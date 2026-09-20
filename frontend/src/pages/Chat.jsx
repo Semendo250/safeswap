@@ -118,13 +118,27 @@ export default function Chat() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 68px)' }}>
-      <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--color-border)', display: 'flex', alignItems: 'center', gap: '10px' }}>
-        <Link to={`/listings/${listingId}`} style={{ color: 'var(--color-muted)', fontSize: '18px' }}>&larr;</Link>
-        <div>
-          <p style={{ margin: 0, fontWeight: 600, fontSize: '14px' }}>{listingTitle || 'Listing'}</p>
-          <p style={{ margin: 0, fontSize: '12px', color: 'var(--color-muted)' }}>Chat about this item</p>
-        </div>
-      </div>
+      <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--color-border)', display: 'flex', alignItems: 'center', gap: '10px', background: '#fafafa' }}>
+  <Link to={`/listings/${listingId}`} style={{ color: 'var(--color-muted)', fontSize: '18px' }}>&larr;</Link>
+  <div
+    style={{
+      width: '36px',
+      height: '36px',
+      borderRadius: '50%',
+      background: 'var(--color-primary)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      flexShrink: 0,
+    }}
+  >
+    <span style={{ color: '#fff', fontWeight: 700, fontSize: '14px' }}>{listingTitle?.[0]?.toUpperCase()}</span>
+  </div>
+  <div>
+    <p style={{ margin: 0, fontWeight: 600, fontSize: '14px' }}>{listingTitle || 'Listing'}</p>
+    <p style={{ margin: 0, fontSize: '12px', color: 'var(--color-muted)' }}>Chat about this item</p>
+  </div>
+</div>
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '16px', background: 'var(--color-surface)' }}>
         {messages.length === 0 && (
@@ -133,7 +147,7 @@ export default function Chat() {
           </p>
         )}
         {messages.map((m) => (
-          <ChatBubble key={m._id} message={m} isOwn={m.sender._id === user.id} onDelete={handleDelete} />
+          <ChatBubble key={m._id} message={m} isOwn={m.sender._id === user.id} onDelete={handleDelete} otherUserName={listingTitle} />
         ))}
         <div ref={bottomRef} />
       </div>

@@ -3,6 +3,14 @@ import { Link } from 'react-router-dom';
 import { getConversations } from '../api/chat.api';
 import BackButton from '../components/BackButton';
 
+function timeAgo(dateStr) {
+  const diff = Math.floor((Date.now() - new Date(dateStr)) / 1000);
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return new Date(dateStr).toLocaleDateString();
+}
+
 export default function Inbox() {
   const [conversations, setConversations] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -17,36 +25,71 @@ export default function Inbox() {
     <div className="container">
       <BackButton />
       <h2>Messages</h2>
+
       {loading && <p style={{ color: 'var(--color-muted)' }}>Loading...</p>}
+
       {!loading && conversations.length === 0 && (
-        <p style={{ color: 'var(--color-muted)' }}>No conversations yet.</p>
+        <div style={{ textAlign: 'center', padding: '40px 0' }}>
+          <p style={{ fontSize: '32px', margin: 0 }}>💬</p>
+          <p style={{ fontWeight: 600, margin: '8px 0 2px' }}>No messages yet</p>
+          <p style={{ color: 'var(--color-muted)', fontSize: '13px' }}>
+            Visit a listing and message the seller to start a conversation.
+          </p>
+        </div>
       )}
+
       <div>
         {conversations.map((c) => (
           <Link
             key={c.listingId}
             to={`/chat/${c.listingId}`}
             state={{ receiverId: c.otherUser.id }}
-            className="divider-row"
-            style={{ color: 'inherit', alignItems: 'flex-start' }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              padding: '12px 4px',
+              borderBottom: '1px solid var(--color-border)',
+              color: 'inherit',
+            }}
           >
-            {c.listingPhoto && (
-              <img
-                src={c.listingPhoto}
-                alt={c.listingTitle}
-                style={{ width: '52px', height: '52px', objectFit: 'cover', borderRadius: 'var(--radius)', flexShrink: 0 }}
-              />
-            )}
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <span style={{ fontWeight: 600, fontSize: '14px' }}>{c.otherUser.fullName}</span>
-              <p style={{ margin: '2px 0 0', fontSize: '13px', color: 'var(--color-muted)' }}>{c.listingTitle}</p>
-              <p style={{ margin: '2px 0 0', fontSize: '13px', color: 'var(--color-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {c.lastMessage}
-              </p>
+            <div
+              style={{
+                width: '44px',
+                height: '44px',
+                borderRadius: '50%',
+                background: 'var(--color-primary)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+                overflow: 'hidden',
+              }}
+            >
+              <span style={{ color: '#fff', fontWeight: 700, fontSize: '16px' }}>
+                {c.otherUser.fullName?.[0]?.toUpperCase()}
+              </span>
             </div>
-            <span style={{ fontSize: '11px', color: 'var(--color-muted)', flexShrink: 0, whiteSpace: 'nowrap' }}>
-              {new Date(c.lastMessageAt).toLocaleDateString()}
-            </span>
+
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 600, fontSize: '14px', marginBottom: '2px' }}>{c.otherUser.fullName}</div>
+              <div style={{ fontSize: '12px', color: 'var(--color-teal)', marginBottom: '2px' }}>{c.listingTitle}</div>
+              <div
+                style={{
+                  fontSize: '13px',
+                  color: 'var(--color-muted)',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {c.lastMessage}
+              </div>
+            </div>
+
+            <div style={{ fontSize: '11px', color: 'var(--color-muted)', flexShrink: 0, whiteSpace: 'nowrap' }}>
+              {timeAgo(c.lastMessageAt)}
+            </div>
           </Link>
         ))}
       </div>
