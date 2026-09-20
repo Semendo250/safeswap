@@ -14,25 +14,30 @@ export default function Navbar() {
   return (
     <nav
       style={{
+        position: 'sticky',
+        top: 0,
+        zIndex: 50,
+        height: '68px',
+        boxSizing: 'border-box',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        padding: '14px 20px',
+        padding: '0 20px',
         borderBottom: '3px solid var(--color-teal)',
         background: '#fff',
       }}
     >
       <Link to="/">
-        <img src="/logo-full.svg" alt="SafeSwap" style={{ height: '42px' }} />
+        <img src="/logo-full.svg" alt="SafeSwap" style={{ height: '38px', display: 'block' }} />
       </Link>
       <div style={{ display: 'flex', gap: '18px', alignItems: 'center', fontSize: '14px', fontWeight: 500 }}>
         {user ? (
           <>
             <Link to="/messages" className="nav-pill">Messages</Link>
-<Link to="/create-listing" className="nav-pill">Sell</Link>
-{user.role === 'admin' && <Link to="/admin" className="nav-pill">Admin</Link>}
-<Link to="/profile" className="nav-pill">Profile</Link>
-<button onClick={handleLogout} className="btn-outline">Log out</button>
+            <Link to="/create-listing" className="nav-pill">Sell</Link>
+            {user.role === 'admin' && <Link to="/admin" className="nav-pill">Admin</Link>}
+            <Link to="/profile" className="nav-pill">Profile</Link>
+            <button onClick={handleLogout} className="btn-outline">Log out</button>
           </>
         ) : (
           <>
