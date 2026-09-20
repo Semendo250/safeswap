@@ -15,7 +15,14 @@ const paymentsRoutes = require('./routes/payments.routes');
 
 const app = express();
 
-app.use(cors());
+app.use(cors({
+  origin: [
+    'https://safeswap-project.vercel.app',
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+  ],
+  credentials: true,
+}));
 app.use(express.json());
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
