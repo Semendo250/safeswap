@@ -23,76 +23,129 @@ export default function Inbox() {
 
   return (
     <div className="container">
+      <style>{`
+        .inbox-row {
+          border-bottom: 0.5px solid var(--color-border);
+          transition: background 0.15s;
+        }
+        .inbox-row:last-child { border-bottom: none; }
+        .inbox-row:hover {
+          background: color-mix(in srgb, var(--color-primary) 6%, transparent);
+        }
+      `}</style>
+
       <BackButton />
       <h2>Messages</h2>
 
       {loading && <p style={{ color: 'var(--color-muted)' }}>Loading...</p>}
 
-      {!loading && conversations.length === 0 && (
-        <div style={{ textAlign: 'center', padding: '40px 0' }}>
-          <p style={{ fontSize: '32px', margin: 0 }}>💬</p>
-          <p style={{ fontWeight: 600, margin: '8px 0 2px' }}>No messages yet</p>
-          <p style={{ color: 'var(--color-muted)', fontSize: '13px' }}>
-            Visit a listing and message the seller to start a conversation.
-          </p>
+      {!loading && (
+        <div style={s.card}>
+          <div style={s.cardHeader}>
+            <span style={s.cardTitle}>Conversations</span>
+            <span style={s.count}>{conversations.length}</span>
+          </div>
+
+          {conversations.length === 0 ? (
+            <div style={s.empty}>
+              <p style={{ fontSize: 36, margin: '0 0 8px' }}>💬</p>
+              <p style={{ fontSize: 15, fontWeight: 600, color: 'var(--color-ink)', margin: '0 0 4px' }}>
+                No messages yet
+              </p>
+              <p style={{ fontSize: 13, color: 'var(--color-muted)', lineHeight: 1.5, margin: 0 }}>
+                Visit a listing and message the seller to start a conversation.
+              </p>
+            </div>
+          ) : (
+            <div>
+              {conversations.map((c) => (
+                <Link
+                  key={c.listingId}
+                  to={`/chat/${c.listingId}`}
+                  state={{ receiverId: c.otherUser.id }}
+                  className="inbox-row"
+                  style={s.row}
+                >
+                  <div style={s.avatar}>
+                    <span style={{ color: '#fff', fontWeight: 700, fontSize: 16 }}>
+                      {c.otherUser.fullName?.[0]?.toUpperCase()}
+                    </span>
+                  </div>
+
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={s.name}>{c.otherUser.fullName}</div>
+                    <div style={s.listing}>{c.listingTitle}</div>
+                    <div style={s.preview}>{c.lastMessage}</div>
+                  </div>
+
+                  <div style={s.time}>{timeAgo(c.lastMessageAt)}</div>
+                </Link>
+              ))}
+            </div>
+          )}
         </div>
       )}
-
-      <div>
-        {conversations.map((c) => (
-          <Link
-            key={c.listingId}
-            to={`/chat/${c.listingId}`}
-            state={{ receiverId: c.otherUser.id }}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px',
-              padding: '12px 4px',
-              borderBottom: '1px solid var(--color-border)',
-              color: 'inherit',
-            }}
-          >
-            <div
-              style={{
-                width: '44px',
-                height: '44px',
-                borderRadius: '50%',
-                background: 'var(--color-primary)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0,
-                overflow: 'hidden',
-              }}
-            >
-              <span style={{ color: '#fff', fontWeight: 700, fontSize: '16px' }}>
-                {c.otherUser.fullName?.[0]?.toUpperCase()}
-              </span>
-            </div>
-
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontWeight: 600, fontSize: '14px', marginBottom: '2px' }}>{c.otherUser.fullName}</div>
-              <div style={{ fontSize: '12px', color: 'var(--color-teal)', marginBottom: '2px' }}>{c.listingTitle}</div>
-              <div
-                style={{
-                  fontSize: '13px',
-                  color: 'var(--color-muted)',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {c.lastMessage}
-              </div>
-            </div>
-
-            <div style={{ fontSize: '11px', color: 'var(--color-muted)', flexShrink: 0, whiteSpace: 'nowrap' }}>
-              {timeAgo(c.lastMessageAt)}
-            </div>
-          </Link>
-        ))}
-      </div>
     </div>
   );
 }
+
+const s = {
+  card: {
+    background: '#fff',
+    border: '0.5px solid var(--color-border)',
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  cardHeader: {
+    padding: '14px 16px',
+    borderBottom: '0.5px solid var(--color-border)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  cardTitle: { fontSize: 14, fontWeight: 700, color: 'var(--color-ink)' },
+  count: {
+    fontSize: 12,
+    fontWeight: 600,
+    padding: '2px 8px',
+    borderRadius: 10,
+    color: 'var(--color-teal)',
+    background: 'color-mix(in srgb, var(--color-primary) 10%, transparent)',
+  },
+  row: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+    padding: '10px 14px',
+    color: 'inherit',
+    textDecoration: 'none',
+  },
+  avatar: {
+    width: 44,
+    height: 44,
+    borderRadius: '50%',
+    background: 'var(--color-primary)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+    overflow: 'hidden',
+  },
+  name: { fontSize: 14, fontWeight: 600, color: 'var(--color-ink)', marginBottom: 2 },
+  listing: { fontSize: 12, color: 'var(--color-teal)', marginBottom: 2 },
+  preview: {
+    fontSize: 12,
+    color: 'var(--color-muted)',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  time: { fontSize: 11, color: 'var(--color-muted)', flexShrink: 0, whiteSpace: 'nowrap' },
+  empty: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    padding: '2rem',
+    textAlign: 'center',
+  },
+};

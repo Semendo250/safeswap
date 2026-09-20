@@ -7,6 +7,8 @@ import { getListingById } from '../api/listings.api';
 import ChatBubble from '../components/ChatBubble';
 import ChatInput from '../components/ChatInput';
 
+const NAVBAR_HEIGHT = 68;
+
 export default function Chat() {
   const { listingId } = useParams();
   const { user, loading: authLoading } = useContext(AuthContext);
@@ -69,9 +71,8 @@ export default function Chat() {
 
   // Pin the chat container to the visual viewport, so the input row stays
   // directly above the on-screen keyboard when it's open, and sits at the
-  // true bottom of the screen when it's closed. The navbar height (68px)
-  // is subtracted so this container starts right below it and never
-  // covers or scrolls the navbar.
+  // true bottom of the screen when it's closed. The navbar height is
+  // subtracted so this container starts right below it.
   useEffect(() => {
     const outer = outerRef.current;
     if (!outer) return;
@@ -79,8 +80,8 @@ export default function Chat() {
     function update() {
       const vv = window.visualViewport;
       if (!vv) return;
-      outer.style.top = vv.offsetTop + 68 + 'px';
-      outer.style.height = vv.height - 68 + 'px';
+      outer.style.top = vv.offsetTop + NAVBAR_HEIGHT + 'px';
+      outer.style.height = vv.height - NAVBAR_HEIGHT + 'px';
       const box = messagesBoxRef.current;
       if (box) box.scrollTop = box.scrollHeight;
     }
@@ -112,25 +113,36 @@ export default function Chat() {
     }
   }
 
+  // Returns false on failure so ChatInput keeps the typed text.
   async function handleSend(content) {
     if (!receiverId) {
       alert('Cannot determine who to message — please open this chat from the listing page.');
-      return;
+      return false;
     }
-    const res = await sendMessage(listingId, receiverId, content);
-    const saved = res.data;
-    setMessages((prev) => [
-      ...prev,
-      { ...saved, sender: { _id: user.id, fullName: user.fullName }, receiver: { _id: receiverId } },
-    ]);
-    socket.emit('send_message', {
-      listingId,
-      senderId: user.id,
-      receiverId,
-      content: saved.content,
-      _id: saved._id,
-      createdAt: saved.createdAt,
-    });
+    try {
+      const res = await sendMessage(listingId, receiverId, content);
+      const saved = res.data;
+      setMessages((prev) => [
+        ...prev,
+        { ...saved, sender: { _id: user.id, fullName: user.fullName }, receiver: { _id: receiverId } },
+      ]);
+      socket.emit('send_message', {
+        listingId,
+        senderId: user.id,
+        receiverId,
+        content: saved.content,
+        _id: saved._id,
+        createdAt: saved.createdAt,
+      });
+      return true;
+    } catch (err) {
+      alert(
+        !err.response
+          ? 'Network error — check your connection.'
+          : err.response?.data?.error || 'Failed to send.'
+      );
+      return false;
+    }
   }
 
   if (authLoading) return null;
@@ -141,79 +153,115 @@ export default function Chat() {
       ref={outerRef}
       style={{
         position: 'fixed',
+        // initial values; the visualViewport effect overrides top/height
+        top: NAVBAR_HEIGHT,
         left: 0,
         right: 0,
+        bottom: 0,
         display: 'flex',
         flexDirection: 'column',
+        padding: 12,
+        boxSizing: 'border-box',
         overflow: 'hidden',
         background: '#fff',
+        touchAction: 'none',
       }}
     >
-      {/* This inner header is part of the fixed chat panel (stays visible
-          with the chat), distinct from your app Navbar above, which never
-          moves regardless of keyboard state */}
-      <div
-        style={{
-          padding: '12px 16px',
-          borderBottom: '1px solid var(--color-border)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '10px',
-          background: '#fafafa',
-          flexShrink: 0,
-        }}
-      >
-        <Link to={`/listings/${listingId}`} style={{ color: 'var(--color-muted)', fontSize: '18px' }}>&larr;</Link>
-        <div
-          style={{
-            width: '36px',
-            height: '36px',
-            borderRadius: '50%',
-            background: 'var(--color-primary)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexShrink: 0,
-          }}
-        >
-          <span style={{ color: '#fff', fontWeight: 700, fontSize: '14px' }}>{listingTitle?.[0]?.toUpperCase()}</span>
-        </div>
-        <div>
-          <p style={{ margin: 0, fontWeight: 600, fontSize: '14px' }}>{listingTitle || 'Listing'}</p>
-          <p style={{ margin: 0, fontSize: '12px', color: 'var(--color-muted)' }}>Chat about this item</p>
-        </div>
-      </div>
+      <style>{`
+        @media (max-width: 640px) {
+          .msg-bubble { max-width: 85% !important; }
+          .msg-input-row { gap: 4px !important; padding: 8px !important; }
+        }
+      `}</style>
 
+      {/* The chat "card": hairline border + 12px radius, like the source app */}
       <div
-        ref={messagesBoxRef}
         style={{
           flex: 1,
           minHeight: 0,
-          overflowY: 'auto',
-          overflowX: 'hidden',
-          padding: '16px',
-          background: 'var(--color-surface)',
+          display: 'flex',
+          flexDirection: 'column',
+          background: '#fff',
+          border: '0.5px solid var(--color-border)',
+          borderRadius: 12,
+          overflow: 'hidden',
         }}
       >
-        {messages.length === 0 && (
-          <p style={{ textAlign: 'center', color: 'var(--color-muted)', fontSize: '13px', marginTop: '30px' }}>
-            No messages yet — say hello.
-          </p>
-        )}
-        {messages.map((m) => (
-          <ChatBubble
-            key={m._id}
-            message={m}
-            isOwn={m.sender._id === user.id}
-            onDelete={handleDelete}
-            otherUserName={listingTitle}
-          />
-        ))}
-        <div ref={bottomRef} />
-      </div>
+        <div
+          style={{
+            padding: '12px 16px',
+            borderBottom: '0.5px solid var(--color-border)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            background: '#fafafa',
+            flexShrink: 0,
+          }}
+        >
+          <Link to={`/listings/${listingId}`} style={{ color: 'var(--color-muted)', fontSize: 18 }}>
+            &larr;
+          </Link>
+          <div
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: '50%',
+              background: 'var(--color-primary)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              overflow: 'hidden',
+              flexShrink: 0,
+            }}
+          >
+            <span style={{ color: '#fff', fontWeight: 700, fontSize: 16 }}>
+              {listingTitle?.[0]?.toUpperCase()}
+            </span>
+          </div>
+          <div style={{ minWidth: 0 }}>
+            <p style={{ margin: '0 0 2px', fontWeight: 600, fontSize: 14, color: 'var(--color-ink)' }}>
+              {listingTitle || 'Listing'}
+            </p>
+            <p style={{ margin: 0, fontSize: 12, color: 'var(--color-teal)' }}>Chat about this item</p>
+          </div>
+        </div>
 
-      <div style={{ flexShrink: 0 }}>
-        <ChatInput onSend={handleSend} />
+        <div
+          ref={messagesBoxRef}
+          style={{
+            flex: 1,
+            minHeight: 0,
+            overflowY: 'auto',
+            overflowX: 'hidden',
+            padding: 16,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 8,
+            background: 'var(--color-surface)',
+            touchAction: 'pan-y',
+            overscrollBehavior: 'contain',
+          }}
+        >
+          {messages.length === 0 && (
+            <p style={{ textAlign: 'center', color: 'var(--color-muted)', fontSize: 13, margin: 'auto' }}>
+              No messages yet — say hello. 👋
+            </p>
+          )}
+          {messages.map((m) => (
+            <ChatBubble
+              key={m._id}
+              message={m}
+              isOwn={m.sender._id === user.id}
+              onDelete={handleDelete}
+              otherUserName={listingTitle}
+            />
+          ))}
+          <div ref={bottomRef} />
+        </div>
+
+        <div style={{ flexShrink: 0 }}>
+          <ChatInput onSend={handleSend} />
+        </div>
       </div>
     </div>
   );
