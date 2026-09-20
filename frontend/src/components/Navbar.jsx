@@ -1,13 +1,15 @@
-import { useContext } from 'react';
+import { useContext, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 
 export default function Navbar() {
   const { user, logout } = useContext(AuthContext);
   const navigate = useNavigate();
+  const [menuOpen, setMenuOpen] = useState(false);
 
   function handleLogout() {
     logout();
+    setMenuOpen(false);
     navigate('/');
   }
 
@@ -17,20 +19,22 @@ export default function Navbar() {
         position: 'sticky',
         top: 0,
         zIndex: 50,
-        height: '68px',
+        height: '60px',
         boxSizing: 'border-box',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        padding: '0 20px',
+        padding: '0 16px',
         borderBottom: '3px solid var(--color-teal)',
         background: '#fff',
       }}
     >
-      <Link to="/">
-        <img src="/logo-full.svg" alt="SafeSwap" style={{ height: '38px', display: 'block' }} />
+      <Link to="/" onClick={() => setMenuOpen(false)}>
+        <img src="/logo-full.svg" alt="SafeSwap" style={{ height: '32px', display: 'block' }} />
       </Link>
-      <div style={{ display: 'flex', gap: '18px', alignItems: 'center', fontSize: '14px', fontWeight: 500 }}>
+
+      {/* Desktop links - hidden on narrow screens via CSS class */}
+      <div className="nav-links-desktop" style={{ display: 'flex', gap: '16px', alignItems: 'center', fontSize: '14px', fontWeight: 500 }}>
         {user ? (
           <>
             <Link to="/messages" className="nav-pill">Messages</Link>
@@ -48,6 +52,49 @@ export default function Navbar() {
           </>
         )}
       </div>
+
+      {/* Mobile hamburger - shown only on narrow screens via CSS class */}
+      <button
+        className="nav-hamburger"
+        onClick={() => setMenuOpen((v) => !v)}
+        style={{ display: 'none', background: 'transparent', border: 'none', fontSize: '22px', padding: '4px 8px', color: 'var(--color-ink)' }}
+      >
+        {menuOpen ? '✕' : '☰'}
+      </button>
+
+      {menuOpen && (
+        <div
+          className="nav-mobile-menu"
+          style={{
+            position: 'absolute',
+            top: '60px',
+            left: 0,
+            right: 0,
+            background: '#fff',
+            borderBottom: '1px solid var(--color-border)',
+            boxShadow: '0 4px 10px rgba(0,0,0,0.08)',
+            display: 'flex',
+            flexDirection: 'column',
+            padding: '10px 16px',
+            gap: '10px',
+          }}
+        >
+          {user ? (
+            <>
+              <Link to="/messages" onClick={() => setMenuOpen(false)}>Messages</Link>
+              <Link to="/create-listing" onClick={() => setMenuOpen(false)}>Sell</Link>
+              {user.role === 'admin' && <Link to="/admin" onClick={() => setMenuOpen(false)}>Admin</Link>}
+              <Link to="/profile" onClick={() => setMenuOpen(false)}>Profile</Link>
+              <button onClick={handleLogout} className="btn-outline" style={{ alignSelf: 'flex-start' }}>Log out</button>
+            </>
+          ) : (
+            <>
+              <Link to="/login" onClick={() => setMenuOpen(false)}>Log in</Link>
+              <Link to="/signup" onClick={() => setMenuOpen(false)}>Sign up</Link>
+            </>
+          )}
+        </div>
+      )}
     </nav>
   );
 }
