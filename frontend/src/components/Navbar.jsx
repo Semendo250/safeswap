@@ -38,7 +38,7 @@ export default function Navbar() {
         {user ? (
           <>
             <Link to="/messages" className="nav-pill">Messages</Link>
-            <Link to="/create-listing" className="nav-pill">Sell</Link>
+            <Link to="/create-listing" className="nav-pill">Create new listing</Link>
             {user.role === 'admin' && <Link to="/admin" className="nav-pill">Admin</Link>}
             <Link to="/profile" className="nav-pill">Profile</Link>
             <button onClick={handleLogout} className="btn-outline">Log out</button>
