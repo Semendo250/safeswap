@@ -2,8 +2,6 @@ import { useContext, useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 
-// Every admin page, in the order they appear in the admin hamburger.
-// Change the labels here if you want different wording.
 const ADMIN_LINKS = [
   { to: '/admin', label: 'Dashboard' },
   { to: '/admin/flagged', label: 'Flagged queue' },
@@ -22,16 +20,13 @@ export default function Navbar() {
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   const isAdmin = user?.role === 'admin';
-  // The second hamburger only exists while an admin is on an /admin page
   const onAdminPage = isAdmin && location.pathname.startsWith('/admin');
 
-  // Close both menus whenever the page changes
   useEffect(() => {
     setMenuOpen(false);
     setAdminMenuOpen(false);
   }, [location.pathname]);
 
-  // Close menus when tapping anywhere outside the navbar
   useEffect(() => {
     if (!menuOpen && !adminMenuOpen) return;
     function onPointerDown(e) {
@@ -44,7 +39,6 @@ export default function Navbar() {
     return () => document.removeEventListener('pointerdown', onPointerDown);
   }, [menuOpen, adminMenuOpen]);
 
-  // Escape closes the logout dialog
   useEffect(() => {
     if (!confirmOpen) return;
     function onKey(e) {
@@ -55,25 +49,23 @@ export default function Navbar() {
   }, [confirmOpen]);
 
   function toggleMenu() {
-    setAdminMenuOpen(false);
     setMenuOpen((v) => !v);
   }
-
   function toggleAdminMenu() {
-    setMenuOpen(false);
     setAdminMenuOpen((v) => !v);
   }
-
-  // Every "Log out" button asks first
   function askLogout() {
     setMenuOpen(false);
     setAdminMenuOpen(false);
     setConfirmOpen(true);
   }
-
   function confirmLogout() {
     logout();
     setConfirmOpen(false);
+    navigate('/');
+  }
+  function exitAdmin() {
+    setAdminMenuOpen(false);
     navigate('/');
   }
 
@@ -116,87 +108,58 @@ export default function Navbar() {
           background: '#fff',
         }}
       >
-        <Link to="/" style={{ marginRight: 'auto' }}>
-          <img src="/logo-full.svg" alt="SafeSwap" style={{ height: '32px', display: 'block' }} />
-        </Link>
+        {onAdminPage ? (
+          // ADMIN MODE: back arrow, spacer, admin hamburger pinned far right.
+          // The general nav/links/burger are completely hidden here, so
+          // only one menu can ever be open at a time.
+          <>
+            <button
+              onClick={exitAdmin}
+              aria-label="Exit admin"
+              style={{
+                background: 'transparent',
+                border: 'none',
+                fontSize: '20px',
+                padding: '4px 8px',
+                color: 'var(--color-ink)',
+                cursor: 'pointer',
+                lineHeight: 1,
+              }}
+            >
+              &larr;
+            </button>
+            <span style={{ fontWeight: 700, color: 'var(--color-primary)' }}>Admin</span>
 
-        {/* Desktop links (hidden on phones) */}
-        <div className="sw-nav-desktop">
-          {user ? (
-            <>
-              <Link to="/messages" className="nav-pill">Messages</Link>
-              <Link to="/create-listing" className="nav-pill">Create listing</Link>
-              {isAdmin && <Link to="/admin" className="nav-pill">Admin</Link>}
-              <Link to="/profile" className="nav-pill">Profile</Link>
-              <button onClick={askLogout} className="btn-outline">Log out</button>
-            </>
-          ) : (
-            <>
-              <Link to="/login" style={{ color: 'var(--color-ink)' }}>Log in</Link>
-              <Link
-                to="/signup"
-                style={{ color: '#fff', background: 'var(--color-primary)', padding: '7px 14px', borderRadius: '6px' }}
-              >
-                Sign up
-              </Link>
-            </>
-          )}
-        </div>
+            <button
+              onClick={toggleAdminMenu}
+              aria-expanded={adminMenuOpen}
+              aria-label="Admin menu"
+              style={{
+                marginLeft: 'auto',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '6px 10px',
+                borderRadius: '8px',
+                border: '1px solid var(--color-teal)',
+                background: adminMenuOpen ? 'var(--color-surface)' : '#fff',
+                color: 'var(--color-teal)',
+                fontSize: '13px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                lineHeight: 1,
+              }}
+            >
+              <span style={{ fontSize: '18px' }}>{adminMenuOpen ? '✕' : '☰'}</span>
+            </button>
 
-        {/* Second hamburger: admin features, only on /admin pages */}
-        {onAdminPage && (
-          <button
-            onClick={toggleAdminMenu}
-            aria-expanded={adminMenuOpen}
-            aria-label="Admin menu"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '6px 10px',
-              borderRadius: '8px',
-              border: '1px solid var(--color-teal)',
-              background: adminMenuOpen ? 'var(--color-surface)' : '#fff',
-              color: 'var(--color-teal)',
-              fontSize: '13px',
-              fontWeight: 600,
-              cursor: 'pointer',
-              lineHeight: 1,
-            }}
-          >
-            <span style={{ fontSize: '18px' }}>{adminMenuOpen ? '✕' : '☰'}</span> Admin
-          </button>
-        )}
-
-        {/* First hamburger: main menu (phones only) */}
-        <button
-          className="sw-nav-burger"
-          onClick={toggleMenu}
-          aria-expanded={menuOpen}
-          aria-label="Main menu"
-          style={{
-            alignItems: 'center',
-            background: 'transparent',
-            border: 'none',
-            fontSize: '22px',
-            padding: '4px 8px',
-            color: 'var(--color-ink)',
-            cursor: 'pointer',
-            lineHeight: 1,
-          }}
-        >
-          {menuOpen ? '✕' : '☰'}
-        </button>
-
-        {/* Main menu dropdown */}
-        {menuOpen && (
-          <div style={dropdownStyle}>
-            {user ? (
-              <>
-                <Link to="/messages" className={linkClass('/messages')}>Messages</Link>
-                <Link to="/create-listing" className={linkClass('/create-listing')}>Create listing</Link>
-                {isAdmin && <Link to="/admin" className={linkClass('/admin', true)}>Admin</Link>}
-                <Link to="/profile" className={linkClass('/profile')}>Profile</Link>
+            {adminMenuOpen && (
+              <div style={dropdownStyle}>
+                {ADMIN_LINKS.map((item) => (
+                  <Link key={item.to} to={item.to} className={linkClass(item.to)}>
+                    {item.label}
+                  </Link>
+                ))}
                 <button
                   onClick={askLogout}
                   className="sw-menu-link"
@@ -211,29 +174,93 @@ export default function Navbar() {
                 >
                   Log out
                 </button>
-              </>
-            ) : (
-              <>
-                <Link to="/login" className={linkClass('/login')}>Log in</Link>
-                <Link to="/signup" className={linkClass('/signup')}>Sign up</Link>
-              </>
+              </div>
             )}
-          </div>
-        )}
+          </>
+        ) : (
+          // GENERAL MODE: logo, desktop links, single main hamburger
+          <>
+            <Link to="/" style={{ marginRight: 'auto' }}>
+              <img src="/logo-full.svg" alt="SafeSwap" style={{ height: '32px', display: 'block' }} />
+            </Link>
 
-        {/* Admin menu dropdown */}
-        {onAdminPage && adminMenuOpen && (
-          <div style={dropdownStyle}>
-            {ADMIN_LINKS.map((item) => (
-              <Link key={item.to} to={item.to} className={linkClass(item.to)}>
-                {item.label}
-              </Link>
-            ))}
-          </div>
+            <div className="sw-nav-desktop">
+              {user ? (
+                <>
+                  <Link to="/messages" className="nav-pill">Messages</Link>
+                  <Link to="/create-listing" className="nav-pill">Create listing</Link>
+                  {isAdmin && <Link to="/admin" className="nav-pill">Admin</Link>}
+                  <Link to="/profile" className="nav-pill">Profile</Link>
+                  <button onClick={askLogout} className="btn-outline">Log out</button>
+                </>
+              ) : (
+                <>
+                  <Link to="/login" style={{ color: 'var(--color-ink)' }}>Log in</Link>
+                  <Link
+                    to="/signup"
+                    style={{ color: '#fff', background: 'var(--color-primary)', padding: '7px 14px', borderRadius: '6px' }}
+                  >
+                    Sign up
+                  </Link>
+                </>
+              )}
+            </div>
+
+            <button
+              className="sw-nav-burger"
+              onClick={toggleMenu}
+              aria-expanded={menuOpen}
+              aria-label="Main menu"
+              style={{
+                marginLeft: 'auto',
+                alignItems: 'center',
+                background: 'transparent',
+                border: 'none',
+                fontSize: '22px',
+                padding: '4px 8px',
+                color: 'var(--color-ink)',
+                cursor: 'pointer',
+                lineHeight: 1,
+              }}
+            >
+              {menuOpen ? '✕' : '☰'}
+            </button>
+
+            {menuOpen && (
+              <div style={dropdownStyle}>
+                {user ? (
+                  <>
+                    <Link to="/messages" className={linkClass('/messages')}>Messages</Link>
+                    <Link to="/create-listing" className={linkClass('/create-listing')}>Create listing</Link>
+                    {isAdmin && <Link to="/admin" className={linkClass('/admin', true)}>Admin</Link>}
+                    <Link to="/profile" className={linkClass('/profile')}>Profile</Link>
+                    <button
+                      onClick={askLogout}
+                      className="sw-menu-link"
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        borderTop: '1px solid var(--color-border)',
+                        borderRadius: 0,
+                        marginTop: '4px',
+                        color: 'var(--color-warning)',
+                      }}
+                    >
+                      Log out
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <Link to="/login" className={linkClass('/login')}>Log in</Link>
+                    <Link to="/signup" className={linkClass('/signup')}>Sign up</Link>
+                  </>
+                )}
+              </div>
+            )}
+          </>
         )}
       </nav>
 
-      {/* Logout confirmation */}
       {confirmOpen && (
         <div
           onClick={() => setConfirmOpen(false)}

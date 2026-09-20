@@ -7,17 +7,18 @@ import BackButton from '../components/BackButton';
 import TrustBadge from '../components/TrustBadge';
 import VerificationBadge from '../components/VerificationBadge';
 import Avatar from '../components/Avatar';
+import ImageLightbox from '../components/ImageLightbox';
 import { normalizeKenyanPhone, formatPhone, phoneForInput } from '../utils/phone';
 
 const MAX_PICTURE_BYTES = 5 * 1024 * 1024;
 
 export default function Profile() {
-  const { user, updateUser } = useContext(AuthContext);
+  const { user, updateUser, loading: authLoading } = useContext(AuthContext);
   const [listings, setListings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState('sales');
+  const [lightboxOpen, setLightboxOpen] = useState(false);
 
-  // Edit profile form
   const [phoneInput, setPhoneInput] = useState('');
   const [locationInput, setLocationInput] = useState('');
   const [newPicture, setNewPicture] = useState(null);
@@ -33,13 +34,11 @@ export default function Profile() {
       .finally(() => setLoading(false));
   }, []);
 
-  // Fill the form from the saved profile (also runs once the user finishes loading)
   useEffect(() => {
     setPhoneInput(phoneForInput(user?.phone));
     setLocationInput(user?.location || '');
   }, [user?.phone, user?.location]);
 
-  // Free the temporary preview URL when it changes or the page closes
   useEffect(() => {
     return () => {
       if (newPreview) URL.revokeObjectURL(newPreview);
@@ -94,8 +93,28 @@ export default function Profile() {
     }
   }
 
+  if (authLoading) {
+    return (
+      <div className="container">
+        <BackButton />
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '60px 0' }}>
+          <div
+            style={{
+              width: '96px',
+              height: '96px',
+              borderRadius: '50%',
+              background: 'var(--color-surface)',
+            }}
+          />
+          <p style={{ color: 'var(--color-muted)', marginTop: '12px', fontSize: '13px' }}>Loading profile...</p>
+        </div>
+      </div>
+    );
+  }
+
   const sold = listings.filter((l) => l.status === 'sold');
   const pending = listings.filter((l) => l.status === 'active' || l.status === 'under_review');
+  const currentAvatarSrc = newPreview || user?.profilePicture;
 
   const tabStyle = (active) => ({
     flex: 1,
@@ -114,19 +133,39 @@ export default function Profile() {
   return (
     <div className="container">
       <BackButton />
-      <h2>Profile</h2>
 
-      {/* Centered header: picture, name, email */}
-      <div
-        className="divider-row"
-        style={{ flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: '4px' }}
-      >
-        <Avatar
-          src={user?.profilePicture}
-          name={user?.fullName}
-          size={96}
-          style={{ border: '2px solid var(--color-border)', marginBottom: '6px' }}
-        />
+      <h2 style={{ textAlign: 'center' }}>My Profile</h2>
+
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: '4px', paddingBottom: '16px', borderBottom: '1px solid var(--color-border)' }}>
+        <button
+          type="button"
+          onClick={() => currentAvatarSrc && setLightboxOpen(true)}
+          style={{ background: 'none', border: 'none', padding: 0, cursor: currentAvatarSrc ? 'zoom-in' : 'default' }}
+          aria-label="View profile picture"
+        >
+          <Avatar
+            src={currentAvatarSrc}
+            name={user?.fullName}
+            size={96}
+            style={{ border: '2px solid var(--color-border)', marginBottom: '6px' }}
+          />
+        </button>
+
+        {tab === 'edit' && (
+          <>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={handlePick}
+              style={{ display: 'none' }}
+            />
+            <button type="button" className="btn-outline" onClick={() => fileRef.current?.click()} style={{ marginBottom: '4px' }}>
+              {currentAvatarSrc ? 'Change photo' : 'Add photo'}
+            </button>
+          </>
+        )}
+
         <span style={{ fontWeight: 600, fontSize: '18px' }}>{user?.fullName}</span>
         <span style={{ color: 'var(--color-muted)', fontSize: '13px' }}>{user?.email}</span>
         {user?.location && (
@@ -141,7 +180,10 @@ export default function Profile() {
         </div>
       </div>
 
-      {/* Tabs */}
+      {lightboxOpen && (
+        <ImageLightbox src={currentAvatarSrc} alt={user?.fullName} onClose={() => setLightboxOpen(false)} />
+      )}
+
       <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
         <button type="button" style={tabStyle(tab === 'sales')} onClick={() => setTab('sales')}>
           Sales
@@ -194,25 +236,6 @@ export default function Profile() {
 
       {tab === 'edit' && (
         <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '20px' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
-            <Avatar
-              src={newPreview || user?.profilePicture}
-              name={user?.fullName}
-              size={96}
-              style={{ border: '2px solid var(--color-border)' }}
-            />
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              onChange={handlePick}
-              style={{ display: 'none' }}
-            />
-            <button type="button" className="btn-outline" onClick={() => fileRef.current?.click()}>
-              {newPreview || user?.profilePicture ? 'Change photo' : 'Add photo'}
-            </button>
-          </div>
-
           <div>
             <label style={labelStyle} htmlFor="edit-phone">Phone number</label>
             <input
