@@ -1,6 +1,22 @@
+const crypto = require('crypto');
 const { initiateStkPush } = require('../utils/mpesa');
 const Listing = require('../models/Listing');
 const paymentStore = require('../utils/paymentStore');
+
+// Checks the secret that we put on the callback URL (see MPESA_CALLBACK_SECRET).
+// Until the secret is configured this lets callbacks through, so existing payments
+// keep working, but it warns loudly. Set the secret before real payments go live.
+function callbackTokenIsValid(provided) {
+  const secret = process.env.MPESA_CALLBACK_SECRET;
+  if (!secret) {
+    console.warn('MPESA_CALLBACK_SECRET is not set: M-Pesa callbacks are NOT authenticated');
+    return true;
+  }
+  if (typeof provided !== 'string') return false;
+  const a = Buffer.from(provided);
+  const b = Buffer.from(secret);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
 
 // POST /api/payments/stk-push
 async function initiatePayment(req, res) {
@@ -12,6 +28,20 @@ async function initiatePayment(req, res) {
 
     const listing = await Listing.findById(listingId);
     if (!listing) return res.status(404).json({ error: 'Listing not found' });
+
+    if (listing.seller.toString() === req.user._id.toString()) {
+      return res.status(400).json({ error: "You can't buy your own listing" });
+    }
+    if (listing.status !== 'active') {
+      return res.status(400).json({ error: 'This listing is no longer available' });
+    }
+
+    // Money is already held for this item: a new attempt would replace its record
+    // and strand the payment. This also stops the same buyer paying twice.
+    const existing = paymentStore.getLatestByListingId(listing._id.toString());
+    if (existing && existing.status === 'held') {
+      return res.status(409).json({ error: 'A payment for this item is already in progress' });
+    }
 
     const result = await initiateStkPush({
       phone,
@@ -36,16 +66,27 @@ async function initiatePayment(req, res) {
 }
 
 // POST /api/payments/callback
+// Called by Safaricom, not by the app. Protected by a secret in the URL.
 async function handleCallback(req, res) {
   try {
+    if (!callbackTokenIsValid(req.query.token)) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
     const callback = req.body?.Body?.stkCallback;
     if (!callback) return res.status(400).json({ error: 'Invalid callback payload' });
 
     const { CheckoutRequestID, ResultCode } = callback;
-    paymentStore.updateStatusByCheckoutId(
-      CheckoutRequestID,
-      ResultCode === 0 ? 'held' : 'failed'
-    );
+
+    // Only a pending payment can change state, so a repeated or replayed callback
+    // can't reopen a payment that was already released or failed.
+    const record = paymentStore.getByCheckoutId(CheckoutRequestID);
+    if (record && record.status === 'pending') {
+      paymentStore.updateStatusByCheckoutId(
+        CheckoutRequestID,
+        ResultCode === 0 ? 'held' : 'failed'
+      );
+    }
     // ResultCode 0 = success. Status moves to 'held' - this is the
     // escrow-lite state: payment confirmed but not yet released to the
     // seller until handover is confirmed (see confirmMeetup in listings).

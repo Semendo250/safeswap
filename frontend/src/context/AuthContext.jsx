@@ -42,8 +42,13 @@ export function AuthProvider({ children }) {
     socket.disconnect();
   }
 
+  // Merge new fields into the logged-in user (used after editing the profile)
+  function updateUser(patch) {
+    setUser((prev) => (prev ? { ...prev, ...patch } : prev));
+  }
+
   return (
-    <AuthContext.Provider value={{ user, token, login, logout, loading }}>
+    <AuthContext.Provider value={{ user, token, login, logout, updateUser, loading }}>
       {children}
     </AuthContext.Provider>
   );

@@ -238,3 +238,16 @@ button.tab.active {
   .nav-links-desktop { display: none !important; }
   .nav-hamburger { display: block !important; }
 }
+/* Disable long-press text selection / copy app-wide, except in form fields */
+* {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+input,
+textarea,
+[contenteditable='true'] {
+  -webkit-user-select: text;
+  user-select: text;
+}

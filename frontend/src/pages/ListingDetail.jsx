@@ -1,5 +1,5 @@
 import { useState, useEffect, useContext } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { getListingById, setMeetup, confirmMeetup } from '../api/listings.api';
 import { initiateStkPush, getPaymentStatus } from '../api/payments.api';
@@ -7,10 +7,12 @@ import TrustBadge from '../components/TrustBadge';
 import VerificationBadge from '../components/VerificationBadge';
 import SafeZonePicker from '../components/SafeZonePicker';
 import BackButton from '../components/BackButton';
+import Avatar from '../components/Avatar';
+import { formatPhone, telHref } from '../utils/phone';
 
 export default function ListingDetail() {
   const { id } = useParams();
-  const { user } = useContext(AuthContext);
+  const { user, loading: authLoading } = useContext(AuthContext);
   const navigate = useNavigate();
   const [listing, setListing] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -21,14 +23,24 @@ export default function ListingDetail() {
   const [payError, setPayError] = useState('');
   const [paying, setPaying] = useState(false);
 
-  function loadListing() {
-    getListingById(id).then((res) => setListing(res.data));
-  }
+  // Photo preview: index of the photo being viewed, or null when closed
+  const [viewerIndex, setViewerIndex] = useState(null);
+  const viewerOpen = viewerIndex !== null;
+  const photoCount = listing?.photos?.length || 0;
 
+  // Wait until we know whether the visitor is logged in, so the login token is
+  // attached and the seller's phone number comes back. Reloads if login state changes.
   useEffect(() => {
-    loadListing();
+    if (authLoading) return;
+    let cancelled = false;
+    getListingById(id).then((res) => {
+      if (!cancelled) setListing(res.data);
+    });
     setLoading(false);
-  }, [id]);
+    return () => {
+      cancelled = true;
+    };
+  }, [id, authLoading, user?.id]);
 
   useEffect(() => {
     if (!checkoutId || paymentStatus === 'held' || paymentStatus === 'failed') return;
@@ -38,9 +50,36 @@ export default function ListingDetail() {
     return () => clearInterval(interval);
   }, [checkoutId, paymentStatus]);
 
+  // While the preview is open: lock page scroll, and Esc / arrow keys work
+  useEffect(() => {
+    if (!viewerOpen) return;
+    function onKey(e) {
+      if (e.key === 'Escape') setViewerIndex(null);
+      else if (e.key === 'ArrowRight') setViewerIndex((i) => (i + 1) % photoCount);
+      else if (e.key === 'ArrowLeft') setViewerIndex((i) => (i - 1 + photoCount) % photoCount);
+    }
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [viewerOpen, photoCount]);
+
   if (loading || !listing) return <p>Loading...</p>;
 
   const isOwnListing = user && listing.seller._id === user.id;
+
+  function closeViewer() {
+    setViewerIndex(null);
+  }
+  function showPrev() {
+    setViewerIndex((i) => (i - 1 + photoCount) % photoCount);
+  }
+  function showNext() {
+    setViewerIndex((i) => (i + 1) % photoCount);
+  }
 
   function handleMessageSeller() {
     navigate(`/chat/${listing._id}`, { state: { receiverId: listing.seller._id } });
@@ -80,7 +119,21 @@ export default function ListingDetail() {
       <BackButton />
       <div style={{ display: 'flex', gap: '6px', overflowX: 'auto' }}>
         {listing.photos.map((url, i) => (
-          <img key={i} src={url} alt={listing.title} style={{ width: '120px', height: '120px', objectFit: 'cover', borderRadius: '8px' }} />
+          <img
+            key={i}
+            src={url}
+            alt={listing.title}
+            role="button"
+            tabIndex={0}
+            onClick={() => setViewerIndex(i)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                setViewerIndex(i);
+              }
+            }}
+            style={{ width: '120px', height: '120px', objectFit: 'cover', borderRadius: '8px', cursor: 'pointer' }}
+          />
         ))}
       </div>
 
@@ -94,11 +147,45 @@ export default function ListingDetail() {
         </p>
       )}
 
-      <div style={{ borderTop: '1px solid #e5e7eb', marginTop: '16px', paddingTop: '12px' }}>
-        <p style={{ fontWeight: 600, margin: 0 }}>{listing.seller.fullName}</p>
-        <div style={{ display: 'flex', gap: '6px', marginTop: '4px' }}>
-          <TrustBadge score={listing.seller.trustScore} />
-          <VerificationBadge verificationPath={listing.seller.verificationPath} />
+      {/* Seller */}
+      <div
+        style={{
+          borderTop: '1px solid #e5e7eb',
+          marginTop: '16px',
+          paddingTop: '12px',
+          display: 'flex',
+          gap: '12px',
+          alignItems: 'flex-start',
+        }}
+      >
+        <Avatar src={listing.seller.profilePicture} name={listing.seller.fullName} size={44} />
+        <div style={{ minWidth: 0 }}>
+          <p style={{ fontWeight: 600, margin: 0 }}>{listing.seller.fullName}</p>
+          <div style={{ display: 'flex', gap: '6px', marginTop: '4px' }}>
+            <TrustBadge score={listing.seller.trustScore} />
+            <VerificationBadge verificationPath={listing.seller.verificationPath} />
+          </div>
+
+          {!isOwnListing &&
+            (user ? (
+              <div style={{ marginTop: '8px', fontSize: '13px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                {listing.seller.location && (
+                  <span style={{ color: 'var(--color-muted)' }}>📍 {listing.seller.location}</span>
+                )}
+                {listing.seller.phone ? (
+                  <a href={telHref(listing.seller.phone)} style={{ color: 'var(--color-teal)', fontWeight: 600 }}>
+                    📞 {formatPhone(listing.seller.phone)}
+                  </a>
+                ) : (
+                  <span style={{ color: 'var(--color-muted)' }}>Seller hasn't added a phone number</span>
+                )}
+              </div>
+            ) : (
+              <p style={{ margin: '8px 0 0', fontSize: '13px', color: 'var(--color-muted)' }}>
+                <Link to="/login" style={{ color: 'var(--color-teal)', fontWeight: 600 }}>Log in</Link> to see the
+                seller's phone number
+              </p>
+            ))}
         </div>
       </div>
 
@@ -143,6 +230,121 @@ export default function ListingDetail() {
       {listing.status === 'sold' && (
         <p style={{ marginTop: '16px', fontWeight: 600, color: '#166534' }}>This item has been sold.</p>
       )}
+
+      {/* Full-screen photo preview */}
+      {viewerOpen && listing.photos[viewerIndex] && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Photo preview"
+          onClick={closeViewer}
+          style={viewerStyles.overlay}
+        >
+          <button onClick={closeViewer} aria-label="Close preview" style={viewerStyles.close}>
+            ✕
+          </button>
+
+          {photoCount > 1 && (
+            <button
+              onClick={(e) => { e.stopPropagation(); showPrev(); }}
+              aria-label="Previous photo"
+              style={{ ...viewerStyles.arrow, left: '10px' }}
+            >
+              ‹
+            </button>
+          )}
+
+          <img
+            src={listing.photos[viewerIndex]}
+            alt={listing.title}
+            draggable={false}
+            onClick={(e) => e.stopPropagation()}
+            style={viewerStyles.image}
+          />
+
+          {photoCount > 1 && (
+            <button
+              onClick={(e) => { e.stopPropagation(); showNext(); }}
+              aria-label="Next photo"
+              style={{ ...viewerStyles.arrow, right: '10px' }}
+            >
+              ›
+            </button>
+          )}
+
+          {photoCount > 1 && (
+            <div style={viewerStyles.counter}>
+              {viewerIndex + 1} / {photoCount}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
+
+const viewerStyles = {
+  overlay: {
+    position: 'fixed',
+    inset: 0,
+    background: 'rgba(0,0,0,0.92)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 2000,
+    padding: '16px',
+    boxSizing: 'border-box',
+  },
+  image: {
+    maxWidth: '92vw',
+    maxHeight: '85vh',
+    objectFit: 'contain',
+    borderRadius: '8px',
+    display: 'block',
+  },
+  close: {
+    position: 'absolute',
+    top: 'calc(env(safe-area-inset-top, 0px) + 12px)',
+    right: '12px',
+    width: '40px',
+    height: '40px',
+    padding: 0,
+    borderRadius: '50%',
+    border: 'none',
+    background: 'rgba(255,255,255,0.18)',
+    color: '#fff',
+    fontSize: '20px',
+    lineHeight: 1,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer',
+  },
+  arrow: {
+    position: 'absolute',
+    top: '50%',
+    transform: 'translateY(-50%)',
+    width: '40px',
+    height: '40px',
+    padding: 0,
+    borderRadius: '50%',
+    border: 'none',
+    background: 'rgba(255,255,255,0.18)',
+    color: '#fff',
+    fontSize: '26px',
+    lineHeight: 1,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer',
+  },
+  counter: {
+    position: 'absolute',
+    bottom: 'calc(env(safe-area-inset-bottom, 0px) + 16px)',
+    left: 0,
+    right: 0,
+    textAlign: 'center',
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: '13px',
+  },
+};

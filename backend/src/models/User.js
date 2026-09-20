@@ -7,6 +7,8 @@ const userSchema = new mongoose.Schema(
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     password: { type: String, required: true },
     phone: { type: String, trim: true },
+    location: { type: String, trim: true, maxlength: 100 },
+    profilePicture: { type: String }, // Cloudinary URL
 
     // Verification
     verificationPath: {

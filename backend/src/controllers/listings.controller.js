@@ -2,6 +2,32 @@ const Listing = require('../models/Listing');
 const { checkImeiStatus } = require('../utils/imei');
 const paymentStore = require('../utils/paymentStore');
 
+// Seller details anyone may see. Phone + location are added only for logged-in viewers.
+const SELLER_PUBLIC_FIELDS = 'fullName trustScore verificationPath completedSales profilePicture';
+
+// Turns a listing into what this viewer is allowed to see.
+// The IMEI and the proof photo (phone next to a student ID) only go to the seller or an admin.
+function presentListing(listing, viewer) {
+  const obj = listing.toJSON();
+  const ref = obj.seller;
+  const sellerId = ref && ref._id ? ref._id.toString() : ref ? String(ref) : null;
+  const isPrivileged = viewer && (viewer.role === 'admin' || viewer._id.toString() === sellerId);
+  if (!isPrivileged) {
+    delete obj.imei;
+    delete obj.proofPhoto;
+  }
+  return obj;
+}
+
+// Loads one listing the way the detail page needs it: seller filled in,
+// phone/location only for logged-in viewers, private fields removed.
+async function loadListingForViewer(id, viewer) {
+  const sellerFields = SELLER_PUBLIC_FIELDS + (viewer ? ' phone location' : '');
+  const listing = await Listing.findById(id).populate('seller', sellerFields);
+  if (!listing) return null;
+  return presentListing(listing, viewer);
+}
+
 // POST /api/listings
 // Handles both categories: 'phone' (IMEI check + proof photo required)
 // and 'general' (lighter flow, no IMEI/proof photo)
@@ -80,7 +106,9 @@ async function getListings(req, res) {
       filter.category = category;
     }
 
+    // IMEI and proof photo are private: never sent in the public feed
     const listings = await Listing.find(filter)
+      .select('-imei -proofPhoto')
       .sort({ createdAt: -1 })
       .populate('seller', 'fullName trustScore verificationPath');
 
@@ -91,12 +119,10 @@ async function getListings(req, res) {
 }
 
 // GET /api/listings/:id
+// Seller phone/location: logged-in viewers only. IMEI + proof photo: seller or admin only.
 async function getListingById(req, res) {
   try {
-    const listing = await Listing.findById(req.params.id).populate(
-      'seller',
-      'fullName trustScore verificationPath completedSales'
-    );
+    const listing = await loadListingForViewer(req.params.id, req.user);
     if (!listing) return res.status(404).json({ error: 'Listing not found' });
     res.json(listing);
   } catch (err) {
@@ -152,36 +178,51 @@ async function setMeetup(req, res) {
       return res.status(400).json({ error: 'Invalid safe zone selection' });
     }
 
-    const listing = await Listing.findByIdAndUpdate(
+    const updated = await Listing.findByIdAndUpdate(
       req.params.id,
       { meetupSafeZone: safeZone, meetupConfirmed: false },
       { new: true }
     );
-    if (!listing) return res.status(404).json({ error: 'Listing not found' });
-    res.json(listing);
+    if (!updated) return res.status(404).json({ error: 'Listing not found' });
+
+    // Same shape as the detail page (seller filled in, private fields removed)
+    res.json(await loadListingForViewer(updated._id, req.user));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 }
 
 // PATCH /api/listings/:id/meetup/confirm
+// PATCH /api/listings/:id/meetup/confirm
 async function confirmMeetup(req, res) {
   try {
     const listing = await Listing.findById(req.params.id);
     if (!listing) return res.status(404).json({ error: 'Listing not found' });
 
-    listing.meetupConfirmed = true;
+    const callerId = req.user._id.toString();
+
+    // The seller must never be able to release the payment to themselves
+    if (listing.seller.toString() === callerId) {
+      return res
+        .status(403)
+        .json({ error: "Sellers can't confirm their own meetup. The buyer confirms it." });
+    }
 
     // If a payment was made for this listing and it's sitting in 'held',
-    // confirming the meetup is what releases it to the seller
+    // confirming the meetup is what releases it to the seller.
+    // Only the buyer who actually paid may do that.
     const payment = paymentStore.getLatestByListingId(listing._id.toString());
     if (payment && payment.status === 'held') {
+      if (String(payment.buyerId) !== callerId) {
+        return res.status(403).json({ error: 'Only the buyer who paid can confirm this meetup.' });
+      }
       paymentStore.releaseByListingId(listing._id.toString());
       listing.status = 'sold';
     }
 
+    listing.meetupConfirmed = true;
     await listing.save();
-    res.json(listing);
+    res.json(await loadListingForViewer(listing._id, req.user));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -196,4 +237,4 @@ async function getMyListings(req, res) {
   }
 }
 
-module.exports = { createListing,getMyListings, getListings, getListingById, updateListing, deleteListing, setMeetup, confirmMeetup, SAFE_ZONES };
+module.exports = { createListing, getMyListings, getListings, getListingById, updateListing, deleteListing, setMeetup, confirmMeetup, SAFE_ZONES };
