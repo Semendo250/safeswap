@@ -7,11 +7,22 @@ const { normalizeKenyanPhone } = require('../utils/phone');
 const { generateOtp, storeOtp, verifyOtp, sendOtpEmail, isUniversityEmail } = require('../utils/otp');
 
 const PHONE_ERROR = 'Enter a valid Kenyan phone number, e.g. 0712 345 678';
+const EMAIL_TIMEOUT_MS = 20000;
 
 function signToken(userId) {
   return jwt.sign({ id: userId }, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRES_IN || '7d',
   });
+}
+
+// Gives up on a promise after `ms` milliseconds. The email code can hang for minutes
+// when the mail server can't be reached; this keeps requests from hanging with it.
+function withTimeout(promise, ms, message) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(message)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
 // One consistent user shape for login, verify-otp, /me and profile updates
@@ -46,8 +57,19 @@ function publicIdFromUrl(url) {
   return m ? m[1] : null;
 }
 
+async function deleteImageByUrl(url) {
+  const id = publicIdFromUrl(url);
+  if (!id) return;
+  try {
+    await cloudinary.uploader.destroy(id);
+  } catch (err) {
+    // best effort only
+  }
+}
+
 // POST /api/auth/signup  (JSON, or multipart when a profile picture is attached)
 async function signup(req, res) {
+  let accountSaved = false; // once true, the uploaded picture belongs to the account
   try {
     const { fullName, studentRegNo, email, password } = req.body;
     const rawPhone = (req.body.phone || '').trim();
@@ -55,6 +77,7 @@ async function signup(req, res) {
     const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
     let error = null;
     let status = 400;
+    let existing = null;
 
     if (!fullName || !studentRegNo || !email || !password) {
       error = 'Missing required fields';
@@ -64,10 +87,13 @@ async function signup(req, res) {
     } else if (rawPhone && !normalizeKenyanPhone(rawPhone)) {
       error = PHONE_ERROR;
     } else {
-      const existing = await User.findOne({ email: email.toLowerCase() });
-      if (existing) {
+      existing = await User.findOne({ email: String(email).toLowerCase().trim() });
+      if (existing && existing.emailVerified) {
         error = 'Email already registered';
         status = 409;
+      } else if (existing && existing.isBanned) {
+        error = 'Account banned';
+        status = 403;
       }
     }
 
@@ -76,22 +102,50 @@ async function signup(req, res) {
       return res.status(status).json({ error });
     }
 
+    const emailLower = String(email).toLowerCase().trim();
     const hashedPassword = await bcrypt.hash(password, 10);
-    const verificationPath = isUniversityEmail(email) ? 'university_email' : 'fallback';
+    const verificationPath = isUniversityEmail(emailLower) ? 'university_email' : 'fallback';
+    const phone = rawPhone ? normalizeKenyanPhone(rawPhone) : undefined;
 
-    const user = await User.create({
-      fullName,
-      studentRegNo,
-      email: email.toLowerCase(),
-      password: hashedPassword,
-      phone: rawPhone ? normalizeKenyanPhone(rawPhone) : undefined,
-      profilePicture: req.file ? req.file.path : undefined,
-      verificationPath,
-    });
+    let user;
+    if (existing) {
+      // An unverified account left over from an earlier attempt (for example the code
+      // email never arrived). Reuse it instead of blocking the student.
+      const oldPicture = existing.profilePicture;
+      existing.fullName = fullName;
+      existing.studentRegNo = studentRegNo;
+      existing.password = hashedPassword;
+      existing.phone = phone;
+      existing.verificationPath = verificationPath;
+      if (req.file) existing.profilePicture = req.file.path;
+      await existing.save();
+      accountSaved = true;
+      user = existing;
+      if (req.file && oldPicture) await deleteImageByUrl(oldPicture);
+    } else {
+      user = await User.create({
+        fullName,
+        studentRegNo,
+        email: emailLower,
+        password: hashedPassword,
+        phone,
+        profilePicture: req.file ? req.file.path : undefined,
+        verificationPath,
+      });
+      accountSaved = true;
+    }
 
     const otp = generateOtp();
     await storeOtp(user.email, otp);
-    await sendOtpEmail(user.email, otp);
+    try {
+      await withTimeout(sendOtpEmail(user.email, otp), EMAIL_TIMEOUT_MS, 'Email sending timed out');
+    } catch (mailErr) {
+      console.error('Signup: could not send the verification email:', mailErr.message);
+      return res.status(503).json({
+        error:
+          "We couldn't send your verification email right now. Your details are saved, so please try signing up again in a few minutes.",
+      });
+    }
 
     res.status(201).json({
       message: 'Signup successful. Check your email for a verification code.',
@@ -99,7 +153,7 @@ async function signup(req, res) {
       userId: user._id,
     });
   } catch (err) {
-    await discardUpload(req.file);
+    if (!accountSaved) await discardUpload(req.file);
     res.status(500).json({ error: err.message });
   }
 }
@@ -139,7 +193,14 @@ async function resendOtp(req, res) {
 
     const otp = generateOtp();
     await storeOtp(user.email, otp);
-    await sendOtpEmail(user.email, otp);
+    try {
+      await withTimeout(sendOtpEmail(user.email, otp), EMAIL_TIMEOUT_MS, 'Email sending timed out');
+    } catch (mailErr) {
+      console.error('Resend: could not send the verification email:', mailErr.message);
+      return res
+        .status(503)
+        .json({ error: "We couldn't send the code right now. Please try again in a few minutes." });
+    }
 
     res.json({ message: 'A new code has been sent' });
   } catch (err) {
@@ -215,16 +276,7 @@ async function updateProfile(req, res) {
     }).select('-password');
 
     // Replace the old picture so Cloudinary doesn't fill up with unused images
-    if (req.file && oldPicture) {
-      const oldId = publicIdFromUrl(oldPicture);
-      if (oldId) {
-        try {
-          await cloudinary.uploader.destroy(oldId);
-        } catch (err) {
-          // best effort only
-        }
-      }
-    }
+    if (req.file && oldPicture) await deleteImageByUrl(oldPicture);
 
     res.json(publicUser(user));
   } catch (err) {
@@ -243,7 +295,11 @@ async function forgotPassword(req, res) {
       const token = generateOtp();
       await PasswordResetToken.deleteMany({ email: user.email });
       await PasswordResetToken.create({ email: user.email, token });
-      await sendOtpEmail(user.email, token);
+      try {
+        await withTimeout(sendOtpEmail(user.email, token), EMAIL_TIMEOUT_MS, 'Email sending timed out');
+      } catch (mailErr) {
+        console.error('Forgot password: could not send the reset email:', mailErr.message);
+      }
     }
 
     res.json({ message: 'If an account exists for this email, a reset code has been sent.' });
