@@ -1,9 +1,7 @@
-import { useContext } from 'react';
 import { Routes, Route } from 'react-router-dom';
-import { AuthContext } from './context/AuthContext';
 import Navbar from './components/Navbar';
-import Home from './pages/Home';
 import Landing from './pages/Landing';
+import Browse from './pages/Browse';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
 import VerifyOtp from './pages/VerifyOtp';
@@ -20,14 +18,6 @@ import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import Profile from './pages/Profile';
 
-// Logged-out visitors see the landing page at "/", logged-in users see Home.
-// Waits for the login check first, so signed-in users never flash the landing page.
-function HomeRoute() {
-  const { user, loading } = useContext(AuthContext);
-  if (loading) return null;
-  return user ? <Home /> : <Landing />;
-}
-
 function App() {
   return (
     <>
@@ -41,8 +31,8 @@ function App() {
         <Route path="/admin/verification" element={<VerificationQueue />} />
         <Route path="/admin" element={<Dashboard />} />
         <Route path="/admin/flagged" element={<FlaggedQueue />} />
-        <Route path="/" element={<HomeRoute />} />
-        <Route path="/browse" element={<Home />} />
+        <Route path="/" element={<Landing />} />
+        <Route path="/browse" element={<Browse />} />
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
         <Route path="/verify-otp" element={<VerifyOtp />} />

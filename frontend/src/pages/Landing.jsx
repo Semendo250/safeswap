@@ -1,4 +1,6 @@
+import { useContext } from 'react';
 import { Link } from 'react-router-dom';
+import { AuthContext } from '../context/AuthContext';
 
 const STEPS = [
   {
@@ -97,6 +99,9 @@ function PhoneArt() {
 }
 
 export default function Landing() {
+  const { user, loading } = useContext(AuthContext);
+  if (loading) return null;
+
   return (
     <div className="lp">
       <style>{CSS}</style>
@@ -112,12 +117,16 @@ export default function Landing() {
             </p>
             <div className="lp-actions">
               <Link to="/browse" className="lp-btn lp-btn-primary">Browse listings</Link>
-              <Link to="/signup" className="lp-btn lp-btn-outline">Create account</Link>
+              {user ? (
+                <Link to="/create-listing" className="lp-btn lp-btn-outline">Create a listing</Link>
+              ) : (
+                <Link to="/signup" className="lp-btn lp-btn-outline">Create account</Link>
+              )}
               <button type="button" className="lp-textlink" onClick={scrollToHow}>
                 See how it works
               </button>
             </div>
-            <p className="lp-note">Sign up with your university email to get a verified badge.</p>
+            {!user && <p className="lp-note">Sign up with your university email to get a verified badge.</p>}
           </div>
 
           {/* Sample listing: shows the checks every deal goes through */}
@@ -206,10 +215,23 @@ export default function Landing() {
       <section className="lp-cta" aria-labelledby="lp-cta-title">
         <div className="lp-wrap">
           <h2 id="lp-cta-title" className="lp-h2">Ready to swap safely?</h2>
-          <p>Create an account with your university email, or look around first.</p>
+          <p>
+            {user
+              ? 'Browse what is for sale, or list something of your own.'
+              : 'Create an account with your university email, or look around first.'}
+          </p>
           <div className="lp-actions">
-            <Link to="/signup" className="lp-btn lp-btn-light">Create account</Link>
-            <Link to="/browse" className="lp-btn lp-btn-ghost-light">Browse listings</Link>
+            {user ? (
+              <>
+                <Link to="/browse" className="lp-btn lp-btn-light">Browse listings</Link>
+                <Link to="/create-listing" className="lp-btn lp-btn-ghost-light">Create a listing</Link>
+              </>
+            ) : (
+              <>
+                <Link to="/signup" className="lp-btn lp-btn-light">Create account</Link>
+                <Link to="/browse" className="lp-btn lp-btn-ghost-light">Browse listings</Link>
+              </>
+            )}
           </div>
         </div>
       </section>
@@ -219,8 +241,12 @@ export default function Landing() {
           <p>SafeSwap. Verified secondhand for Maseno University students.</p>
           <nav aria-label="Footer">
             <Link to="/browse">Browse</Link>
-            <Link to="/login">Log in</Link>
-            <Link to="/signup">Sign up</Link>
+            {!user && (
+              <>
+                <Link to="/login">Log in</Link>
+                <Link to="/signup">Sign up</Link>
+              </>
+            )}
           </nav>
         </div>
       </footer>
@@ -284,4 +310,81 @@ const CSS = `
 .lp-mock-price { margin-top: 2px; font-size: 15px; font-weight: 600; color: var(--color-primary); }
 .lp-mock-tag {
   font-size: 11px; padding: 3px 8px; border-radius: 999px; white-space: nowrap;
-  background: var(--color-surface); color: var(--color-muted); border: 1px solid
+  background: var(--color-surface); color: var(--color-muted); border: 1px solid var(--color-border);
+}
+.lp-mock-checks { list-style: none; padding: 0; margin-top: 14px; display: grid; gap: 10px; }
+.lp-mock-checks li { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; line-height: 1.4; }
+.lp-mock-pay {
+  margin-top: 16px; padding: 12px; border-radius: 10px; text-align: center;
+  background: var(--color-primary); color: #fff; font-size: 15px; font-weight: 600;
+}
+
+/* Sections */
+.lp-section { padding: 48px 0; }
+.lp-band { background: var(--color-surface); }
+#how-it-works { scroll-margin-top: 72px; }
+.lp-h2 { font-size: clamp(24px, 5.5vw, 34px); line-height: 1.15; font-weight: 800; letter-spacing: -0.02em; }
+.lp-sub {
+  margin-top: 10px; max-width: 560px; font-size: 16px; line-height: 1.6;
+  color: color-mix(in srgb, var(--color-ink) 72%, #fff);
+}
+
+/* Steps */
+.lp-steps { list-style: none; padding: 0; margin-top: 28px; display: grid; gap: 22px; }
+.lp-step { display: flex; gap: 14px; }
+.lp-step-num {
+  flex-shrink: 0; width: 32px; height: 32px; border-radius: 50%;
+  background: var(--color-primary); color: #fff; font-size: 15px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+}
+.lp-step h3 { font-size: 16px; font-weight: 700; }
+.lp-step p { margin-top: 4px; font-size: 14px; line-height: 1.55; color: var(--color-muted); }
+
+/* Features */
+.lp-features { list-style: none; padding: 0; margin-top: 26px; display: grid; gap: 0 48px; }
+.lp-feature { display: flex; gap: 12px; padding: 18px 0; border-top: 1px solid var(--color-border); }
+.lp-feature h3 { font-size: 16px; font-weight: 700; }
+.lp-feature p { margin-top: 4px; font-size: 14px; line-height: 1.55; color: var(--color-muted); }
+
+/* Safe zones */
+.lp-zones-wrap { padding-bottom: 48px; }
+.lp-zones {
+  display: grid; gap: 20px; padding: 28px 22px; border-radius: 16px;
+  background: color-mix(in srgb, var(--color-primary) 7%, #fff);
+  border: 1px solid color-mix(in srgb, var(--color-primary) 18%, #fff);
+}
+.lp-pills { display: flex; flex-wrap: wrap; gap: 10px; }
+.lp-pill {
+  display: inline-flex; align-items: center; gap: 6px; padding: 9px 14px; border-radius: 999px;
+  background: #fff; border: 1px solid var(--color-border); font-size: 14px; font-weight: 600;
+}
+
+/* Final call to action */
+.lp-cta { background: var(--color-primary); color: #fff; text-align: center; padding: 52px 0; }
+.lp-cta .lp-h2 { color: #fff; }
+.lp-cta p { margin: 10px auto 0; max-width: 480px; line-height: 1.6; color: rgba(255,255,255,0.88); }
+.lp-cta .lp-actions { justify-content: center; }
+
+/* Footer */
+.lp-footer { border-top: 1px solid var(--color-border); padding: 22px 0 28px; font-size: 13px; color: var(--color-muted); }
+.lp-footer-inner { display: flex; flex-wrap: wrap; gap: 10px 24px; justify-content: space-between; align-items: center; }
+.lp-footer nav { display: flex; gap: 18px; }
+.lp-footer a { color: var(--color-muted); text-decoration: none; }
+
+@media (max-width: 480px) {
+  .lp-actions .lp-btn { flex: 1 1 100%; }
+}
+
+@media (min-width: 860px) {
+  .lp-hero { padding: 72px 0 80px; }
+  .lp-hero-grid { grid-template-columns: 1.1fr 0.9fr; gap: 56px; }
+  .lp-mock { justify-self: end; }
+  .lp-section { padding: 72px 0; }
+  .lp-steps { grid-template-columns: repeat(4, 1fr); gap: 28px; }
+  .lp-step { flex-direction: column; gap: 12px; }
+  .lp-features { grid-template-columns: 1fr 1fr; }
+  .lp-zones-wrap { padding-bottom: 72px; }
+  .lp-zones { grid-template-columns: 1fr 1fr; align-items: center; padding: 40px; gap: 32px; }
+  .lp-cta { padding: 72px 0; }
+}
+`;

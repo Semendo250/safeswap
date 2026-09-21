@@ -23,13 +23,13 @@ export default function Login() {
       setSubmitting(true);
       const res = await login(form);
       loginUser(res.data.user, res.data.token);
-      navigate('/');
+
     } catch (err) {
       setError(err.response?.data?.error || 'Login failed');
     } finally {
       setSubmitting(false);
     }
-  }
+  }      navigate('/browse');
 
   return (
     <div className="container">

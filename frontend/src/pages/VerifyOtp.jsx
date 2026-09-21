@@ -21,7 +21,8 @@ export default function VerifyOtp() {
       const res = await verifyOtp({ email, otp });
       loginUser(res.data.user, res.data.token);
       setSuccess(true);
-      setTimeout(() => navigate('/'), 2200);
+            setTimeout(() => navigate('/browse'), 2200);
+      
     } catch (err) {
       setError(err.response?.data?.error || 'Verification failed');
       setSubmitting(false);

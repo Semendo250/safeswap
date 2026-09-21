@@ -192,6 +192,7 @@ export default function Navbar() {
             <div style={{ flex: 1 }} />
 
             <div className="sw-nav-desktop">
+                        <Link to="/browse" className="nav-pill">Browse</Link>
               {user ? (
                 <>
                   <Link to="/messages" className="nav-pill">Messages</Link>
@@ -234,6 +235,7 @@ export default function Navbar() {
 
             {menuOpen && (
               <div style={dropdownStyle}>
+                            <Link to="/browse" className={linkClass('/browse')}>Browse</Link>
                 {user ? (
                   <>
                     <Link to="/messages" className={linkClass('/messages')}>Messages</Link>
