@@ -75,7 +75,7 @@ function CheckIcon({ size = 20 }) {
 
 function PinIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style={{ color: 'var(--color-primary)' }}>
+    <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style={{ color: 'var(--lp-primary)' }}>
       <path
         d="M12 22s7-6.2 7-12a7 7 0 10-14 0c0 5.8 7 12 7 12z"
         fill="none"
@@ -255,11 +255,19 @@ export default function Landing() {
 }
 
 const CSS = `
-.lp { color: var(--color-ink); }
+.lp {
+  /* Maseno University colours */
+  --lp-primary: #126567;  /* deep teal */
+  --lp-light: #65C1CF;    /* light teal (tints only) */
+  --lp-gold: #F0B256;     /* gold accent */
+  --lp-dark: #0B2E30;     /* text on gold */
+  --lp-tint: color-mix(in srgb, var(--lp-light) 16%, #fff);
+  color: var(--color-ink);
+}
 .lp *, .lp *::before, .lp *::after { box-sizing: border-box; }
 .lp h1, .lp h2, .lp h3, .lp p, .lp ul, .lp ol { margin: 0; }
 .lp-wrap { width: 100%; max-width: 1080px; margin: 0 auto; padding: 0 20px; }
-.lp-check { color: var(--color-primary); flex-shrink: 0; }
+.lp-check { color: var(--lp-primary); flex-shrink: 0; }
 
 /* Buttons */
 .lp-btn {
@@ -270,20 +278,24 @@ const CSS = `
 }
 .lp-btn:active { transform: translateY(1px); }
 .lp-btn:focus-visible, .lp-textlink:focus-visible {
-  outline: 3px solid color-mix(in srgb, var(--color-teal) 45%, transparent); outline-offset: 2px;
+  outline: 3px solid color-mix(in srgb, var(--lp-primary) 45%, transparent); outline-offset: 2px;
 }
-.lp-btn-primary { background: var(--color-primary); color: #fff; border: 1.5px solid var(--color-primary); }
-.lp-btn-outline { background: #fff; color: var(--color-primary); border: 1.5px solid var(--color-primary); }
-.lp-btn-light { background: #fff; color: var(--color-primary); border: 1.5px solid #fff; }
+.lp-btn-primary { background: var(--lp-primary); color: #fff; border: 1.5px solid var(--lp-primary); }
+.lp-btn-primary:hover { background: color-mix(in srgb, var(--lp-primary) 86%, #000); }
+.lp-btn-outline { background: #fff; color: var(--lp-primary); border: 1.5px solid var(--lp-primary); }
+.lp-btn-outline:hover { background: var(--lp-tint); }
+/* Main button in the dark band is gold (class name kept so the page code doesn't change) */
+.lp-btn-light { background: var(--lp-gold); color: var(--lp-dark); border: 1.5px solid var(--lp-gold); }
+.lp-btn-light:hover { background: color-mix(in srgb, var(--lp-gold) 88%, #fff); }
 .lp-btn-ghost-light { background: transparent; color: #fff; border: 1.5px solid rgba(255,255,255,0.7); }
 .lp-textlink {
   background: none; border: none; box-shadow: none; border-radius: 6px;
   min-width: 0; min-height: 0; width: auto; padding: 8px 4px;
-  color: var(--color-teal); font-size: 15px; font-weight: 600; cursor: pointer;
+  color: var(--lp-primary); font-size: 15px; font-weight: 600; cursor: pointer;
 }
 
 /* Hero */
-.lp-hero { padding: 36px 0 44px; }
+.lp-hero { padding: 36px 0 44px; background: linear-gradient(180deg, var(--lp-tint) 0%, #fff 100%); }
 .lp-hero-grid { display: grid; gap: 36px; align-items: center; }
 .lp-h1 { font-size: clamp(32px, 8vw, 54px); line-height: 1.08; font-weight: 800; letter-spacing: -0.025em; }
 .lp-lead {
@@ -299,15 +311,16 @@ const CSS = `
   border: 1px solid var(--color-border); border-radius: 16px; overflow: hidden;
   box-shadow: 0 14px 34px rgba(0,0,0,0.08);
 }
+.lp-mock::before { content: ''; display: block; height: 4px; background: var(--lp-gold); }
 .lp-mock-photo {
   height: 140px; display: flex; align-items: center; justify-content: center;
-  color: var(--color-primary);
-  background: color-mix(in srgb, var(--color-primary) 8%, #fff);
+  color: var(--lp-primary);
+  background: color-mix(in srgb, var(--lp-light) 22%, #fff);
 }
 .lp-mock-body { padding: 16px 18px 18px; }
 .lp-mock-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
 .lp-mock-title { font-size: 17px; font-weight: 700; }
-.lp-mock-price { margin-top: 2px; font-size: 15px; font-weight: 600; color: var(--color-primary); }
+.lp-mock-price { margin-top: 2px; font-size: 15px; font-weight: 600; color: var(--lp-primary); }
 .lp-mock-tag {
   font-size: 11px; padding: 3px 8px; border-radius: 999px; white-space: nowrap;
   background: var(--color-surface); color: var(--color-muted); border: 1px solid var(--color-border);
@@ -316,12 +329,12 @@ const CSS = `
 .lp-mock-checks li { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; line-height: 1.4; }
 .lp-mock-pay {
   margin-top: 16px; padding: 12px; border-radius: 10px; text-align: center;
-  background: var(--color-primary); color: #fff; font-size: 15px; font-weight: 600;
+  background: var(--lp-primary); color: #fff; font-size: 15px; font-weight: 600;
 }
 
 /* Sections */
 .lp-section { padding: 48px 0; }
-.lp-band { background: var(--color-surface); }
+.lp-band { background: var(--lp-tint); }
 #how-it-works { scroll-margin-top: 72px; }
 .lp-h2 { font-size: clamp(24px, 5.5vw, 34px); line-height: 1.15; font-weight: 800; letter-spacing: -0.02em; }
 .lp-sub {
@@ -334,7 +347,7 @@ const CSS = `
 .lp-step { display: flex; gap: 14px; }
 .lp-step-num {
   flex-shrink: 0; width: 32px; height: 32px; border-radius: 50%;
-  background: var(--color-primary); color: #fff; font-size: 15px; font-weight: 700;
+  background: var(--lp-primary); color: #fff; font-size: 15px; font-weight: 700;
   display: flex; align-items: center; justify-content: center;
 }
 .lp-step h3 { font-size: 16px; font-weight: 700; }
@@ -350,8 +363,8 @@ const CSS = `
 .lp-zones-wrap { padding-bottom: 48px; }
 .lp-zones {
   display: grid; gap: 20px; padding: 28px 22px; border-radius: 16px;
-  background: color-mix(in srgb, var(--color-primary) 7%, #fff);
-  border: 1px solid color-mix(in srgb, var(--color-primary) 18%, #fff);
+  background: var(--lp-tint);
+  border: 1px solid color-mix(in srgb, var(--lp-light) 45%, #fff);
 }
 .lp-pills { display: flex; flex-wrap: wrap; gap: 10px; }
 .lp-pill {
@@ -360,7 +373,7 @@ const CSS = `
 }
 
 /* Final call to action */
-.lp-cta { background: var(--color-primary); color: #fff; text-align: center; padding: 52px 0; }
+.lp-cta { background: var(--lp-primary); color: #fff; text-align: center; padding: 52px 0; }
 .lp-cta .lp-h2 { color: #fff; }
 .lp-cta p { margin: 10px auto 0; max-width: 480px; line-height: 1.6; color: rgba(255,255,255,0.88); }
 .lp-cta .lp-actions { justify-content: center; }

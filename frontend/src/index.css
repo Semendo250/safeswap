@@ -14,9 +14,13 @@ img {
   height: auto;
 }
 :root {
-  --color-primary: #0E6E52;
-  --color-primary-dark: #0A5540;
-  --color-teal: #3BAFAF;
+  /* Maseno University palette */
+  --color-primary: #126567;        /* deep teal: buttons, chat bubbles, avatars */
+  --color-primary-dark: #0D4B4D;   /* hover state */
+  --color-teal: #126567;           /* links, outlines, focus rings */
+  --color-accent: #65C1CF;         /* light teal: borders and tints only, too pale for text */
+  --color-gold-bright: #F0B256;    /* Maseno gold: fills and accents, use dark text on it */
+
   --color-gold: #C9962C;
   --color-gold-bg: #FBF1DE;
   --color-bg: #FFFFFF;
@@ -180,20 +184,6 @@ button.tab.active {
   border-bottom: 2px solid var(--color-teal) !important;
 }
 
-.btn-outline {
-  background: transparent;
-  border: 1px solid var(--color-teal);
-  color: var(--color-teal);
-  padding: 6px 14px;
-  font-size: 13px;
-  font-weight: 600;
-  border-radius: var(--radius);
-  cursor: pointer;
-}
-.btn-outline:hover {
-  background: var(--color-teal);
-  color: #fff;
-}
 .btn-outline {
   background: transparent;
   border: 1px solid var(--color-teal);
