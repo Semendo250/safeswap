@@ -110,51 +110,27 @@ export default function Navbar() {
       >
         {onAdminPage ? (
           <>
+            {/* Back arrow and hamburger are the same width, so "Admin" sits exactly in the middle */}
             <button
               onClick={exitAdmin}
               aria-label="Exit admin"
-              style={{
-                flexShrink: 0,
-                background: 'transparent',
-                border: 'none',
-                fontSize: '20px',
-                padding: '4px 8px',
-                color: 'var(--color-ink)',
-                cursor: 'pointer',
-                lineHeight: 1,
-              }}
+              style={{ ...iconBtn, display: 'inline-flex', color: 'var(--color-ink)', marginLeft: '-10px' }}
             >
               &larr;
             </button>
 
-            {/* This spacer both centers the "Admin" label and pushes the
-                hamburger all the way to the right, regardless of how wide
-                the back arrow or hamburger button end up being */}
             <div style={{ flex: 1, textAlign: 'center', fontWeight: 700, color: 'var(--color-primary)' }}>
               Admin
             </div>
 
+            {/* Admin hamburger: plain icon, no border, far right */}
             <button
               onClick={toggleAdminMenu}
               aria-expanded={adminMenuOpen}
               aria-label="Admin menu"
-              style={{
-                flexShrink: 0,
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '6px 10px',
-                borderRadius: '8px',
-                border: '1px solid var(--color-teal)',
-                background: adminMenuOpen ? 'var(--color-surface)' : '#fff',
-                color: 'var(--color-teal)',
-                fontSize: '13px',
-                fontWeight: 600,
-                cursor: 'pointer',
-                lineHeight: 1,
-              }}
+              style={{ ...iconBtn, display: 'inline-flex', color: 'var(--color-teal)', marginRight: '-10px' }}
             >
-              <span style={{ fontSize: '18px' }}>{adminMenuOpen ? '✕' : '☰'}</span>
+              {adminMenuOpen ? '✕' : '☰'}
             </button>
 
             {adminMenuOpen && (
@@ -187,12 +163,11 @@ export default function Navbar() {
               <img src="/logo-full.svg" alt="SafeSwap" style={{ height: '32px', display: 'block' }} />
             </Link>
 
-            {/* Spacer: pushes whichever of desktop-links or the hamburger
-                is currently visible (via CSS above) all the way right */}
+            {/* Spacer: pushes the desktop links / hamburger to the far right */}
             <div style={{ flex: 1 }} />
 
             <div className="sw-nav-desktop">
-                        <Link to="/browse" className="nav-pill">Browse</Link>
+              <Link to="/browse" className="nav-pill">Browse</Link>
               {user ? (
                 <>
                   <Link to="/messages" className="nav-pill">Messages</Link>
@@ -214,28 +189,20 @@ export default function Navbar() {
               )}
             </div>
 
+            {/* Main hamburger (phones only; its display comes from the CSS above) */}
             <button
               className="sw-nav-burger"
               onClick={toggleMenu}
               aria-expanded={menuOpen}
               aria-label="Main menu"
-              style={{
-                flexShrink: 0,
-                background: 'transparent',
-                border: 'none',
-                fontSize: '22px',
-                padding: '4px 8px',
-                color: 'var(--color-ink)',
-                cursor: 'pointer',
-                lineHeight: 1,
-              }}
+              style={{ ...iconBtn, color: 'var(--color-ink)', marginRight: '-10px' }}
             >
               {menuOpen ? '✕' : '☰'}
             </button>
 
             {menuOpen && (
               <div style={dropdownStyle}>
-                            <Link to="/browse" className={linkClass('/browse')}>Browse</Link>
+                <Link to="/browse" className={linkClass('/browse')}>Browse</Link>
                 {user ? (
                   <>
                     <Link to="/messages" className={linkClass('/messages')}>Messages</Link>
@@ -344,6 +311,26 @@ export default function Navbar() {
     </>
   );
 }
+
+// Plain icon button: fixed 44px, no border, no background. minWidth 0 overrides the
+// 110px minimum that index.css gives every button (that was stretching the menu box).
+// `display` is left out on purpose so the main hamburger's show/hide CSS still works.
+const iconBtn = {
+  flexShrink: 0,
+  width: '44px',
+  height: '44px',
+  minWidth: 0,
+  padding: 0,
+  alignSelf: 'center',
+  alignItems: 'center',
+  justifyContent: 'center',
+  border: 'none',
+  borderRadius: '6px',
+  background: 'transparent',
+  fontSize: '22px',
+  lineHeight: 1,
+  cursor: 'pointer',
+};
 
 const dropdownStyle = {
   position: 'absolute',
