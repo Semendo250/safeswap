@@ -174,24 +174,27 @@ export default function Profile() {
   aria-label={currentAvatarSrc ? 'Change photo' : 'Add photo'}
   style={{
     position: 'absolute',
-    bottom: '-2px',
-    right: '-2px',
-    width: '22px',
-    height: '22px',
+    right: '1px',
+    bottom: '1px',
+    width: '26px',
+    height: '26px',
+    minWidth: 0,
+    minHeight: 0,
+    boxSizing: 'border-box',
+    padding: 0,
     borderRadius: '50%',
     background: 'var(--color-primary)',
     border: '2px solid #fff',
-    color: '#fff',
-    fontSize: '14px',
-    lineHeight: 1,
+    boxShadow: '0 1px 3px rgba(0,0,0,0.25)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
+    fontSize: '12px',
+    lineHeight: 1,
     cursor: 'pointer',
-    padding: 0,
   }}
 >
-  +
+  ✏️
 </button>
             </>
           )}
