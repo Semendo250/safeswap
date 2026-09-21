@@ -333,17 +333,18 @@ const iconBtn = {
 };
 
 const dropdownStyle = {
-  position: 'absolute',
+  position: 'fixed',
   top: '60px',
   left: 0,
   right: 0,
+  zIndex: 60,
   background: '#fff',
   borderBottom: '1px solid var(--color-border)',
   boxShadow: '0 4px 10px rgba(0,0,0,0.08)',
   display: 'flex',
   flexDirection: 'column',
   padding: '8px 16px',
-  // Never taller than the visible screen under the bar; scrolls inside if it has to
+  // Never taller than the screen under the bar; scrolls inside if it has to
   maxHeight: 'calc(100dvh - 60px)',
   overflowY: 'auto',
   overscrollBehavior: 'contain',
