@@ -127,8 +127,6 @@ export default function Profile() {
     <div className="container">
       <BackButton />
 
-      {/* Header block: explicit width 100%, everything forced to the
-          horizontal center regardless of the container's own text-align */}
       <div
         style={{
           width: '100%',
@@ -143,36 +141,62 @@ export default function Profile() {
           borderBottom: '1px solid var(--color-border)',
         }}
       >
-        <button
-          type="button"
-          onClick={() => currentAvatarSrc && setLightboxOpen(true)}
-          style={{ background: 'none', border: 'none', padding: 0, margin: '0 auto', cursor: currentAvatarSrc ? 'zoom-in' : 'default', display: 'block' }}
-          aria-label="View profile picture"
-        >
-          <Avatar
-            src={currentAvatarSrc}
-            name={user?.fullName}
-            size={96}
-            style={{ border: '2px solid var(--color-border)', marginBottom: '6px' }}
-          />
-        </button>
-
-        {tab === 'edit' && (
-          <>
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              onChange={handlePick}
-              style={{ display: 'none' }}
+        {/* Avatar with an edit badge in the corner (edit mode only) -
+            clicking the picture itself still opens the lightbox; clicking
+            the small camera badge opens the file picker */}
+        <div style={{ position: 'relative', margin: '0 auto' }}>
+          <button
+            type="button"
+            onClick={() => currentAvatarSrc && setLightboxOpen(true)}
+            style={{ background: 'none', border: 'none', padding: 0, cursor: currentAvatarSrc ? 'zoom-in' : 'default', display: 'block' }}
+            aria-label="View profile picture"
+          >
+            <Avatar
+              src={currentAvatarSrc}
+              name={user?.fullName}
+              size={96}
+              style={{ border: '2px solid var(--color-border)' }}
             />
-            <button type="button" className="btn-outline" onClick={() => fileRef.current?.click()} style={{ marginBottom: '4px' }}>
-              {currentAvatarSrc ? 'Change photo' : 'Add photo'}
-            </button>
-          </>
-        )}
+          </button>
 
-        <span style={{ fontWeight: 600, fontSize: '18px' }}>{user?.fullName}</span>
+          {tab === 'edit' && (
+            <>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={handlePick}
+                style={{ display: 'none' }}
+              />
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                aria-label={currentAvatarSrc ? 'Change photo' : 'Add photo'}
+                style={{
+                  position: 'absolute',
+                  bottom: '0',
+                  right: '0',
+                  width: '30px',
+                  height: '30px',
+                  borderRadius: '50%',
+                  background: 'var(--color-primary)',
+                  border: '2px solid #fff',
+                  color: '#fff',
+                  fontSize: '14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  padding: 0,
+                }}
+              >
+                📷
+              </button>
+            </>
+          )}
+        </div>
+
+        <span style={{ fontWeight: 600, fontSize: '18px', marginTop: '6px' }}>{user?.fullName}</span>
         <span style={{ color: 'var(--color-muted)', fontSize: '13px' }}>{user?.email}</span>
         {user?.location && (
           <span style={{ color: 'var(--color-muted)', fontSize: '13px' }}>📍 {user.location}</span>
