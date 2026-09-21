@@ -36,10 +36,10 @@ async function initiatePayment(req, res) {
       return res.status(400).json({ error: 'This listing is no longer available' });
     }
 
-    // Money is already held for this item: a new attempt would replace its record
-    // and strand the payment. This also stops the same buyer paying twice.
-    const existing = paymentStore.getLatestByListingId(listing._id.toString());
-    if (existing && existing.status === 'held') {
+    // Money is already held for this item: a second payment would strand one of them.
+    // This also stops the same buyer paying twice.
+    const held = await paymentStore.getHeldByListingId(listing._id.toString());
+    if (held) {
       return res.status(409).json({ error: 'A payment for this item is already in progress' });
     }
 
@@ -50,7 +50,7 @@ async function initiatePayment(req, res) {
       transactionDesc: `SafeSwap: ${listing.title}`,
     });
 
-    paymentStore.createPending(result.CheckoutRequestID, {
+    await paymentStore.createPending(result.CheckoutRequestID, {
       listingId: listing._id.toString(),
       buyerId: req.user._id.toString(),
     });
@@ -80,13 +80,7 @@ async function handleCallback(req, res) {
 
     // Only a pending payment can change state, so a repeated or replayed callback
     // can't reopen a payment that was already released or failed.
-    const record = paymentStore.getByCheckoutId(CheckoutRequestID);
-    if (record && record.status === 'pending') {
-      paymentStore.updateStatusByCheckoutId(
-        CheckoutRequestID,
-        ResultCode === 0 ? 'held' : 'failed'
-      );
-    }
+    await paymentStore.settlePending(CheckoutRequestID, ResultCode === 0 ? 'held' : 'failed');
     // ResultCode 0 = success. Status moves to 'held' - this is the
     // escrow-lite state: payment confirmed but not yet released to the
     // seller until handover is confirmed (see confirmMeetup in listings).
@@ -99,9 +93,13 @@ async function handleCallback(req, res) {
 
 // GET /api/payments/status/:checkoutRequestId
 async function getPaymentStatus(req, res) {
-  const record = paymentStore.getByCheckoutId(req.params.checkoutRequestId);
-  if (!record) return res.status(404).json({ error: 'No record found' });
-  res.json(record);
+  try {
+    const record = await paymentStore.getByCheckoutId(req.params.checkoutRequestId);
+    if (!record) return res.status(404).json({ error: 'No record found' });
+    res.json(record);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 }
 
 module.exports = { initiatePayment, handleCallback, getPaymentStatus };

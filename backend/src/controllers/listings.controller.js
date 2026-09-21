@@ -167,10 +167,12 @@ async function deleteListing(req, res) {
     res.status(500).json({ error: err.message });
   }
 }
+
 const SAFE_ZONES = ['Library entrance', 'Main gate', 'Student center', 'Hostel common room'];
 
 // PATCH /api/listings/:id/meetup
-// Buyer or seller proposes/confirms a safe-zone meetup for this listing
+// Picks the safe-zone meetup for this listing. Once a buyer's payment is being
+// held, only that buyer and the seller can change it.
 async function setMeetup(req, res) {
   try {
     const { safeZone } = req.body;
@@ -178,21 +180,33 @@ async function setMeetup(req, res) {
       return res.status(400).json({ error: 'Invalid safe zone selection' });
     }
 
-    const updated = await Listing.findByIdAndUpdate(
-      req.params.id,
-      { meetupSafeZone: safeZone, meetupConfirmed: false },
-      { new: true }
-    );
-    if (!updated) return res.status(404).json({ error: 'Listing not found' });
+    const listing = await Listing.findById(req.params.id);
+    if (!listing) return res.status(404).json({ error: 'Listing not found' });
+
+    if (listing.status !== 'active') {
+      return res.status(400).json({ error: 'This listing is no longer available' });
+    }
+
+    const callerId = req.user._id.toString();
+    const isSeller = listing.seller.toString() === callerId;
+    const held = await paymentStore.getHeldByListingId(listing._id.toString());
+    if (held && !isSeller && String(held.buyerId) !== callerId) {
+      return res.status(403).json({
+        error: 'A payment is already in progress for this item. Only the buyer and seller can change the meetup.',
+      });
+    }
+
+    listing.meetupSafeZone = safeZone;
+    listing.meetupConfirmed = false;
+    await listing.save();
 
     // Same shape as the detail page (seller filled in, private fields removed)
-    res.json(await loadListingForViewer(updated._id, req.user));
+    res.json(await loadListingForViewer(listing._id, req.user));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 }
 
-// PATCH /api/listings/:id/meetup/confirm
 // PATCH /api/listings/:id/meetup/confirm
 async function confirmMeetup(req, res) {
   try {
@@ -208,25 +222,38 @@ async function confirmMeetup(req, res) {
         .json({ error: "Sellers can't confirm their own meetup. The buyer confirms it." });
     }
 
-    // If a payment was made for this listing and it's sitting in 'held',
-    // confirming the meetup is what releases it to the seller.
-    // Only the buyer who actually paid may do that.
-    const payment = paymentStore.getLatestByListingId(listing._id.toString());
-    if (payment && payment.status === 'held') {
-      if (String(payment.buyerId) !== callerId) {
+    // If a payment is being held for this listing, confirming the meetup is what
+    // releases it to the seller. Only the buyer who paid may do that.
+    let releasedCheckoutId = null;
+    const held = await paymentStore.getHeldByListingId(listing._id.toString());
+    if (held) {
+      if (String(held.buyerId) !== callerId) {
         return res.status(403).json({ error: 'Only the buyer who paid can confirm this meetup.' });
       }
-      paymentStore.releaseByListingId(listing._id.toString());
-      listing.status = 'sold';
+      const released = await paymentStore.releaseByListingId(listing._id.toString());
+      if (released) {
+        listing.status = 'sold';
+        releasedCheckoutId = released.checkoutRequestId;
+      }
     }
 
     listing.meetupConfirmed = true;
-    await listing.save();
+    try {
+      await listing.save();
+    } catch (saveErr) {
+      // Don't leave a payment released while the listing still shows as for sale
+      if (releasedCheckoutId) {
+        await paymentStore.updateStatusByCheckoutId(releasedCheckoutId, 'held');
+      }
+      throw saveErr;
+    }
+
     res.json(await loadListingForViewer(listing._id, req.user));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 }
+
 // GET /api/listings/mine
 async function getMyListings(req, res) {
   try {

@@ -1,47 +1,74 @@
-// Shared in-memory payment tracking so both payments.controller.js and
-// listings.controller.js can read/update the same records.
-// Replace with a real Payment model in MongoDB before any real deployment -
-// this resets on server restart and won't work across multiple server
-// instances.
+// Payment records, stored in MongoDB (see models/Payment.js).
+// Every function is async, so callers must `await` them.
+const Payment = require('../models/Payment');
 
-const byCheckoutId = new Map();
-const listingToCheckoutId = new Map(); // tracks the latest payment attempt per listing
-
-function createPending(checkoutRequestId, { listingId, buyerId }) {
-  byCheckoutId.set(checkoutRequestId, { listingId, buyerId, status: 'pending' });
-  listingToCheckoutId.set(listingId, checkoutRequestId);
+function toRecord(doc) {
+  if (!doc) return null;
+  return {
+    checkoutRequestId: doc.checkoutRequestId,
+    listingId: doc.listing.toString(),
+    buyerId: doc.buyer.toString(),
+    status: doc.status,
+    createdAt: doc.createdAt,
+  };
 }
 
-function updateStatusByCheckoutId(checkoutRequestId, status) {
-  const record = byCheckoutId.get(checkoutRequestId);
-  if (!record) return null;
-  record.status = status;
-  byCheckoutId.set(checkoutRequestId, record);
-  return record;
+async function createPending(checkoutRequestId, { listingId, buyerId }) {
+  const doc = await Payment.create({
+    checkoutRequestId,
+    listing: listingId,
+    buyer: buyerId,
+    status: 'pending',
+  });
+  return toRecord(doc);
 }
 
-function getByCheckoutId(checkoutRequestId) {
-  return byCheckoutId.get(checkoutRequestId) || null;
+// Moves a payment out of 'pending' exactly once. Returns null if it was not pending,
+// so a repeated or replayed M-Pesa callback can't change a payment that already settled.
+async function settlePending(checkoutRequestId, status) {
+  const doc = await Payment.findOneAndUpdate(
+    { checkoutRequestId, status: 'pending' },
+    { status },
+    { new: true }
+  );
+  return toRecord(doc);
 }
 
-function getLatestByListingId(listingId) {
-  const checkoutId = listingToCheckoutId.get(listingId.toString());
-  if (!checkoutId) return null;
-  return byCheckoutId.get(checkoutId) || null;
+async function updateStatusByCheckoutId(checkoutRequestId, status) {
+  const doc = await Payment.findOneAndUpdate({ checkoutRequestId }, { status }, { new: true });
+  return toRecord(doc);
 }
 
-// Releases the held payment tied to a listing - called once meetup is
-// confirmed, marking the escrow-lite transaction complete
-function releaseByListingId(listingId) {
-  const checkoutId = listingToCheckoutId.get(listingId.toString());
-  if (!checkoutId) return null;
-  return updateStatusByCheckoutId(checkoutId, 'released');
+async function getByCheckoutId(checkoutRequestId) {
+  return toRecord(await Payment.findOne({ checkoutRequestId }).lean());
+}
+
+async function getLatestByListingId(listingId) {
+  return toRecord(await Payment.findOne({ listing: listingId }).sort({ createdAt: -1 }).lean());
+}
+
+// The payment currently holding money for this listing, if any
+async function getHeldByListingId(listingId) {
+  return toRecord(await Payment.findOne({ listing: listingId, status: 'held' }).lean());
+}
+
+// Releases the held payment for a listing. It is one atomic step (held -> released),
+// so two quick taps on "Confirm meetup" can't release it twice.
+async function releaseByListingId(listingId) {
+  const doc = await Payment.findOneAndUpdate(
+    { listing: listingId, status: 'held' },
+    { status: 'released' },
+    { new: true, sort: { createdAt: -1 } }
+  );
+  return toRecord(doc);
 }
 
 module.exports = {
   createPending,
+  settlePending,
   updateStatusByCheckoutId,
   getByCheckoutId,
   getLatestByListingId,
+  getHeldByListingId,
   releaseByListingId,
 };
