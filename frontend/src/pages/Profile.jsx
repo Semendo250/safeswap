@@ -44,6 +44,12 @@ export default function Profile() {
       if (newPreview) URL.revokeObjectURL(newPreview);
     };
   }, [newPreview]);
+  // Hide the "Profile updated" message after 3 seconds
+useEffect(() => {
+  if (!saved) return;
+  const timer = setTimeout(() => setSaved(false), 3000);
+  return () => clearTimeout(timer);
+}, [saved]);
 
   function handlePick(e) {
     const file = e.target.files?.[0];
@@ -299,7 +305,7 @@ export default function Profile() {
           </div>
 
           {saveError && <p style={{ color: 'var(--color-warning)', margin: 0 }}>{saveError}</p>}
-          {saved && <p style={{ color: 'var(--color-success)', margin: 0 }}>Profile updated</p>}
+          {saved && <p style={{ color: 'var(--color-success)', margin: 0 }}>Profile updated succesfully</p>}
 
           <button type="submit" disabled={saving}>
             {saving ? 'Saving...' : 'Save changes'}
