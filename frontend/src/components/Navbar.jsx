@@ -77,7 +77,7 @@ export default function Navbar() {
   return (
     <>
       <style>{`
-        .sw-nav-desktop { display: flex; gap: 16px; align-items: center; font-size: 14px; font-weight: 500; }
+        .sw-nav-desktop { display: flex; gap: 16px; align-items: center; font-size: 14px; font-weight: 500; flex-shrink: 0; }
         .sw-nav-burger { display: none; }
         @media (max-width: 767px) {
           .sw-nav-desktop { display: none; }
@@ -100,23 +100,21 @@ export default function Navbar() {
           zIndex: 50,
           height: '60px',
           boxSizing: 'border-box',
+          width: '100%',
           display: 'flex',
           alignItems: 'center',
-          gap: '8px',
           padding: '0 16px',
           borderBottom: '3px solid var(--color-teal)',
           background: '#fff',
         }}
       >
         {onAdminPage ? (
-          // ADMIN MODE: back arrow, spacer, admin hamburger pinned far right.
-          // The general nav/links/burger are completely hidden here, so
-          // only one menu can ever be open at a time.
           <>
             <button
               onClick={exitAdmin}
               aria-label="Exit admin"
               style={{
+                flexShrink: 0,
                 background: 'transparent',
                 border: 'none',
                 fontSize: '20px',
@@ -128,14 +126,20 @@ export default function Navbar() {
             >
               &larr;
             </button>
-            <span style={{ fontWeight: 700, color: 'var(--color-primary)' }}>Admin</span>
+
+            {/* This spacer both centers the "Admin" label and pushes the
+                hamburger all the way to the right, regardless of how wide
+                the back arrow or hamburger button end up being */}
+            <div style={{ flex: 1, textAlign: 'center', fontWeight: 700, color: 'var(--color-primary)' }}>
+              Admin
+            </div>
 
             <button
               onClick={toggleAdminMenu}
               aria-expanded={adminMenuOpen}
               aria-label="Admin menu"
               style={{
-                marginLeft: 'auto',
+                flexShrink: 0,
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '6px',
@@ -178,11 +182,14 @@ export default function Navbar() {
             )}
           </>
         ) : (
-          // GENERAL MODE: logo, desktop links, single main hamburger
           <>
-            <Link to="/" style={{ marginRight: 'auto' }}>
+            <Link to="/" style={{ flexShrink: 0 }}>
               <img src="/logo-full.svg" alt="SafeSwap" style={{ height: '32px', display: 'block' }} />
             </Link>
+
+            {/* Spacer: pushes whichever of desktop-links or the hamburger
+                is currently visible (via CSS above) all the way right */}
+            <div style={{ flex: 1 }} />
 
             <div className="sw-nav-desktop">
               {user ? (
@@ -212,8 +219,7 @@ export default function Navbar() {
               aria-expanded={menuOpen}
               aria-label="Main menu"
               style={{
-                marginLeft: 'auto',
-                alignItems: 'center',
+                flexShrink: 0,
                 background: 'transparent',
                 border: 'none',
                 fontSize: '22px',

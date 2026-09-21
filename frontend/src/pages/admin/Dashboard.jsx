@@ -9,7 +9,13 @@ export default function Dashboard() {
     getOverview().then((res) => setStats(res.data));
   }, []);
 
-  if (!stats) return <p>Loading...</p>;
+  if (!stats) {
+    return (
+      <div className="container">
+        <p style={{ color: 'var(--color-muted)' }}>Loading...</p>
+      </div>
+    );
+  }
 
   const cards = [
     { label: 'Active listings', value: stats.activeListings },
@@ -19,22 +25,36 @@ export default function Dashboard() {
   ];
 
   return (
-    <div style={{ maxWidth: '480px', margin: '0 auto', padding: '1rem' }}>
-      <h2>Admin dashboard</h2>
+    <div className="container">
+      <h2 style={{ textAlign: 'center' }}>Admin dashboard</h2>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '20px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '24px' }}>
         {cards.map((c) => (
-          <div key={c.label} style={{ border: '1px solid #e5e7eb', borderRadius: '10px', padding: '10px' }}>
-            <p style={{ margin: 0, fontSize: '12px', color: '#6b7280' }}>{c.label}</p>
-            <p style={{ margin: '2px 0 0', fontSize: '20px', fontWeight: 600 }}>{c.value}</p>
+          <div
+            key={c.label}
+            style={{
+              border: '1px solid var(--color-border)',
+              borderRadius: 'var(--radius)',
+              padding: '14px',
+              background: 'var(--color-surface)',
+            }}
+          >
+            <p style={{ margin: 0, fontSize: '12px', color: 'var(--color-muted)' }}>{c.label}</p>
+            <p style={{ margin: '4px 0 0', fontSize: '22px', fontWeight: 700, color: 'var(--color-primary)' }}>{c.value}</p>
           </div>
         ))}
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        <Link to="/admin/flagged">Flagged listings &rarr;</Link>
-        <Link to="/admin/verification">Verification queue &rarr;</Link>
-        <Link to="/admin/blacklist">IMEI blacklist &rarr;</Link>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        <Link to="/admin/flagged" className="nav-pill" style={{ textAlign: 'center' }}>
+          Flagged listings &rarr;
+        </Link>
+        <Link to="/admin/verification" className="nav-pill" style={{ textAlign: 'center' }}>
+          Verification queue &rarr;
+        </Link>
+        <Link to="/admin/blacklist" className="nav-pill" style={{ textAlign: 'center' }}>
+          IMEI blacklist &rarr;
+        </Link>
       </div>
     </div>
   );
