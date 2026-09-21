@@ -53,6 +53,8 @@ async function initiatePayment(req, res) {
     await paymentStore.createPending(result.CheckoutRequestID, {
       listingId: listing._id.toString(),
       buyerId: req.user._id.toString(),
+      amount: listing.price,
+      phone,
     });
 
     res.json({
@@ -78,9 +80,22 @@ async function handleCallback(req, res) {
 
     const { CheckoutRequestID, ResultCode } = callback;
 
+    // On success Safaricom includes the M-Pesa receipt number; keep it so admins
+    // can find the transaction later (refunds, disputes)
+    let mpesaReceipt;
+    const items = callback.CallbackMetadata?.Item;
+    if (Array.isArray(items)) {
+      const found = items.find((i) => i && i.Name === 'MpesaReceiptNumber');
+      if (found && found.Value) mpesaReceipt = String(found.Value);
+    }
+
     // Only a pending payment can change state, so a repeated or replayed callback
     // can't reopen a payment that was already released or failed.
-    await paymentStore.settlePending(CheckoutRequestID, ResultCode === 0 ? 'held' : 'failed');
+    await paymentStore.settlePending(
+      CheckoutRequestID,
+      ResultCode === 0 ? 'held' : 'failed',
+      { mpesaReceipt }
+    );
     // ResultCode 0 = success. Status moves to 'held' - this is the
     // escrow-lite state: payment confirmed but not yet released to the
     // seller until handover is confirmed (see confirmMeetup in listings).

@@ -13,11 +13,13 @@ function toRecord(doc) {
   };
 }
 
-async function createPending(checkoutRequestId, { listingId, buyerId }) {
+async function createPending(checkoutRequestId, { listingId, buyerId, amount, phone }) {
   const doc = await Payment.create({
     checkoutRequestId,
     listing: listingId,
     buyer: buyerId,
+    amount: amount !== undefined && amount !== null ? Number(amount) : undefined,
+    phone: phone ? String(phone).trim() : undefined,
     status: 'pending',
   });
   return toRecord(doc);
@@ -25,10 +27,12 @@ async function createPending(checkoutRequestId, { listingId, buyerId }) {
 
 // Moves a payment out of 'pending' exactly once. Returns null if it was not pending,
 // so a repeated or replayed M-Pesa callback can't change a payment that already settled.
-async function settlePending(checkoutRequestId, status) {
+async function settlePending(checkoutRequestId, status, extra = {}) {
+  const update = { status };
+  if (extra.mpesaReceipt) update.mpesaReceipt = extra.mpesaReceipt;
   const doc = await Payment.findOneAndUpdate(
     { checkoutRequestId, status: 'pending' },
-    { status },
+    update,
     { new: true }
   );
   return toRecord(doc);

@@ -20,6 +20,7 @@ const userSchema = new mongoose.Schema(
     phoneVerified: { type: Boolean, default: false },
     fallbackIdPhoto: { type: String }, // Cloudinary URL, only used on fallback path
     fallbackApproved: { type: Boolean, default: false }, // admin approves fallback accounts
+    fallbackRejected: { type: Boolean, default: false }, // admin rejected the ID
 
     // Trust
     trustScore: { type: Number, default: 50 },

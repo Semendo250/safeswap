@@ -13,6 +13,10 @@ import Dashboard from './pages/admin/Dashboard';
 import FlaggedQueue from './pages/admin/FlaggedQueue';
 import VerificationQueue from './pages/admin/VerificationQueue';
 import BlacklistManager from './pages/admin/BlacklistManager';
+import Users from './pages/admin/Users';
+import Listings from './pages/admin/Listings';
+import Payments from './pages/admin/Payments';
+import Activity from './pages/admin/Activity';
 import Inbox from './pages/Inbox';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
@@ -27,10 +31,14 @@ function App() {
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/messages" element={<Inbox />} />
-        <Route path="/admin/blacklist" element={<BlacklistManager />} />
-        <Route path="/admin/verification" element={<VerificationQueue />} />
         <Route path="/admin" element={<Dashboard />} />
+        <Route path="/admin/users" element={<Users />} />
+        <Route path="/admin/verification" element={<VerificationQueue />} />
+        <Route path="/admin/listings" element={<Listings />} />
         <Route path="/admin/flagged" element={<FlaggedQueue />} />
+        <Route path="/admin/payments" element={<Payments />} />
+        <Route path="/admin/blacklist" element={<BlacklistManager />} />
+        <Route path="/admin/activity" element={<Activity />} />
         <Route path="/" element={<Landing />} />
         <Route path="/browse" element={<Browse />} />
         <Route path="/login" element={<Login />} />

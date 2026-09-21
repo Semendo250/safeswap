@@ -4,9 +4,13 @@ import { AuthContext } from '../context/AuthContext';
 
 const ADMIN_LINKS = [
   { to: '/admin', label: 'Dashboard' },
-  { to: '/admin/flagged', label: 'Flagged queue' },
+  { to: '/admin/users', label: 'Users' },
   { to: '/admin/verification', label: 'Verification queue' },
+  { to: '/admin/listings', label: 'All listings' },
+  { to: '/admin/flagged', label: 'Flagged queue' },
+  { to: '/admin/payments', label: 'Payments' },
   { to: '/admin/blacklist', label: 'IMEI blacklist' },
+  { to: '/admin/activity', label: 'Activity log' },
 ];
 
 export default function Navbar() {
