@@ -97,15 +97,8 @@ export default function Profile() {
     return (
       <div className="container">
         <BackButton />
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '60px 0' }}>
-          <div
-            style={{
-              width: '96px',
-              height: '96px',
-              borderRadius: '50%',
-              background: 'var(--color-surface)',
-            }}
-          />
+        <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '60px 0' }}>
+          <div style={{ width: '96px', height: '96px', borderRadius: '50%', background: 'var(--color-surface)' }} />
           <p style={{ color: 'var(--color-muted)', marginTop: '12px', fontSize: '13px' }}>Loading profile...</p>
         </div>
       </div>
@@ -134,13 +127,26 @@ export default function Profile() {
     <div className="container">
       <BackButton />
 
-      <h2 style={{ textAlign: 'center' }}>My Profile</h2>
-
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: '4px', paddingBottom: '16px', borderBottom: '1px solid var(--color-border)' }}>
+      {/* Header block: explicit width 100%, everything forced to the
+          horizontal center regardless of the container's own text-align */}
+      <div
+        style={{
+          width: '100%',
+          boxSizing: 'border-box',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          textAlign: 'center',
+          gap: '4px',
+          paddingBottom: '16px',
+          borderBottom: '1px solid var(--color-border)',
+        }}
+      >
         <button
           type="button"
           onClick={() => currentAvatarSrc && setLightboxOpen(true)}
-          style={{ background: 'none', border: 'none', padding: 0, cursor: currentAvatarSrc ? 'zoom-in' : 'default' }}
+          style={{ background: 'none', border: 'none', padding: 0, margin: '0 auto', cursor: currentAvatarSrc ? 'zoom-in' : 'default', display: 'block' }}
           aria-label="View profile picture"
         >
           <Avatar
