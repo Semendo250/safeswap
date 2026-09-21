@@ -343,4 +343,8 @@ const dropdownStyle = {
   display: 'flex',
   flexDirection: 'column',
   padding: '8px 16px',
+  // Never taller than the visible screen under the bar; scrolls inside if it has to
+  maxHeight: 'calc(100dvh - 60px)',
+  overflowY: 'auto',
+  overscrollBehavior: 'contain',
 };
