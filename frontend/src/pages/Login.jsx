@@ -1,5 +1,5 @@
 import { useState, useContext } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { login } from '../api/auth.api';
 import { AuthContext } from '../context/AuthContext';
 import PasswordInput from '../components/PasswordInput';
@@ -7,6 +7,7 @@ import BackButton from '../components/BackButton';
 
 export default function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { login: loginUser } = useContext(AuthContext);
   const [form, setForm] = useState({ email: '', password: '' });
   const [error, setError] = useState('');
@@ -23,13 +24,16 @@ export default function Login() {
       setSubmitting(true);
       const res = await login(form);
       loginUser(res.data.user, res.data.token);
-
+      // Back to where the visitor came from (e.g. a listing), otherwise the marketplace
+      const from = location.state?.from;
+      const target = typeof from === 'string' && from.startsWith('/') ? from : '/browse';
+      navigate(target, { replace: true });
     } catch (err) {
       setError(err.response?.data?.error || 'Login failed');
     } finally {
       setSubmitting(false);
     }
-  }      navigate('/browse');
+  }
 
   return (
     <div className="container">
