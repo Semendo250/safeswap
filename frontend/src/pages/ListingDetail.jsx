@@ -23,6 +23,9 @@ export default function ListingDetail() {
   const [payError, setPayError] = useState('');
   const [paying, setPaying] = useState(false);
 
+  // Which control a logged-out visitor tried to use: 'meetup', 'pay', or null
+  const [loginNotice, setLoginNotice] = useState(null);
+
   // Photo preview: index of the photo being viewed, or null when closed
   const [viewerIndex, setViewerIndex] = useState(null);
   const viewerOpen = viewerIndex !== null;
@@ -71,6 +74,16 @@ export default function ListingDetail() {
 
   const isOwnListing = user && listing.seller._id === user.id;
 
+  // Shown to logged-out visitors who try to pick a meetup point or pay
+  const loginNoticeEl = (
+    <p role="alert" style={{ color: 'var(--color-warning)', fontSize: '13px', margin: '8px 0 0' }}>
+      Please log in to complete request.{' '}
+      <Link to="/login" state={{ from: `/listings/${listing._id}` }} style={{ fontWeight: 600 }}>
+        Log in
+      </Link>
+    </p>
+  );
+
   function closeViewer() {
     setViewerIndex(null);
   }
@@ -86,11 +99,19 @@ export default function ListingDetail() {
   }
 
   async function handleSetMeetup(zone) {
+    if (!user) {
+      setLoginNotice('meetup');
+      return;
+    }
     const res = await setMeetup(listing._id, zone);
     setListing(res.data);
   }
 
   async function handleConfirmMeetup() {
+    if (!user) {
+      setLoginNotice('meetup');
+      return;
+    }
     const res = await confirmMeetup(listing._id);
     setListing(res.data);
   }
@@ -98,6 +119,10 @@ export default function ListingDetail() {
   async function handlePay(e) {
     e.preventDefault();
     setPayError('');
+    if (!user) {
+      setLoginNotice('pay');
+      return;
+    }
     if (!phone) {
       setPayError('Enter the phone number to pay from');
       return;
@@ -196,7 +221,13 @@ export default function ListingDetail() {
           </button>
 
           <div style={{ marginTop: '16px' }}>
-            <SafeZonePicker value={listing.meetupSafeZone} onSelect={handleSetMeetup} />
+            <SafeZonePicker
+              value={listing.meetupSafeZone}
+              onSelect={handleSetMeetup}
+              locked={!user}
+              onLockedTap={() => setLoginNotice('meetup')}
+            />
+            {loginNotice === 'meetup' && !user && loginNoticeEl}
           </div>
 
           {listing.meetupSafeZone && !listing.meetupConfirmed && (
@@ -216,6 +247,7 @@ export default function ListingDetail() {
             <button type="submit" disabled={paying} style={{ minWidth: '200px', padding: '11px 28px' }}>
               {paying ? 'Sending STK push...' : 'Pay now'}
             </button>
+            {loginNotice === 'pay' && !user && loginNoticeEl}
             {paymentStatus && (
               <p style={{ fontSize: '13px' }}>
                 Payment status: <strong>{paymentStatus}</strong>
