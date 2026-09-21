@@ -169,29 +169,30 @@ export default function Profile() {
                 style={{ display: 'none' }}
               />
               <button
-                type="button"
-                onClick={() => fileRef.current?.click()}
-                aria-label={currentAvatarSrc ? 'Change photo' : 'Add photo'}
-                style={{
-                  position: 'absolute',
-                  bottom: '0',
-                  right: '0',
-                  width: '30px',
-                  height: '30px',
-                  borderRadius: '50%',
-                  background: 'var(--color-primary)',
-                  border: '2px solid #fff',
-                  color: '#fff',
-                  fontSize: '14px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  padding: 0,
-                }}
-              >
-                📷
-              </button>
+  type="button"
+  onClick={() => fileRef.current?.click()}
+  aria-label={currentAvatarSrc ? 'Change photo' : 'Add photo'}
+  style={{
+    position: 'absolute',
+    bottom: '-2px',
+    right: '-2px',
+    width: '22px',
+    height: '22px',
+    borderRadius: '50%',
+    background: 'var(--color-primary)',
+    border: '2px solid #fff',
+    color: '#fff',
+    fontSize: '14px',
+    lineHeight: 1,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer',
+    padding: 0,
+  }}
+>
+  +
+</button>
             </>
           )}
         </div>
