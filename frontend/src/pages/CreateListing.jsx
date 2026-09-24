@@ -58,9 +58,9 @@ export default function CreateListing() {
       <CategoryTabs value={category} onChange={setCategory} />
 
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-        <input placeholder="Title" value={title} onChange={(e) => setTitle(e.target.value)} required />
+        <input placeholder="Title including the name of the phone" value={title} onChange={(e) => setTitle(e.target.value)} required />
         <textarea
-          placeholder="Description,tell us more about your phone,eg storage and RAM"
+          placeholder="Description,tell us more about your phone,e.g storage and RAM"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
         />
@@ -75,13 +75,12 @@ export default function CreateListing() {
         {category === 'phone' && (
           <>
             <input
-              placeholder="IMEI (15 digits) dial *#06# to access the IMEI.)"
+              placeholder="IMEI (15 digits)"
               value={imei}
               onChange={(e) => setImei(e.target.value)}
               maxLength={15}
             />
-                                   <label>
-              Proof photo
+                                              <div>
               <div style={{ fontSize: '13px', color: 'var(--color-muted)', margin: '2px 0 6px' }}>
                 One photo showing your phone's IMEI screen together with your National ID, School ID, or
                 School Temporary ID, so both are clearly visible in the same shot.
@@ -89,8 +88,11 @@ export default function CreateListing() {
                 To find your IMEI: dial <strong>*#06#</strong> on the phone, and a screen showing the IMEI
                 number(s) will appear — photograph that screen next to your ID.
               </div>
-              <input type="file" accept="image/*" onChange={(e) => setProofPhoto(e.target.files[0])} />
-            </label>
+              <label>
+                Proof photo
+                <input type="file" accept="image/*" onChange={(e) => setProofPhoto(e.target.files[0])} />
+              </label>
+            </div>
           </>
         )}
 
