@@ -144,7 +144,11 @@ async function getUsers(req, res) {
     const countMap = new Map(counts.map((c) => [c._id.toString(), c.count]));
 
     res.json({
-      users: users.map((u) => ({ ...u, listingCount: countMap.get(u._id.toString()) || 0 })),
+      users: users.map((u) => ({
+        ...u,
+        trustScore: u.role === 'admin' ? 99 : u.trustScore,
+        listingCount: countMap.get(u._id.toString()) || 0,
+      })),
       total,
       page,
       pages: Math.max(Math.ceil(total / limit), 1),
@@ -160,6 +164,7 @@ async function getUserById(req, res) {
     if (!isId(req.params.id)) return res.status(400).json({ error: 'Invalid user id' });
     const user = await User.findById(req.params.id).select('-password').lean();
     if (!user) return res.status(404).json({ error: 'User not found' });
+    if (user.role === 'admin') user.trustScore = 99;
 
     const [listings, payments] = await Promise.all([
       Listing.find({ seller: user._id })
@@ -430,13 +435,13 @@ async function removeListing(req, res) {
     await listing.save();
 
     // Removing a listing for cause upholds any pending reports against it,
-    // and penalizes the seller's trust score
+    // and penalizes the seller's trust score (admin accounts are exempt: fixed score)
     await Report.updateMany(
       { listing: listing._id, status: 'pending' },
       { status: 'reviewed_upheld' }
     );
     const seller = await User.findById(listing.seller);
-    if (seller) {
+    if (seller && seller.role !== 'admin') {
       seller.reportCount += 1;
       seller.trustScore = calculateTrustScore(seller);
       await seller.save();
