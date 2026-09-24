@@ -1,3 +1,6 @@
+// Rule-based, explainable trust score - not a black-box model.
+// Baseline 50, adjusted by clear, documentable rules.
+
 const BASELINE = 50;
 const MAX_SALE_BONUS = 30;
 const SALE_BONUS_PER_SALE = 5;
@@ -9,21 +12,26 @@ const ADMIN_TRUST_SCORE = 99;
 
 function calculateTrustScore(user) {
   // Admin accounts display a fixed trust score, not an earned one
-  if (user.isAdmin) {
+  if (user.role === 'admin') {
     return ADMIN_TRUST_SCORE;
   }
 
   let score = BASELINE;
 
+  // Reward clean completed sales, capped so it can't run away
   const saleBonus = Math.min(user.completedSales * SALE_BONUS_PER_SALE, MAX_SALE_BONUS);
   score += saleBonus;
 
+  // Penalize upheld reports more heavily than the sale bonus rewards,
+  // so trust is harder to earn back than to lose
   score -= user.reportCount * REPORT_PENALTY_MIN;
 
+  // Verification path penalty
   if (user.verificationPath === 'fallback') {
     score -= FALLBACK_PATH_PENALTY;
   }
 
+  // Clamp between 0 and 100
   return Math.max(0, Math.min(100, score));
 }
 
