@@ -1,7 +1,7 @@
 import api from './axios';
 
-export function getConversation(listingId) {
-  return api.get(`/chat/${listingId}`);
+export function getConversation(listingId, otherUserId) {
+  return api.get(`/chat/${listingId}/${otherUserId}`);
 }
 
 export function sendMessage(listingId, receiverId, content) {

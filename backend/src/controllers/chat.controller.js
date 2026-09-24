@@ -1,10 +1,11 @@
 const Message = require('../models/Message');
 const Listing = require('../models/Listing');
 
-// GET /api/chat/:listingId
+// GET /api/chat/:listingId/:otherUserId
+// Messages between the logged-in user and otherUserId, about this one listing only
 async function getConversation(req, res) {
   try {
-    const { listingId } = req.params;
+    const { listingId, otherUserId } = req.params;
     const userId = req.user._id;
 
     const listing = await Listing.findById(listingId).select('seller');
@@ -12,7 +13,10 @@ async function getConversation(req, res) {
 
     const messages = await Message.find({
       listing: listingId,
-      $or: [{ sender: userId }, { receiver: userId }],
+      $or: [
+        { sender: userId, receiver: otherUserId },
+        { sender: otherUserId, receiver: userId },
+      ],
     })
       .sort({ createdAt: 1 })
       .populate('sender', 'fullName')
@@ -22,20 +26,6 @@ async function getConversation(req, res) {
     const visibleMessages = messages.filter(
       (m) => !m.deletedFor.some((id) => id.toString() === userId.toString())
     );
-
-    // Resolve who the "other person" is, reliably, without depending on
-    // message history existing yet:
-    // - if I'm the seller, the other party is whoever I've been messaging
-    // - if I'm not the seller, the other party is the seller
-    let otherUserId = null;
-    const isSeller = listing.seller.toString() === userId.toString();
-
-    if (isSeller) {
-      const other = visibleMessages.find((m) => m.sender._id.toString() !== userId.toString());
-      otherUserId = other ? other.sender._id : null;
-    } else {
-      otherUserId = listing.seller;
-    }
 
     res.json({ messages: visibleMessages, otherUserId });
   } catch (err) {
@@ -82,6 +72,7 @@ async function markAsRead(req, res) {
 }
 
 // GET /api/chat
+// One row per (listing, other person) pair, not per listing
 async function getConversations(req, res) {
   try {
     const userId = req.user._id;
@@ -99,14 +90,15 @@ async function getConversations(req, res) {
 
     for (const msg of messages) {
       if (!msg.listing) continue;
-      const listingId = msg.listing._id.toString();
-      if (seen.has(listingId)) continue;
-      seen.add(listingId);
-
       const otherUser = msg.sender._id.toString() === userId.toString() ? msg.receiver : msg.sender;
+      if (!otherUser) continue;
+
+      const key = `${msg.listing._id}:${otherUser._id}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
 
       conversations.push({
-        listingId,
+        listingId: msg.listing._id.toString(),
         listingTitle: msg.listing.title,
         listingPhoto: msg.listing.photos?.[0],
         otherUser: { id: otherUser._id, fullName: otherUser.fullName },

@@ -90,7 +90,7 @@ export default function VerificationQueue() {
               {!u.emailVerified && <Chip tone="gold">Email not verified</Chip>}
             </div>
             <Field label="Email"><CopyText value={u.email} /></Field>
-            <Field label="Reg no">{u.studentRegNo}</Field>
+                        {u.studentRegNo && <Field label="Reg no">{u.studentRegNo}</Field>}
             <Field label="Phone">{u.phone ? <CopyText value={u.phone} /> : 'Not given'}</Field>
             {u.location && <Field label="Location">{u.location}</Field>}
             <Field label="Signed up">{fmtDate(u.createdAt)}</Field>

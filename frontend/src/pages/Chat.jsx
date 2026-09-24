@@ -16,33 +16,47 @@ export default function Chat() {
   const [messages, setMessages] = useState([]);
   const [receiverId, setReceiverId] = useState(location.state?.receiverId || null);
   const [listingTitle, setListingTitle] = useState('');
+  const [listingSellerId, setListingSellerId] = useState(null);
   const bottomRef = useRef(null);
   const messagesBoxRef = useRef(null);
   const outerRef = useRef(null);
 
   useEffect(() => {
     if (!listingId) return;
-    getListingById(listingId).then((res) => setListingTitle(res.data.title));
+    getListingById(listingId).then((res) => {
+      setListingTitle(res.data.title);
+      setListingSellerId(res.data.seller?._id || null);
+    });
   }, [listingId]);
 
+  // If we weren't told who the other person is (e.g. a bookmarked link) and I'm
+  // not the seller, the other person must be the seller
   useEffect(() => {
-    if (!listingId || authLoading || !user) return;
-    getConversation(listingId).then((res) => {
+    if (receiverId || !user || !listingSellerId) return;
+    if (listingSellerId !== user.id) setReceiverId(listingSellerId);
+  }, [receiverId, user, listingSellerId]);
+
+  useEffect(() => {
+    if (!listingId || authLoading || !user || !receiverId) return;
+    getConversation(listingId, receiverId).then((res) => {
       setMessages(res.data.messages);
-      if (res.data.otherUserId) setReceiverId(res.data.otherUserId);
     });
-  }, [listingId, user, authLoading]);
+  }, [listingId, user, authLoading, receiverId]);
 
   useEffect(() => {
     if (!listingId || !user) return;
-    socket.emit('join_chat', listingId);
+    // Room is per (listing, the two participants), not per listing alone,
+    // so messages from a different buyer about the same item don't arrive here
+    const room = receiverId ? [listingId, [user.id, receiverId].sort().join('-')].join(':') : null;
+    if (!room) return;
+    socket.emit('join_chat', room);
 
     function handleIncoming(data) {
       if (data.senderId === user.id) return;
-      setMessages((prev) => [
-        ...prev,
-        { ...data, sender: { _id: data.senderId }, receiver: { _id: data.receiverId } },
-      ]);
+      setMessages((prev) => {
+        if (prev.some((m) => m._id === data._id)) return prev;
+        return [...prev, { ...data, sender: { _id: data.senderId }, receiver: { _id: data.receiverId } }];
+      });
     }
     function handleDeleted(data) {
       if (data.forEveryone) {
@@ -60,7 +74,7 @@ export default function Chat() {
       socket.off('receive_message', handleIncoming);
       socket.off('message_deleted', handleDeleted);
     };
-  }, [listingId, user]);
+  }, [listingId, user, receiverId]);
 
   // Keep the messages scrolled to the latest, scoped to the box itself
   // (never the whole page), so nothing shifts sideways or moves the navbar
@@ -226,42 +240,52 @@ export default function Chat() {
           </div>
         </div>
 
-        <div
-          ref={messagesBoxRef}
-          style={{
-            flex: 1,
-            minHeight: 0,
-            overflowY: 'auto',
-            overflowX: 'hidden',
-            padding: 16,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 8,
-            background: 'var(--color-surface)',
-            touchAction: 'pan-y',
-            overscrollBehavior: 'contain',
-          }}
-        >
-          {messages.length === 0 && (
-            <p style={{ textAlign: 'center', color: 'var(--color-muted)', fontSize: 13, margin: 'auto' }}>
-              No messages yet — say hello. 👋
+        {!receiverId ? (
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+            <p style={{ textAlign: 'center', color: 'var(--color-muted)', fontSize: 13 }}>
+              Open this conversation from your <Link to="/messages">Messages</Link> list.
             </p>
-          )}
-          {messages.map((m) => (
-            <ChatBubble
-              key={m._id}
-              message={m}
-              isOwn={m.sender._id === user.id}
-              onDelete={handleDelete}
-              otherUserName={listingTitle}
-            />
-          ))}
-          <div ref={bottomRef} />
-        </div>
+          </div>
+        ) : (
+          <>
+            <div
+              ref={messagesBoxRef}
+              style={{
+                flex: 1,
+                minHeight: 0,
+                overflowY: 'auto',
+                overflowX: 'hidden',
+                padding: 16,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 8,
+                background: 'var(--color-surface)',
+                touchAction: 'pan-y',
+                overscrollBehavior: 'contain',
+              }}
+            >
+              {messages.length === 0 && (
+                <p style={{ textAlign: 'center', color: 'var(--color-muted)', fontSize: 13, margin: 'auto' }}>
+                  No messages yet — say hello. 👋
+                </p>
+              )}
+              {messages.map((m) => (
+                <ChatBubble
+                  key={m._id}
+                  message={m}
+                  isOwn={m.sender._id === user.id}
+                  onDelete={handleDelete}
+                  otherUserName={listingTitle}
+                />
+              ))}
+              <div ref={bottomRef} />
+            </div>
 
-        <div style={{ flexShrink: 0 }}>
-          <ChatInput onSend={handleSend} />
-        </div>
+            <div style={{ flexShrink: 0 }}>
+              <ChatInput onSend={handleSend} />
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

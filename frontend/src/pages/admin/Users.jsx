@@ -62,7 +62,7 @@ function UserCard({ u, me, isOpen, detail, onToggle, onBan, onUnban, onVerify, o
       </div>
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 14px', fontSize: 12, color: 'var(--color-muted)', margin: '10px 0' }}>
-        <span>Reg {u.studentRegNo}</span>
+               {u.studentRegNo && <span>Reg {u.studentRegNo}</span>}
         <span>{u.listingCount} listing{u.listingCount === 1 ? '' : 's'}</span>
         <span>Trust {u.trustScore}</span>
         <span>{u.reportCount} report{u.reportCount === 1 ? '' : 's'}</span>

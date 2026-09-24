@@ -71,7 +71,7 @@ async function deleteImageByUrl(url) {
 async function signup(req, res) {
   let accountSaved = false; // once true, the uploaded picture belongs to the account
   try {
-    const { fullName, studentRegNo, email, password } = req.body;
+       const { fullName, studentRegNo, email, password } = req.body;
     const rawPhone = (req.body.phone || '').trim();
 
     const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
@@ -79,7 +79,7 @@ async function signup(req, res) {
     let status = 400;
     let existing = null;
 
-    if (!fullName || !studentRegNo || !email || !password) {
+    if (!fullName || !email || !password || !rawPhone) {
       error = 'Missing required fields';
     } else if (!passwordRegex.test(password)) {
       error =

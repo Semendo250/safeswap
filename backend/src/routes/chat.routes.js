@@ -6,7 +6,7 @@ const { getConversation, sendMessage, markAsRead, getConversations, deleteMessag
 router.use(authMiddleware); // every chat route requires a logged-in user
 
 router.get('/', getConversations);
-router.get('/:listingId', getConversation);
+router.get('/:listingId/:otherUserId', getConversation);
 router.post('/:listingId', sendMessage);
 router.patch('/:messageId/read', markAsRead);
 router.delete('/message/:messageId', deleteMessage);

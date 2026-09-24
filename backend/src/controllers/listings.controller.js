@@ -61,13 +61,13 @@ async function createListing(req, res) {
       if (!imei) {
         return res.status(400).json({ error: 'IMEI is required for phone listings' });
       }
-      const proofFile = req.files?.proofPhoto?.[0];
+            const proofFile = req.files?.proofPhoto?.[0];
       if (!proofFile) {
-        return res
-          .status(400)
-          .json({ error: 'A proof photo (phone next to your student ID) is required for phone listings' });
+        return res.status(400).json({
+          error:
+            'A proof photo is required for phone listings: your specs screen together with your National ID, School ID, or School Temporary ID, in one photo',
+        });
       }
-
       const imeiStatus = await checkImeiStatus(imei);
 
       if (imeiStatus === 'invalid_format') {

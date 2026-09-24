@@ -80,8 +80,12 @@ export default function CreateListing() {
               onChange={(e) => setImei(e.target.value)}
               maxLength={15}
             />
-            <label>
-              Proof photo (phone next to your student ID)
+                        <label>
+              Proof photo
+              <div style={{ fontSize: '13px', color: 'var(--color-muted)', margin: '2px 0 6px' }}>
+                One photo showing your phone's specs screen (Settings → About phone) together with your
+                National ID, School ID, or School Temporary ID, so both are clearly visible in the same shot.
+              </div>
               <input type="file" accept="image/*" onChange={(e) => setProofPhoto(e.target.files[0])} />
             </label>
           </>

@@ -12,7 +12,7 @@ const MAX_PICTURE_BYTES = 5 * 1024 * 1024;
 
 export default function Signup() {
   const navigate = useNavigate();
-  const [form, setForm] = useState({ fullName: '', studentRegNo: '', email: '', password: '', phone: '' });
+    const [form, setForm] = useState({ fullName: '', email: '', password: '', phone: '' });
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordFocused, setPasswordFocused] = useState(false);
   const [error, setError] = useState('');
@@ -67,11 +67,10 @@ export default function Signup() {
       setError('Passwords do not match');
       return;
     }
-    if (form.phone.trim() && !normalizeKenyanPhone(form.phone)) {
+        if (!normalizeKenyanPhone(form.phone)) {
       setError('Enter a valid Kenyan phone number, e.g. 0712 345 678');
       return;
     }
-
     const data = new FormData();
     data.append('fullName', form.fullName);
     data.append('studentRegNo', form.studentRegNo);
@@ -120,15 +119,15 @@ export default function Signup() {
         </div>
 
         <input name="fullName" placeholder="Full name" value={form.fullName} onChange={handleChange} required />
-        <input name="studentRegNo" placeholder="Student reg no." value={form.studentRegNo} onChange={handleChange} required />
         <input name="email" type="email" placeholder="Email" value={form.email} onChange={handleChange} required />
-        <input
+                <input
           name="phone"
           type="tel"
           inputMode="tel"
-          placeholder="Phone (optional) e.g. 0712 345 678"
+          placeholder="Phone number e.g. 0712 345 678"
           value={form.phone}
           onChange={handleChange}
+          required
         />
 
         <div>
