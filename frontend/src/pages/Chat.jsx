@@ -9,6 +9,12 @@ import ChatInput from '../components/ChatInput';
 
 const NAVBAR_HEIGHT = 68;
 
+// Same room name the server relays to — must match on both ends
+function roomFor(listingId, userId, otherUserId) {
+  if (!listingId || !userId || !otherUserId) return null;
+  return [listingId, [userId, otherUserId].sort().join('-')].join(':');
+}
+
 export default function Chat() {
   const { listingId } = useParams();
   const { user, loading: authLoading } = useContext(AuthContext);
@@ -47,7 +53,7 @@ export default function Chat() {
     if (!listingId || !user) return;
     // Room is per (listing, the two participants), not per listing alone,
     // so messages from a different buyer about the same item don't arrive here
-    const room = receiverId ? [listingId, [user.id, receiverId].sort().join('-')].join(':') : null;
+    const room = roomFor(listingId, user.id, receiverId);
     if (!room) return;
     socket.emit('join_chat', room);
 
@@ -118,7 +124,12 @@ export default function Chat() {
             m._id === messageId ? { ...m, content: 'This message was deleted', deletedForEveryone: true } : m
           )
         );
-        socket.emit('delete_message', { listingId, messageId, forEveryone: true });
+        socket.emit('delete_message', {
+          room: roomFor(listingId, user.id, receiverId),
+          listingId,
+          messageId,
+          forEveryone: true,
+        });
       } else {
         setMessages((prev) => prev.filter((m) => m._id !== messageId));
       }
@@ -141,6 +152,7 @@ export default function Chat() {
         { ...saved, sender: { _id: user.id, fullName: user.fullName }, receiver: { _id: receiverId } },
       ]);
       socket.emit('send_message', {
+        room: roomFor(listingId, user.id, receiverId),
         listingId,
         senderId: user.id,
         receiverId,

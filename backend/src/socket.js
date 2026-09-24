@@ -8,20 +8,24 @@ function initSocket(server) {
   });
 
   io.on('connection', (socket) => {
-    socket.on('delete_message', (data) => {
-  // data: { listingId, messageId, forEveryone }
-  io.to(data.listingId).emit('message_deleted', data);
-});
     console.log('Socket connected:', socket.id);
 
-    // Client joins a room scoped to a specific listing's conversation
-    socket.on('join_chat', (listingId) => {
-      socket.join(listingId);
+    // Client joins a room scoped to a specific (listing, pair of participants)
+    // conversation — this is the compound room string computed on the frontend,
+    // not just the raw listingId, so different buyers on the same listing don't
+    // share a room.
+    socket.on('join_chat', (room) => {
+      socket.join(room);
     });
 
     socket.on('send_message', (data) => {
-      // data: { listingId, senderId, receiverId, content }
-      io.to(data.listingId).emit('receive_message', data);
+      // data: { room, listingId, senderId, receiverId, content, _id, createdAt }
+      io.to(data.room).emit('receive_message', data);
+    });
+
+    socket.on('delete_message', (data) => {
+      // data: { room, listingId, messageId, forEveryone }
+      io.to(data.room).emit('message_deleted', data);
     });
 
     socket.on('disconnect', () => {
