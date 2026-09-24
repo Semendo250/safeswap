@@ -58,9 +58,9 @@ export default function CreateListing() {
       <CategoryTabs value={category} onChange={setCategory} />
 
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-        <input placeholder="Title including the name of the phone" value={title} onChange={(e) => setTitle(e.target.value)} required />
+        <input placeholder="Title including name of your item" value={title} onChange={(e) => setTitle(e.target.value)} required />
         <textarea
-          placeholder="Description,tell us more about your phone,e.g storage and RAM"
+          placeholder="Descriptions,tell us more about your item"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
         />
