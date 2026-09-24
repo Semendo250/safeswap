@@ -39,7 +39,7 @@ function ListingCard({ l, onView, onApprove, onRemove }) {
   const photos = l.photos || [];
   const images = [
     ...photos.map((src, i) => ({ src, label: `${l.title}: photo ${i + 1}` })),
-        ...(l.proofPhoto ? [{ src: l.proofPhoto, label: `${l.title}: proof (specs + ID)` }] : []),
+               ...(l.proofPhoto ? [{ src: l.proofPhoto, label: `${l.title}: proof ( IMEI + ID) — check IMEI matches ${l.imei || 'listed IMEI'}` }] : []),
   ];
   const seller = l.seller || null;
   const canApprove = l.status === 'under_review' || l.status === 'removed';
@@ -55,8 +55,8 @@ function ListingCard({ l, onView, onApprove, onRemove }) {
             onClick={() => onView(images, 0)}
           />
         )}
-                {l.proofPhoto && (
-          <Thumb src={l.proofPhoto} label="Proof photo (specs + ID)" onClick={() => onView(images, photos.length)} />
+                        {l.proofPhoto && (
+          <Thumb src={l.proofPhoto} label="Proof photo (IMEI + ID)" onClick={() => onView(images, photos.length)} />
         )}
         <div style={{ minWidth: 0, flex: 1 }}>
           <strong style={{ fontSize: 15, wordBreak: 'break-word' }}>{l.title}</strong>

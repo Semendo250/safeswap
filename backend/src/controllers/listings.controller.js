@@ -63,9 +63,9 @@ async function createListing(req, res) {
       }
             const proofFile = req.files?.proofPhoto?.[0];
       if (!proofFile) {
-        return res.status(400).json({
+                return res.status(400).json({
           error:
-            'A proof photo is required for phone listings: your specs screen together with your National ID, School ID, or School Temporary ID, in one photo',
+            'A proof photo is required for phone listings: your phone IMEI  screen together with your National ID, School ID, or School Temporary ID, in one photo',
         });
       }
       const imeiStatus = await checkImeiStatus(imei);
