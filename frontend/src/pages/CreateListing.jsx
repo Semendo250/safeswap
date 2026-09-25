@@ -1,8 +1,69 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import CategoryTabs from '../components/CategoryTabs';
 import { createListing } from '../api/listings.api';
 import BackButton from '../components/BackButton';
+
+const cardStyle = {
+  background: '#fff',
+  border: '1px solid var(--color-border)',
+  borderRadius: 14,
+  padding: 18,
+  marginBottom: 16,
+  boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+};
+
+const sectionLabelStyle = {
+  fontSize: 12,
+  fontWeight: 700,
+  textTransform: 'uppercase',
+  letterSpacing: '0.04em',
+  color: 'var(--color-teal)',
+  marginBottom: 12,
+  display: 'flex',
+  alignItems: 'center',
+  gap: 6,
+};
+
+const fieldLabelStyle = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 6,
+  fontSize: 13,
+  color: 'var(--color-muted)',
+  marginBottom: 6,
+  fontWeight: 500,
+};
+
+function UploadBox({ icon, mainText, subText, filesSummary, onClick }) {
+  return (
+    <div
+      onClick={onClick}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick();
+        }
+      }}
+      style={{
+        border: '2px dashed var(--color-border)',
+        borderRadius: 12,
+        padding: '22px 16px',
+        textAlign: 'center',
+        background: 'var(--color-surface)',
+        cursor: 'pointer',
+      }}
+    >
+      <div style={{ fontSize: 26, marginBottom: 6 }}>{icon}</div>
+      <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--color-teal)' }}>
+        {filesSummary || mainText}
+      </div>
+      <div style={{ fontSize: 12, color: 'var(--color-muted)', marginTop: 3 }}>{subText}</div>
+    </div>
+  );
+}
 
 export default function CreateListing() {
   const navigate = useNavigate();
@@ -15,6 +76,9 @@ export default function CreateListing() {
   const [proofPhoto, setProofPhoto] = useState(null);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  const proofInputRef = useRef(null);
+  const photosInputRef = useRef(null);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -52,62 +116,160 @@ export default function CreateListing() {
   }
 
   return (
-    <div style={{ maxWidth: '480px', margin: '0', padding: '1rem' }}>
+    <div style={{ maxWidth: '560px', margin: '0 auto', padding: '16px', boxSizing: 'border-box' }}>
       <BackButton />
-      <h2>Create listing</h2>
-      <CategoryTabs value={category} onChange={setCategory} />
+      <h1 style={{ fontSize: 26, margin: '0 0 16px' }}>Create listing</h1>
 
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-        <input placeholder="Title including name of your item" value={title} onChange={(e) => setTitle(e.target.value)} required />
-        <textarea
-          placeholder="Descriptions,tell us more about your item"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-        />
-        <input
-          type="number"
-          placeholder="Price (KES)"
-          value={price}
-          onChange={(e) => setPrice(e.target.value)}
-          required
-        />
+      <div style={{ marginBottom: 18 }}>
+        <CategoryTabs value={category} onChange={setCategory} />
+      </div>
+
+      <form onSubmit={handleSubmit}>
+        <div style={cardStyle}>
+          <div style={sectionLabelStyle}>📝 Item details</div>
+
+          <div style={{ marginBottom: 12 }}>
+            <div style={fieldLabelStyle}>🏷️ Title</div>
+            <input
+              placeholder="Title including name of your item"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              required
+              style={{ width: '100%' }}
+            />
+          </div>
+
+          <div style={{ marginBottom: 12 }}>
+            <div style={fieldLabelStyle}>💬 Description</div>
+            <textarea
+              placeholder="Tell us more about your item — condition, accessories, reason for selling"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              style={{ width: '100%', minHeight: 70 }}
+            />
+          </div>
+
+          <div>
+            <div style={fieldLabelStyle}>💵 Price (KES)</div>
+            <input
+              type="number"
+              placeholder="e.g. 12000"
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+              required
+              style={{ width: '100%' }}
+            />
+          </div>
+        </div>
 
         {category === 'phone' && (
-          <>
-            <input
-              placeholder="IMEI (15 digits)"
-              value={imei}
-              onChange={(e) => setImei(e.target.value)}
-              maxLength={15}
-            />
-                                              <div>
-              <div style={{ fontSize: '13px', color: 'var(--color-muted)', margin: '2px 0 6px' }}>
-                One photo showing your phone's IMEI screen together with your National ID, School ID, or
-                School Temporary ID, so both are clearly visible in the same shot.
-                <br />
-                To find your IMEI: dial <strong>*#06#</strong> on the phone, and a screen showing the IMEI
-                number(s) will appear — photograph that screen next to your ID.
-              </div>
-              <label>
-                Proof photo
-                <input type="file" accept="image/*" onChange={(e) => setProofPhoto(e.target.files[0])} />
-              </label>
+          <div style={cardStyle}>
+            <div style={sectionLabelStyle}>🔒 Verification</div>
+
+            <div style={{ marginBottom: 12 }}>
+              <div style={fieldLabelStyle}>🔢 IMEI (15 digits)</div>
+              <input
+                placeholder="Dial *#06# to find it"
+                value={imei}
+                onChange={(e) => setImei(e.target.value)}
+                maxLength={15}
+                style={{ width: '100%' }}
+              />
             </div>
-          </>
+
+            <div
+              style={{
+                background: 'var(--color-surface)',
+                border: '1px solid var(--color-border)',
+                borderRadius: 12,
+                padding: 14,
+                fontSize: 13,
+                color: 'var(--color-ink)',
+                lineHeight: 1.5,
+                marginBottom: 16,
+                display: 'flex',
+                gap: 10,
+              }}
+            >
+              <div style={{ fontSize: 18, flexShrink: 0 }}>ℹ️</div>
+              <div>
+                One photo showing your phone's IMEI screen together with your National ID, School ID, or
+                School Temporary ID — both clearly visible in the same shot.
+                <br />
+                <br />
+                To find your IMEI: dial{' '}
+                <code
+                  style={{
+                    background: 'color-mix(in srgb, var(--color-primary) 10%, transparent)',
+                    padding: '1px 6px',
+                    borderRadius: 5,
+                    fontWeight: 700,
+                  }}
+                >
+                  *#06#
+                </code>{' '}
+                and photograph the screen next to your ID.
+              </div>
+            </div>
+
+            <div>
+              <div style={fieldLabelStyle}>📸 Proof photo</div>
+              <input
+                ref={proofInputRef}
+                type="file"
+                accept="image/*"
+                onChange={(e) => setProofPhoto(e.target.files[0] || null)}
+                style={{ display: 'none' }}
+              />
+              <UploadBox
+                icon="⬆️"
+                mainText="Tap to upload proof photo"
+                subText={proofPhoto ? proofPhoto.name : 'IMEI screen + ID, one shot'}
+                onClick={() => proofInputRef.current?.click()}
+              />
+            </div>
+          </div>
         )}
 
-        <label>
-          Item photos (up to 5)
-          <input
-            type="file"
-            accept="image/*"
-            multiple
-            onChange={(e) => setPhotos(Array.from(e.target.files).slice(0, 5))}
-          />
-        </label>
+        <div style={cardStyle}>
+          <div style={sectionLabelStyle}>🖼️ Item photos</div>
+          <div>
+            <div style={fieldLabelStyle}>Up to 5 photos</div>
+            <input
+              ref={photosInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={(e) => setPhotos(Array.from(e.target.files).slice(0, 5))}
+              style={{ display: 'none' }}
+            />
+            <UploadBox
+              icon="🖼️"
+              mainText="Tap to add photos"
+              subText={
+                photos.length > 0
+                  ? `${photos.length} photo${photos.length === 1 ? '' : 's'} selected`
+                  : 'Clear photos sell faster'
+              }
+              onClick={() => photosInputRef.current?.click()}
+            />
+          </div>
+        </div>
 
-        {error && <p style={{ color: 'red' }}>{error}</p>}
-        <button type="submit" disabled={submitting} style={{ minWidth: '200px', padding: '11px 28px' }}>
+        {error && <p style={{ color: 'var(--color-warning)', marginBottom: 12 }}>{error}</p>}
+
+        <button
+          type="submit"
+          disabled={submitting}
+          style={{
+            width: '100%',
+            padding: 15,
+            fontSize: 16,
+            fontWeight: 700,
+            borderRadius: 12,
+            boxShadow: '0 4px 14px color-mix(in srgb, var(--color-primary) 25%, transparent)',
+          }}
+        >
           {submitting ? 'Publishing...' : 'Publish listing'}
         </button>
       </form>
