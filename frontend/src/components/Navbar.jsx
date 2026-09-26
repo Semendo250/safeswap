@@ -1,7 +1,6 @@
 import { useContext, useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
-import { useContext as useCtx2 } from 'react'; // avoid clashing if you rename later — or just reuse existing useContext import
 import { ThemeContext } from '../context/ThemeContext';
 
 const ADMIN_LINKS = [
@@ -16,7 +15,7 @@ const ADMIN_LINKS = [
 ];
 
 export default function Navbar() {
-    const { theme, toggleTheme } = useContext(ThemeContext);
+  const { theme, toggleTheme } = useContext(ThemeContext);
   const { user, logout } = useContext(AuthContext);
   const navigate = useNavigate();
   const location = useLocation();
@@ -112,7 +111,7 @@ export default function Navbar() {
           alignItems: 'center',
           padding: '0 16px',
           borderBottom: '3px solid var(--color-teal)',
-          background: '#fff',
+          background: 'var(--color-card)',
         }}
       >
         {onAdminPage ? (
@@ -129,6 +128,15 @@ export default function Navbar() {
             <div style={{ flex: 1, textAlign: 'center', fontWeight: 700, color: 'var(--color-primary)' }}>
               Admin
             </div>
+
+            {/* Theme toggle — always visible on the admin bar too, both desktop and mobile */}
+            <button
+              onClick={toggleTheme}
+              aria-label="Toggle dark mode"
+              style={{ ...iconBtn, width: 36, height: 36, fontSize: 16, color: 'var(--color-ink)' }}
+            >
+              {theme === 'dark' ? '☀️' : '🌙'}
+            </button>
 
             {/* Admin hamburger: plain icon, no border, far right */}
             <button
@@ -173,6 +181,7 @@ export default function Navbar() {
             {/* Spacer: pushes the desktop links / hamburger to the far right */}
             <div style={{ flex: 1 }} />
 
+            {/* Desktop nav (hidden on phones by CSS above) */}
             <div className="sw-nav-desktop">
               <Link to="/browse" className="nav-pill">Browse</Link>
               {user ? (
@@ -182,23 +191,9 @@ export default function Navbar() {
                   {isAdmin && <Link to="/admin" className="nav-pill">Admin</Link>}
                   <Link to="/profile" className="nav-pill">Profile</Link>
                   <button onClick={askLogout} className="btn-outline">Log out</button>
-                            <button
-            onClick={toggleTheme}
-            aria-label="Toggle dark mode"
-            style={{ ...iconBtn, width: 36, height: 36, fontSize: 16, color: 'var(--color-ink)' }}
-          >
-            {theme === 'dark' ? '☀️' : '🌙'}
-          </button>
                 </>
               ) : (
                 <>
-                                <button
-                  onClick={toggleTheme}
-                  className="sw-menu-link"
-                  style={{ background: 'transparent', border: 'none', textAlign: 'left' }}
-                >
-                  {theme === 'dark' ? '☀️ Light mode' : '🌙 Dark mode'}
-                </button>
                   <Link to="/login" style={{ color: 'var(--color-ink)' }}>Log in</Link>
                   <Link
                     to="/signup"
@@ -208,7 +203,24 @@ export default function Navbar() {
                   </Link>
                 </>
               )}
+              <button
+                onClick={toggleTheme}
+                aria-label="Toggle dark mode"
+                style={{ ...iconBtn, width: 36, height: 36, fontSize: 16, color: 'var(--color-ink)' }}
+              >
+                {theme === 'dark' ? '☀️' : '🌙'}
+              </button>
             </div>
+
+            {/* Theme toggle for phones — sits next to the hamburger, always visible regardless of menu state */}
+            <button
+              className="sw-nav-burger"
+              onClick={toggleTheme}
+              aria-label="Toggle dark mode"
+              style={{ ...iconBtn, width: 36, height: 36, fontSize: 16, color: 'var(--color-ink)' }}
+            >
+              {theme === 'dark' ? '☀️' : '🌙'}
+            </button>
 
             {/* Main hamburger (phones only; its display comes from the CSS above) */}
             <button
@@ -277,7 +289,7 @@ export default function Navbar() {
             aria-labelledby="logout-title"
             onClick={(e) => e.stopPropagation()}
             style={{
-              background: '#fff',
+              background: 'var(--color-card)',
               borderRadius: '16px',
               padding: '24px',
               width: '100%',
@@ -300,7 +312,7 @@ export default function Navbar() {
                   padding: '10px 0',
                   borderRadius: '8px',
                   border: '1px solid var(--color-border)',
-                  background: '#fff',
+                  background: 'var(--color-card)',
                   color: 'var(--color-ink)',
                   fontSize: '14px',
                   fontWeight: 600,
@@ -359,7 +371,7 @@ const dropdownStyle = {
   left: 0,
   right: 0,
   zIndex: 60,
-  background: '#fff',
+  background: 'var(--color-card)',
   borderBottom: '1px solid var(--color-border)',
   boxShadow: '0 4px 10px rgba(0,0,0,0.08)',
   display: 'flex',
