@@ -164,7 +164,7 @@ export default function ListingDetail() {
 
       <h2>{listing.title}</h2>
       <p style={{ fontSize: '18px', fontWeight: 600 }}>KES {listing.price}</p>
-      <p style={{ color: '#6b7280' }}>{listing.description}</p>
+            <p style={{ color: 'var(--color-muted)' }}>{listing.description}</p>
 
       {listing.category === 'phone' && (
         <p style={{ fontSize: '13px' }}>
@@ -175,7 +175,7 @@ export default function ListingDetail() {
       {/* Seller */}
       <div
         style={{
-          borderTop: '1px solid #e5e7eb',
+                    borderTop: '1px solid var(--color-border)',
           marginTop: '16px',
           paddingTop: '12px',
           display: 'flex',
@@ -243,7 +243,7 @@ export default function ListingDetail() {
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
             />
-            {payError && <p style={{ color: 'red', fontSize: '13px' }}>{JSON.stringify(payError)}</p>}
+                        {payError && <p style={{ color: 'var(--color-warning)', fontSize: '13px' }}>{JSON.stringify(payError)}</p>}
             <button type="submit" disabled={paying} style={{ minWidth: '200px', padding: '11px 28px' }}>
               {paying ? 'Sending STK push...' : 'Pay now'}
             </button>
@@ -260,7 +260,7 @@ export default function ListingDetail() {
       )}
 
       {listing.status === 'sold' && (
-        <p style={{ marginTop: '16px', fontWeight: 600, color: '#166534' }}>This item has been sold.</p>
+                <p style={{ marginTop: '16px', fontWeight: 600, color: 'var(--color-success)' }}>This item has been sold.</p>
       )}
 
       {/* Full-screen photo preview */}

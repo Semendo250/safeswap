@@ -1,6 +1,8 @@
 import { useContext, useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
+import { useContext as useCtx2 } from 'react'; // avoid clashing if you rename later — or just reuse existing useContext import
+import { ThemeContext } from '../context/ThemeContext';
 
 const ADMIN_LINKS = [
   { to: '/admin', label: 'Dashboard' },
@@ -14,6 +16,7 @@ const ADMIN_LINKS = [
 ];
 
 export default function Navbar() {
+    const { theme, toggleTheme } = useContext(ThemeContext);
   const { user, logout } = useContext(AuthContext);
   const navigate = useNavigate();
   const location = useLocation();
@@ -179,9 +182,23 @@ export default function Navbar() {
                   {isAdmin && <Link to="/admin" className="nav-pill">Admin</Link>}
                   <Link to="/profile" className="nav-pill">Profile</Link>
                   <button onClick={askLogout} className="btn-outline">Log out</button>
+                            <button
+            onClick={toggleTheme}
+            aria-label="Toggle dark mode"
+            style={{ ...iconBtn, width: 36, height: 36, fontSize: 16, color: 'var(--color-ink)' }}
+          >
+            {theme === 'dark' ? '☀️' : '🌙'}
+          </button>
                 </>
               ) : (
                 <>
+                                <button
+                  onClick={toggleTheme}
+                  className="sw-menu-link"
+                  style={{ background: 'transparent', border: 'none', textAlign: 'left' }}
+                >
+                  {theme === 'dark' ? '☀️ Light mode' : '🌙 Dark mode'}
+                </button>
                   <Link to="/login" style={{ color: 'var(--color-ink)' }}>Log in</Link>
                   <Link
                     to="/signup"

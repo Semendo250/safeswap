@@ -27,6 +27,8 @@ img {
   --color-gold: #C9962C;
   --color-gold-bg: #FBF1DE;
   --color-bg: #FFFFFF;
+    --color-card: #ffffff;
+  --color-overlay: rgba(0,0,0,0.4);
   --color-surface: #F4F7F6;
   --color-ink: #1F2A28;
   --color-muted: #6B7A76;
@@ -79,7 +81,7 @@ input, textarea, select {
   padding: 10px 12px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
-  background: #fff;
+  background: var(--color-card);
   color: var(--color-ink);
   width: 100%;
 }
@@ -243,4 +245,28 @@ textarea,
 [contenteditable='true'] {
   -webkit-user-select: text;
   user-select: text;
+}
+[data-theme="dark"] {
+  --color-primary: #17948f;
+  --color-primary-dark: #12746f;
+  --color-teal: #3fb8b3;
+  --color-gold-bright: #f0b256;
+  --color-gold: #e0ac52;
+  --color-gold-bg: #3a2e18;
+  --color-bg: #10151a;
+  --color-surface: #1a2027;
+  --color-card: #1e252c;
+  --color-ink: #e8edf0;
+  --color-muted: #93a1ab;
+  --color-success: #4ade80;
+  --color-success-bg: #16321f;
+  --color-warning: #f87171;
+  --color-warning-bg: #3a1f1f;
+  --color-border: #2c353d;
+  --color-overlay: rgba(0,0,0,0.6);
+}
+
+[data-theme="dark"] .btn-outline:hover,
+[data-theme="dark"] .nav-pill:hover {
+  color: #0e1518;
 }

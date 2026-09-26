@@ -43,10 +43,10 @@ export default function BlacklistManager() {
         />
         <button type="submit">Add</button>
       </form>
-      {error && <p style={{ color: 'red' }}>{error}</p>}
+      {error && <p style={{ color: 'var(--color-warning)' }}>{error}</p>}
 
       {entries.map((e) => (
-        <div key={e._id} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #e5e7eb' }}>
+        <div key={e._id} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--color-border)' }}>
           <span>{e.imei}</span>
           <button onClick={() => handleRemove(e._id)}>Remove</button>
         </div>

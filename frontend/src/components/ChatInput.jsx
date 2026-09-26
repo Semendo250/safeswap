@@ -86,7 +86,7 @@ const s = {
     padding: '10px 14px',
     borderTop: '0.5px solid var(--color-border)',
     alignItems: 'flex-end',
-    background: '#fff',
+    background: 'var(--color-card)',
     boxSizing: 'border-box',
     width: '100%',
   },

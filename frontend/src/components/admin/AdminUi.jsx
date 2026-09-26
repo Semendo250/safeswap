@@ -237,8 +237,8 @@ export function Modal({ title, children, onClose, busy = false }) {
         aria-modal="true"
         aria-label={title}
         onClick={(e) => e.stopPropagation()}
-        style={{
-          background: '#fff',
+                style={{
+          background: 'var(--color-card)',
           borderRadius: 16,
           padding: 24,
           width: '100%',

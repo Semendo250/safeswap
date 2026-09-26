@@ -117,8 +117,8 @@ const s = {
     color: '#fff',
     borderBottomRightRadius: 4,
   },
-  bubbleThem: {
-    background: '#fff',
+    bubbleThem: {
+    background: 'var(--color-card)',
     color: 'var(--color-ink)',
     borderBottomLeftRadius: 4,
     border: '0.5px solid var(--color-border)',
@@ -149,8 +149,8 @@ const s = {
     zIndex: 1000,
     padding: 20,
   },
-  sheet: {
-    background: '#fff',
+    sheet: {
+    background: 'var(--color-card)',
     borderRadius: 16,
     padding: '20px 24px',
     width: '100%',
@@ -167,9 +167,9 @@ const s = {
     margin: '0 0 4px',
     textAlign: 'center',
   },
-  deleteForMe: {
+    deleteForMe: {
     padding: 11,
-    background: '#f5f5f5',
+    background: 'var(--color-surface)',
     border: 'none',
     borderRadius: 10,
     fontSize: 14,
@@ -188,9 +188,9 @@ const s = {
     cursor: 'pointer',
     color: 'var(--color-warning)',
   },
-  cancel: {
+    cancel: {
     padding: 11,
-    background: '#fff',
+    background: 'var(--color-card)',
     border: '0.5px solid var(--color-border)',
     borderRadius: 10,
     fontSize: 14,

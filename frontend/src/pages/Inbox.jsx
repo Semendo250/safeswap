@@ -91,7 +91,7 @@ export default function Inbox() {
 
 const s = {
   card: {
-    background: '#fff',
+    background: 'var(--color-card)',
     border: '0.5px solid var(--color-border)',
     borderRadius: 12,
     overflow: 'hidden',

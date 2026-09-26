@@ -188,8 +188,8 @@ export default function Chat() {
         flexDirection: 'column',
         padding: 12,
         boxSizing: 'border-box',
-        overflow: 'hidden',
-        background: '#fff',
+                overflow: 'hidden',
+        background: 'var(--color-bg)',
         touchAction: 'none',
       }}
     >
@@ -207,7 +207,7 @@ export default function Chat() {
           minHeight: 0,
           display: 'flex',
           flexDirection: 'column',
-          background: '#fff',
+                    background: 'var(--color-card)',
           border: '0.5px solid var(--color-border)',
           borderRadius: 12,
           overflow: 'hidden',
@@ -220,7 +220,7 @@ export default function Chat() {
             display: 'flex',
             alignItems: 'center',
             gap: 10,
-            background: '#fafafa',
+                        background: 'var(--color-surface)',
             flexShrink: 0,
           }}
         >
