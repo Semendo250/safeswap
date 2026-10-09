@@ -123,8 +123,22 @@ button:focus-visible {
 
 .container {
   max-width: 480px;
-  margin: 0;
+  margin: 0 auto;
   padding: 20px 16px 60px;
+  box-sizing: border-box;
+}
+
+@media (min-width: 700px) {
+  .container {
+    max-width: 640px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .container {
+    max-width: 760px;
+    padding: 32px 24px 80px;
+  }
 }
 .divider-row {
   display: flex;

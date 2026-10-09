@@ -83,15 +83,21 @@ export function btn(kind = 'outline', extra) {
 
 export function PageShell({ title, subtitle, children }) {
   return (
-    <div style={{ maxWidth: 720, margin: '0 auto', padding: '20px 16px 60px', boxSizing: 'border-box' }}>
-      <h2 style={{ textAlign: 'center', margin: '0 0 4px' }}>{title}</h2>
-      {subtitle && (
-        <p style={{ textAlign: 'center', margin: '0 0 14px', fontSize: 13, color: 'var(--color-muted)' }}>
-          {subtitle}
-        </p>
-      )}
-      {children}
-    </div>
+    <>
+      <style>{`
+        .admin-page-shell { max-width: 720px; }
+        @media (min-width: 1024px) { .admin-page-shell { max-width: 960px; padding-left: 24px; padding-right: 24px; } }
+      `}</style>
+      <div className="admin-page-shell" style={{ margin: '0 auto', padding: '20px 16px 60px', boxSizing: 'border-box' }}>
+        <h2 style={{ textAlign: 'center', margin: '0 0 4px' }}>{title}</h2>
+        {subtitle && (
+          <p style={{ textAlign: 'center', margin: '0 0 14px', fontSize: 13, color: 'var(--color-muted)' }}>
+            {subtitle}
+          </p>
+        )}
+        {children}
+      </div>
+    </>
   );
 }
 

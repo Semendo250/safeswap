@@ -116,7 +116,7 @@ export default function CreateListing() {
   }
 
   return (
-    <div style={{ maxWidth: '560px', margin: '0 auto', padding: '16px', boxSizing: 'border-box' }}>
+        <div style={{ maxWidth: '640px', margin: '0 auto', padding: '16px', boxSizing: 'border-box' }}>
       <BackButton />
       <h1 style={{ fontSize: 26, margin: '0 0 16px' }}>Create listing</h1>
 

@@ -140,7 +140,11 @@ export default function ListingDetail() {
   }
 
   return (
-    <div style={{ maxWidth: '480px', margin: '0', padding: '1rem' }}>
+        <div className="listing-detail-page" style={{ padding: '1rem' }}>
+      <style>{`
+        .listing-detail-page { max-width: 480px; margin: 0 auto; box-sizing: border-box; }
+        @media (min-width: 700px) { .listing-detail-page { max-width: 680px; padding: 1.5rem; } }
+      `}</style>
       <BackButton />
       <div style={{ display: 'flex', gap: '6px', overflowX: 'auto' }}>
         {listing.photos.map((url, i) => (
