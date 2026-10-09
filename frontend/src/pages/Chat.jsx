@@ -2,7 +2,7 @@ import { useState, useEffect, useContext, useRef } from 'react';
 import { useParams, useLocation, Link } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import socket from '../socket';
-import { getConversation, sendMessage, deleteMessage } from '../api/chat.api';
+import { getConversation, sendMessage, deleteMessage, markAsRead } from '../api/chat.api';
 import { getListingById } from '../api/listings.api';
 import ChatBubble from '../components/ChatBubble';
 import ChatInput from '../components/ChatInput';
@@ -23,9 +23,12 @@ export default function Chat() {
   const [receiverId, setReceiverId] = useState(location.state?.receiverId || null);
   const [listingTitle, setListingTitle] = useState('');
   const [listingSellerId, setListingSellerId] = useState(null);
+  const [otherTyping, setOtherTyping] = useState(false);
+  const [otherOnline, setOtherOnline] = useState(false);
   const bottomRef = useRef(null);
   const messagesBoxRef = useRef(null);
   const outerRef = useRef(null);
+  const typingTimeoutRef = useRef(null);
 
   useEffect(() => {
     if (!listingId) return;
@@ -44,10 +47,24 @@ export default function Chat() {
 
   useEffect(() => {
     if (!listingId || authLoading || !user || !receiverId) return;
+    const room = roomFor(listingId, user.id, receiverId);
     getConversation(listingId, receiverId).then((res) => {
       setMessages(res.data.messages);
+      // Anything already here that I haven't read yet: mark it read now that I'm viewing it
+      res.data.messages
+        .filter((m) => m.sender._id !== user.id && !m.read && !m.deletedForEveryone)
+        .forEach((m) => {
+          markAsRead(m._id).catch(() => {});
+          if (room) socket.emit('message_seen', { room, messageId: m._id });
+        });
     });
   }, [listingId, user, authLoading, receiverId]);
+
+  // Ask whether the other person is online as soon as we know who they are
+  useEffect(() => {
+    if (!receiverId) return;
+    socket.emit('check_online', receiverId, (online) => setOtherOnline(!!online));
+  }, [receiverId]);
 
   useEffect(() => {
     if (!listingId || !user) return;
@@ -63,6 +80,9 @@ export default function Chat() {
         if (prev.some((m) => m._id === data._id)) return prev;
         return [...prev, { ...data, sender: { _id: data.senderId }, receiver: { _id: data.receiverId } }];
       });
+      // The chat is open right now, so this message counts as seen immediately
+      markAsRead(data._id).catch(() => {});
+      socket.emit('message_seen', { room, messageId: data._id });
     }
     function handleDeleted(data) {
       if (data.forEveryone) {
@@ -73,12 +93,42 @@ export default function Chat() {
         );
       }
     }
+    function handleDelivered({ messageId }) {
+      setMessages((prev) => prev.map((m) => (m._id === messageId ? { ...m, delivered: true } : m)));
+    }
+    function handleSeen({ messageId }) {
+      setMessages((prev) => prev.map((m) => (m._id === messageId ? { ...m, read: true } : m)));
+    }
+    function handleTypingEvt({ room: r }) {
+      if (r === room) setOtherTyping(true);
+    }
+    function handleStopTypingEvt({ room: r }) {
+      if (r === room) setOtherTyping(false);
+    }
+    function handleUserOnline({ userId }) {
+      if (userId === receiverId) setOtherOnline(true);
+    }
+    function handleUserOffline({ userId }) {
+      if (userId === receiverId) setOtherOnline(false);
+    }
 
     socket.on('receive_message', handleIncoming);
     socket.on('message_deleted', handleDeleted);
+    socket.on('message_delivered', handleDelivered);
+    socket.on('message_seen', handleSeen);
+    socket.on('typing', handleTypingEvt);
+    socket.on('stop_typing', handleStopTypingEvt);
+    socket.on('user_online', handleUserOnline);
+    socket.on('user_offline', handleUserOffline);
     return () => {
       socket.off('receive_message', handleIncoming);
       socket.off('message_deleted', handleDeleted);
+      socket.off('message_delivered', handleDelivered);
+      socket.off('message_seen', handleSeen);
+      socket.off('typing', handleTypingEvt);
+      socket.off('stop_typing', handleStopTypingEvt);
+      socket.off('user_online', handleUserOnline);
+      socket.off('user_offline', handleUserOffline);
     };
   }, [listingId, user, receiverId]);
 
@@ -87,7 +137,7 @@ export default function Chat() {
   useEffect(() => {
     const box = messagesBoxRef.current;
     if (box) box.scrollTop = box.scrollHeight;
-  }, [messages]);
+  }, [messages, otherTyping]);
 
   // Pin the chat container to the visual viewport, so the input row stays
   // directly above the on-screen keyboard when it's open, and sits at the
@@ -114,6 +164,16 @@ export default function Chat() {
       window.visualViewport?.removeEventListener('scroll', update);
     };
   }, []);
+
+  function handleTyping() {
+    const room = roomFor(listingId, user.id, receiverId);
+    if (!room) return;
+    socket.emit('typing', { room });
+    clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => {
+      socket.emit('stop_typing', { room });
+    }, 1500);
+  }
 
   async function handleDelete(messageId, forEveryone) {
     try {
@@ -151,6 +211,8 @@ export default function Chat() {
         ...prev,
         { ...saved, sender: { _id: user.id, fullName: user.fullName }, receiver: { _id: receiverId } },
       ]);
+      clearTimeout(typingTimeoutRef.current);
+      socket.emit('stop_typing', { room: roomFor(listingId, user.id, receiverId) });
       socket.emit('send_message', {
         room: roomFor(listingId, user.id, receiverId),
         listingId,
@@ -188,12 +250,20 @@ export default function Chat() {
         flexDirection: 'column',
         padding: 12,
         boxSizing: 'border-box',
-                overflow: 'hidden',
+        overflow: 'hidden',
         background: 'var(--color-bg)',
         touchAction: 'none',
       }}
     >
       <style>{`
+        @keyframes typingBounce {
+          0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+          30% { transform: translateY(-4px); opacity: 1; }
+        }
+        .typing-dot {
+          display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+          background: var(--color-muted); margin: 0 2px; animation: typingBounce 1.2s infinite;
+        }
         @media (max-width: 640px) {
           .msg-bubble { max-width: 85% !important; }
           .msg-input-row { gap: 4px !important; padding: 8px !important; }
@@ -207,7 +277,7 @@ export default function Chat() {
           minHeight: 0,
           display: 'flex',
           flexDirection: 'column',
-                    background: 'var(--color-card)',
+          background: 'var(--color-card)',
           border: '0.5px solid var(--color-border)',
           borderRadius: 12,
           overflow: 'hidden',
@@ -220,35 +290,53 @@ export default function Chat() {
             display: 'flex',
             alignItems: 'center',
             gap: 10,
-                        background: 'var(--color-surface)',
+            background: 'var(--color-surface)',
             flexShrink: 0,
           }}
         >
           <Link to={`/listings/${listingId}`} style={{ color: 'var(--color-muted)', fontSize: 18 }}>
             &larr;
           </Link>
-          <div
-            style={{
-              width: 40,
-              height: 40,
-              borderRadius: '50%',
-              background: 'var(--color-primary)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              overflow: 'hidden',
-              flexShrink: 0,
-            }}
-          >
-            <span style={{ color: '#fff', fontWeight: 700, fontSize: 16 }}>
-              {listingTitle?.[0]?.toUpperCase()}
-            </span>
+          <div style={{ position: 'relative', flexShrink: 0 }}>
+            <div
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: '50%',
+                background: 'var(--color-primary)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                overflow: 'hidden',
+              }}
+            >
+              <span style={{ color: '#fff', fontWeight: 700, fontSize: 16 }}>
+                {listingTitle?.[0]?.toUpperCase()}
+              </span>
+            </div>
+            {receiverId && (
+              <span
+                title={otherOnline ? 'Online' : 'Offline'}
+                style={{
+                  position: 'absolute',
+                  bottom: -1,
+                  right: -1,
+                  width: 11,
+                  height: 11,
+                  borderRadius: '50%',
+                  background: otherOnline ? 'var(--color-success)' : 'var(--color-muted)',
+                  border: '2px solid var(--color-surface)',
+                }}
+              />
+            )}
           </div>
           <div style={{ minWidth: 0 }}>
             <p style={{ margin: '0 0 2px', fontWeight: 600, fontSize: 14, color: 'var(--color-ink)' }}>
               {listingTitle || 'Listing'}
             </p>
-            <p style={{ margin: 0, fontSize: 12, color: 'var(--color-teal)' }}>Chat about this item</p>
+            <p style={{ margin: 0, fontSize: 12, color: 'var(--color-teal)' }}>
+              {otherTyping ? 'Typing...' : otherOnline ? 'Online' : 'Chat about this item'}
+            </p>
           </div>
         </div>
 
@@ -290,11 +378,45 @@ export default function Chat() {
                   otherUserName={listingTitle}
                 />
               ))}
+              {otherTyping && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div
+                    style={{
+                      width: 28,
+                      height: 28,
+                      borderRadius: '50%',
+                      background: 'var(--color-primary)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <span style={{ color: '#fff', fontWeight: 700, fontSize: 12 }}>
+                      {listingTitle?.[0]?.toUpperCase() || '?'}
+                    </span>
+                  </div>
+                  <div
+                    style={{
+                      background: 'var(--color-card)',
+                      border: '0.5px solid var(--color-border)',
+                      borderRadius: 16,
+                      borderBottomLeftRadius: 4,
+                      padding: '8px 14px',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                    }}
+                  >
+                    <span className="typing-dot" style={{ animationDelay: '0s' }} />
+                    <span className="typing-dot" style={{ animationDelay: '0.2s' }} />
+                    <span className="typing-dot" style={{ animationDelay: '0.4s' }} />
+                  </div>
+                </div>
+              )}
               <div ref={bottomRef} />
             </div>
 
             <div style={{ flexShrink: 0 }}>
-              <ChatInput onSend={handleSend} />
+              <ChatInput onSend={handleSend} onTyping={handleTyping} />
             </div>
           </>
         )}

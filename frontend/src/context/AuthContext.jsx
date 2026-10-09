@@ -35,6 +35,18 @@ export function AuthProvider({ children }) {
     return () => socket.disconnect();
   }, [token]);
 
+    // Tell the server which user this socket belongs to, for online/offline status.
+  // Re-registers on every reconnect too (e.g. after the free-tier server sleeps and wakes)
+  useEffect(() => {
+    if (!user) return;
+    function doRegister() {
+      socket.emit('register', user.id);
+    }
+    doRegister();
+    socket.on('connect', doRegister);
+    return () => socket.off('connect', doRegister);
+  }, [user]);
+
   function login(userData, jwt) {
     setUser(userData);
     setToken(jwt);

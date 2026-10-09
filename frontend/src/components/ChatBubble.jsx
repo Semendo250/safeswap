@@ -64,7 +64,19 @@ export default function ChatBubble({ message, isOwn, onDelete, otherUserName }) 
             {message.content}
           </div>
         )}
-        <p style={{ ...s.time, textAlign: isOwn ? 'right' : 'left' }}>{time}</p>
+                <p style={{ ...s.time, textAlign: isOwn ? 'right' : 'left' }}>
+          {time}
+          {isOwn && !isDeleted && (
+            <span
+              style={{
+                marginLeft: 4,
+                color: message.read ? 'var(--color-primary)' : 'var(--color-muted)',
+              }}
+            >
+              {message.read || message.delivered ? '✓✓' : '✓'}
+            </span>
+          )}
+        </p>
       </div>
 
       {menuOpen && !isDeleted && (

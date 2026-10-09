@@ -5,7 +5,7 @@ import { useState, useRef } from 'react';
 //
 // `onSend` may be async. If it resolves to `false` the text is kept, so a
 // failed send doesn't lose what the user typed.
-export default function ChatInput({ onSend }) {
+export default function ChatInput({ onSend, onTyping }) {
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [focused, setFocused] = useState(false);
@@ -35,10 +35,11 @@ export default function ChatInput({ onSend }) {
     submit();
   }
 
-  function handleChange(e) {
+    function handleChange(e) {
     setText(e.target.value);
     e.target.style.height = 'auto';
     e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+    onTyping?.();
   }
 
   function handleKeyDown(e) {
