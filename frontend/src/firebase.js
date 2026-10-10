@@ -14,17 +14,44 @@ const VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY;
 
 const app = initializeApp(firebaseConfig);
 
-// Asks the browser for notification permission (if not already decided) and,
-// if granted, returns a device token to register with the backend.
-// Returns null on unsupported browsers (e.g. iOS Safari not installed as a
-// PWA) or if the person denies/ignores the permission prompt.
-export async function requestPushToken() {
+// Reads the current permission without asking for anything.
+// Returns 'unsupported' | 'default' | 'granted' | 'denied'
+export function getNotificationPermission() {
+  if (typeof window === 'undefined') return 'unsupported';
+  if (!('Notification' in window) || !('serviceWorker' in navigator)) return 'unsupported';
+  return Notification.permission;
+}
+
+// iPhone/iPad Safari only supports push for sites added to the Home Screen
+export function needsHomeScreenInstall() {
+  if (typeof navigator === 'undefined' || typeof window === 'undefined') return false;
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const standalone =
+    (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
+    window.navigator.standalone === true;
+  return ios && !standalone;
+}
+
+// Gets a device token to register with the backend.
+//
+// By default this is SILENT: it only returns a token if the person has already allowed
+// notifications, and never shows a prompt. Phones (Android Chrome in particular) ignore
+// permission prompts that don't come from a tap, so the prompt is only shown when this is
+// called with { prompt: true } from a button press.
+//
+// Returns null when unsupported, not allowed, or on any error.
+export async function requestPushToken({ prompt = false } = {}) {
   try {
+    if (getNotificationPermission() === 'unsupported') return null;
+
+    let permission = Notification.permission;
+    if (permission === 'default' && prompt) {
+      permission = await Notification.requestPermission();
+    }
+    if (permission !== 'granted') return null;
+
     const supported = await isSupported();
     if (!supported) return null;
-
-    const permission = await Notification.requestPermission();
-    if (permission !== 'granted') return null;
 
     const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
     const messaging = getMessaging(app);
