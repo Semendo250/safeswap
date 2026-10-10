@@ -215,8 +215,12 @@ export default function Navbar() {
               </button>
             </div>
 
-            {/* Bell for phones — always visible regardless of menu state, only when logged in */}
-            {user && <NotificationBell />}
+            {/* Bell for phones — hidden on desktop (the desktop nav has its own), only when logged in */}
+            {user && (
+              <span className="sw-nav-burger">
+                <NotificationBell />
+              </span>
+            )}
 
             {/* Theme toggle for phones — sits next to the hamburger, always visible regardless of menu state */}
             <button
