@@ -22,11 +22,16 @@ const TYPE_ICON = {
   verification_rejected: '❌',
   listing_approved: '✅',
   listing_rejected: '🚫',
+  listing_removed: '🚫',
+  listing_flagged: '🚩',
+  listing_sold: '🎉',
   payment_status: '💳',
+  meetup_confirmed: '🤝',
   new_message: '💬',
   new_listing_review: '🆕',
+  new_verification_request: '🪪',
+  new_report: '⚠️',
 };
-
 export default function NotificationBell() {
   const { user } = useContext(AuthContext);
   const navigate = useNavigate();

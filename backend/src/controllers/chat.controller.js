@@ -1,8 +1,9 @@
 const Message = require('../models/Message');
 const Listing = require('../models/Listing');
+const { notifyNewMessage } = require('../utils/notify');
+const { isUserActiveInRoom } = require('../socket');
 
 // GET /api/chat/:listingId/:otherUserId
-// Messages between the logged-in user and otherUserId, about this one listing only
 async function getConversation(req, res) {
   try {
     const { listingId, otherUserId } = req.params;
@@ -22,7 +23,6 @@ async function getConversation(req, res) {
       .populate('sender', 'fullName')
       .populate('receiver', 'fullName');
 
-    // Hide messages this user deleted "for me" from their own view
     const visibleMessages = messages.filter(
       (m) => !m.deletedFor.some((id) => id.toString() === userId.toString())
     );
@@ -51,6 +51,25 @@ async function sendMessage(req, res) {
     });
 
     res.status(201).json(message);
+
+    // Fire-and-forget: a notification failure must never affect the response above
+    (async () => {
+      try {
+        const listing = await Listing.findById(listingId).select('title');
+        const room = [listingId, [req.user._id.toString(), String(receiverId)].sort().join('-')].join(':');
+        await notifyNewMessage({
+          recipientId: receiverId,
+          senderId: req.user._id,
+          senderName: req.user.fullName,
+          listingId,
+          listingTitle: listing?.title || 'an item',
+          room,
+          isUserActiveInRoom,
+        });
+      } catch (err) {
+        console.error('sendMessage notify failed:', err.message);
+      }
+    })();
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -72,7 +91,6 @@ async function markAsRead(req, res) {
 }
 
 // GET /api/chat
-// One row per (listing, other person) pair, not per listing
 async function getConversations(req, res) {
   try {
     const userId = req.user._id;

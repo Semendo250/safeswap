@@ -1,12 +1,10 @@
 const Listing = require('../models/Listing');
 const { checkImeiStatus } = require('../utils/imei');
 const paymentStore = require('../utils/paymentStore');
+const { notify, notifyAdmins } = require('../utils/notify');
 
-// Seller details anyone may see. Phone + location are added only for logged-in viewers.
 const SELLER_PUBLIC_FIELDS = 'fullName trustScore verificationPath completedSales profilePicture';
 
-// Turns a listing into what this viewer is allowed to see.
-// The IMEI and the proof photo (phone next to a student ID) only go to the seller or an admin.
 function presentListing(listing, viewer) {
   const obj = listing.toJSON();
   const ref = obj.seller;
@@ -19,8 +17,6 @@ function presentListing(listing, viewer) {
   return obj;
 }
 
-// Loads one listing the way the detail page needs it: seller filled in,
-// phone/location only for logged-in viewers, private fields removed.
 async function loadListingForViewer(id, viewer) {
   const sellerFields = SELLER_PUBLIC_FIELDS + (viewer ? ' phone location' : '');
   const listing = await Listing.findById(id).populate('seller', sellerFields);
@@ -29,8 +25,6 @@ async function loadListingForViewer(id, viewer) {
 }
 
 // POST /api/listings
-// Handles both categories: 'phone' (IMEI check + proof photo required)
-// and 'general' (lighter flow, no IMEI/proof photo)
 async function createListing(req, res) {
   try {
     const { title, description, price, category, imei } = req.body;
@@ -42,7 +36,6 @@ async function createListing(req, res) {
       return res.status(400).json({ error: 'category must be phone or general' });
     }
 
-    // req.files comes from upload.array('photos', 5) on the route
     const photoUrls = (req.files?.photos || []).map((f) => f.path);
     if (photoUrls.length === 0) {
       return res.status(400).json({ error: 'At least one photo is required' });
@@ -61,13 +54,14 @@ async function createListing(req, res) {
       if (!imei) {
         return res.status(400).json({ error: 'IMEI is required for phone listings' });
       }
-            const proofFile = req.files?.proofPhoto?.[0];
+      const proofFile = req.files?.proofPhoto?.[0];
       if (!proofFile) {
-                return res.status(400).json({
+        return res.status(400).json({
           error:
-            'A proof photo is required for phone listings: your phone IMEI  screen together with your National ID, School ID, or School Temporary ID, in one photo',
+            'A proof photo is required for phone listings: dial *#06# to show your IMEI screen, then photograph it together with your National ID, School ID, or School Temporary ID, in one photo',
         });
       }
+
       const imeiStatus = await checkImeiStatus(imei);
 
       if (imeiStatus === 'invalid_format') {
@@ -75,19 +69,27 @@ async function createListing(req, res) {
       }
 
       listingData.imei = imei;
-      listingData.imeiStatus = imeiStatus; // 'clean' or 'blacklisted'
+      listingData.imeiStatus = imeiStatus;
       listingData.proofPhoto = proofFile.path;
 
       if (imeiStatus === 'blacklisted') {
         listingData.status = 'under_review';
         const listing = await Listing.create(listingData);
+
+        await notifyAdmins({
+          type: 'new_listing_review',
+          title: 'New listing to review',
+          body: `"${listing.title}" was flagged (blacklisted IMEI) and needs review.`,
+          link: '/admin/listings',
+          actorId: req.user._id,
+        });
+
         return res.status(403).json({
           error: 'This device has been flagged. Your listing was submitted for review.',
           listing,
         });
       }
     }
-    // category === 'general' skips IMEI/proof photo entirely and goes straight to active
 
     const listing = await Listing.create(listingData);
     res.status(201).json(listing);
@@ -97,7 +99,6 @@ async function createListing(req, res) {
 }
 
 // GET /api/listings
-// Feed - filterable by category, only shows active listings
 async function getListings(req, res) {
   try {
     const { category } = req.query;
@@ -106,7 +107,6 @@ async function getListings(req, res) {
       filter.category = category;
     }
 
-    // IMEI and proof photo are private: never sent in the public feed
     const listings = await Listing.find(filter)
       .select('-imei -proofPhoto')
       .sort({ createdAt: -1 })
@@ -119,7 +119,6 @@ async function getListings(req, res) {
 }
 
 // GET /api/listings/:id
-// Seller phone/location: logged-in viewers only. IMEI + proof photo: seller or admin only.
 async function getListingById(req, res) {
   try {
     const listing = await loadListingForViewer(req.params.id, req.user);
@@ -131,7 +130,6 @@ async function getListingById(req, res) {
 }
 
 // PATCH /api/listings/:id
-// Only the seller can edit their own listing, and only certain fields
 async function updateListing(req, res) {
   try {
     const listing = await Listing.findById(req.params.id);
@@ -171,8 +169,6 @@ async function deleteListing(req, res) {
 const SAFE_ZONES = ['Library entrance', 'Main gate', 'Student center', 'Hostel common room'];
 
 // PATCH /api/listings/:id/meetup
-// Picks the safe-zone meetup for this listing. Once a buyer's payment is being
-// held, only that buyer and the seller can change it.
 async function setMeetup(req, res) {
   try {
     const { safeZone } = req.body;
@@ -200,7 +196,6 @@ async function setMeetup(req, res) {
     listing.meetupConfirmed = false;
     await listing.save();
 
-    // Same shape as the detail page (seller filled in, private fields removed)
     res.json(await loadListingForViewer(listing._id, req.user));
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -215,16 +210,14 @@ async function confirmMeetup(req, res) {
 
     const callerId = req.user._id.toString();
 
-    // The seller must never be able to release the payment to themselves
     if (listing.seller.toString() === callerId) {
       return res
         .status(403)
         .json({ error: "Sellers can't confirm their own meetup. The buyer confirms it." });
     }
 
-    // If a payment is being held for this listing, confirming the meetup is what
-    // releases it to the seller. Only the buyer who paid may do that.
     let releasedCheckoutId = null;
+    let paymentWasReleased = false;
     const held = await paymentStore.getHeldByListingId(listing._id.toString());
     if (held) {
       if (String(held.buyerId) !== callerId) {
@@ -234,6 +227,7 @@ async function confirmMeetup(req, res) {
       if (released) {
         listing.status = 'sold';
         releasedCheckoutId = released.checkoutRequestId;
+        paymentWasReleased = true;
       }
     }
 
@@ -241,11 +235,39 @@ async function confirmMeetup(req, res) {
     try {
       await listing.save();
     } catch (saveErr) {
-      // Don't leave a payment released while the listing still shows as for sale
       if (releasedCheckoutId) {
         await paymentStore.updateStatusByCheckoutId(releasedCheckoutId, 'held');
       }
       throw saveErr;
+    }
+
+    // The buyer (req.user) just confirmed; notify the other party, the seller
+    await notify({
+      userId: listing.seller,
+      actorId: req.user._id,
+      type: 'meetup_confirmed',
+      title: 'Meetup confirmed',
+      body: `The buyer confirmed the handover for "${listing.title}".`,
+      link: `/listings/${listing._id}`,
+    });
+
+    if (paymentWasReleased) {
+      await notify({
+        userId: listing.seller,
+        actorId: req.user._id,
+        type: 'payment_status',
+        title: 'Funds released to you',
+        body: `Payment for "${listing.title}" has been released.`,
+        link: `/listings/${listing._id}`,
+      });
+      await notify({
+        userId: listing.seller,
+        actorId: req.user._id,
+        type: 'listing_sold',
+        title: 'Your item has been sold',
+        body: `"${listing.title}" has been marked as sold.`,
+        link: `/listings/${listing._id}`,
+      });
     }
 
     res.json(await loadListingForViewer(listing._id, req.user));

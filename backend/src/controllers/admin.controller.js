@@ -8,6 +8,7 @@ const AuditLog = require('../models/AuditLog');
 const PasswordResetToken = require('../models/PasswordResetToken');
 const { calculateTrustScore } = require('../utils/trustScore');
 const { normalizeKenyanPhone } = require('../utils/phone');
+const { notify } = require('../utils/notify');
 
 const PAYMENT_STATUSES = ['pending', 'held', 'released', 'failed', 'refunded'];
 const LISTING_STATUSES = ['active', 'under_review', 'removed', 'sold'];
@@ -35,7 +36,6 @@ function bodyReason(req) {
   return String(req.body?.reason || '').trim().slice(0, 300);
 }
 
-// Writes one row to the audit log. Never blocks or breaks the action itself.
 async function logAction(req, action, { targetType, targetId, summary, reason, meta } = {}) {
   try {
     await AuditLog.create({
@@ -62,7 +62,6 @@ const PAYMENT_POPULATE = [
   { path: 'buyer', select: 'fullName email phone' },
 ];
 
-// One payment, in the shape the admin pages expect
 function shapePayment(p) {
   const listing = p.listing && typeof p.listing.title === 'string' ? p.listing : null;
   const buyer = p.buyer && p.buyer.fullName ? p.buyer : null;
@@ -93,7 +92,6 @@ async function loadPaymentForAdmin(id) {
 
 // ---------- overview ----------
 
-// GET /api/admin/overview
 async function getOverview(req, res) {
   try {
     const [activeListings, pendingReviews, openReports, signupsToday] = await Promise.all([
@@ -110,7 +108,6 @@ async function getOverview(req, res) {
 
 // ---------- users ----------
 
-// GET /api/admin/users?search=&filter=all|unverified|banned|admins&page=
 async function getUsers(req, res) {
   try {
     const { search = '', filter = 'all' } = req.query;
@@ -125,7 +122,7 @@ async function getUsers(req, res) {
     if (term) {
       const rx = new RegExp(escapeRegex(term), 'i');
       query.$or = [{ fullName: rx }, { email: rx }, { studentRegNo: rx }, { phone: rx }];
-      const normalized = normalizeKenyanPhone(term); // so "0712345678" finds "254712345678"
+      const normalized = normalizeKenyanPhone(term);
       if (normalized) query.$or.push({ phone: normalized });
     }
 
@@ -144,11 +141,7 @@ async function getUsers(req, res) {
     const countMap = new Map(counts.map((c) => [c._id.toString(), c.count]));
 
     res.json({
-      users: users.map((u) => ({
-        ...u,
-        trustScore: u.role === 'admin' ? 99 : u.trustScore,
-        listingCount: countMap.get(u._id.toString()) || 0,
-      })),
+      users: users.map((u) => ({ ...u, listingCount: countMap.get(u._id.toString()) || 0 })),
       total,
       page,
       pages: Math.max(Math.ceil(total / limit), 1),
@@ -158,13 +151,11 @@ async function getUsers(req, res) {
   }
 }
 
-// GET /api/admin/users/:id
 async function getUserById(req, res) {
   try {
     if (!isId(req.params.id)) return res.status(400).json({ error: 'Invalid user id' });
     const user = await User.findById(req.params.id).select('-password').lean();
     if (!user) return res.status(404).json({ error: 'User not found' });
-    if (user.role === 'admin') user.trustScore = 99;
 
     const [listings, payments] = await Promise.all([
       Listing.find({ seller: user._id })
@@ -185,7 +176,6 @@ async function getUserById(req, res) {
   }
 }
 
-// PATCH /api/admin/users/:id/ban   body: { banned: true|false, reason }
 async function setUserBan(req, res) {
   try {
     const { id } = req.params;
@@ -214,8 +204,6 @@ async function setUserBan(req, res) {
     let hidden = 0;
     let kept = 0;
     if (banned) {
-      // Hide their listings, except ones with money held: those stay until the
-      // payment is settled on the Payments page
       const listings = await Listing.find({
         seller: user._id,
         status: { $in: ['active', 'under_review'] },
@@ -251,7 +239,7 @@ async function setUserBan(req, res) {
   }
 }
 
-// PATCH /api/admin/users/:id/verify  - marks the email as verified (e.g. the OTP email never arrived)
+// PATCH /api/admin/users/:id/verify - marks the email as verified manually
 async function verifyUserEmail(req, res) {
   try {
     const { id } = req.params;
@@ -267,14 +255,22 @@ async function verifyUserEmail(req, res) {
       summary: `Marked ${user.fullName} (${user.email}) as email verified`,
       reason: bodyReason(req),
     });
+
+    await notify({
+      userId: user._id,
+      actorId: req.user._id,
+      type: 'verification_approved',
+      title: "You're verified",
+      body: 'Your account is approved — you can now log in.',
+      link: '/profile',
+    });
+
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 }
 
-// DELETE /api/admin/users/:id   body: { reason }
-// Permanent. Refused for users with payment history: ban those instead.
 async function deleteUser(req, res) {
   try {
     const { id } = req.params;
@@ -334,7 +330,6 @@ async function deleteUser(req, res) {
 
 // ---------- listings ----------
 
-// GET /api/admin/flagged-listings
 async function getFlaggedListings(req, res) {
   try {
     const listings = await Listing.find({ status: 'under_review' })
@@ -346,8 +341,6 @@ async function getFlaggedListings(req, res) {
   }
 }
 
-// GET /api/admin/listings?status=&category=&search=&page=
-// Every listing, with the private fields (IMEI, proof photo) that only admins may see
 async function getAllListings(req, res) {
   try {
     const { status = 'all', category = 'all', search = '' } = req.query;
@@ -401,6 +394,7 @@ async function approveListing(req, res) {
       return res.status(400).json({ error: 'The seller is banned. Unban them first.' });
     }
 
+    const wasAlreadyActive = listing.status === 'active';
     listing.status = 'active';
     await listing.save();
 
@@ -410,6 +404,18 @@ async function approveListing(req, res) {
       summary: `Approved listing "${listing.title}"`,
       reason: bodyReason(req),
     });
+
+    if (!wasAlreadyActive) {
+      await notify({
+        userId: listing.seller,
+        actorId: req.user._id,
+        type: 'listing_approved',
+        title: 'Your listing is live',
+        body: `"${listing.title}" is now visible to buyers.`,
+        link: `/listings/${listing._id}`,
+      });
+    }
+
     res.json(listing);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -422,7 +428,7 @@ async function removeListing(req, res) {
     if (!isId(req.params.id)) return res.status(400).json({ error: 'Invalid listing id' });
     const listing = await Listing.findById(req.params.id);
     if (!listing) return res.status(404).json({ error: 'Listing not found' });
-    if (listing.status === 'removed') return res.json(listing); // already removed: don't penalize twice
+    if (listing.status === 'removed') return res.json(listing);
 
     const held = await Payment.exists({ listing: listing._id, status: 'held' });
     if (held) {
@@ -431,17 +437,16 @@ async function removeListing(req, res) {
       });
     }
 
+    const wasUnderReview = listing.status === 'under_review';
     listing.status = 'removed';
     await listing.save();
 
-    // Removing a listing for cause upholds any pending reports against it,
-    // and penalizes the seller's trust score (admin accounts are exempt: fixed score)
     await Report.updateMany(
       { listing: listing._id, status: 'pending' },
       { status: 'reviewed_upheld' }
     );
     const seller = await User.findById(listing.seller);
-    if (seller && seller.role !== 'admin') {
+    if (seller) {
       seller.reportCount += 1;
       seller.trustScore = calculateTrustScore(seller);
       await seller.save();
@@ -453,6 +458,29 @@ async function removeListing(req, res) {
       summary: `Removed listing "${listing.title}"`,
       reason: bodyReason(req),
     });
+
+    // A listing that was never approved in the first place reads as "rejected"
+    // to the seller; one that was live before and is now taken down reads as "removed"
+    if (wasUnderReview) {
+      await notify({
+        userId: listing.seller,
+        actorId: req.user._id,
+        type: 'listing_rejected',
+        title: "Your listing wasn't approved",
+        body: `"${listing.title}" wasn't approved for SafeSwap.`,
+        link: `/listings/${listing._id}`,
+      });
+    } else {
+      await notify({
+        userId: listing.seller,
+        actorId: req.user._id,
+        type: 'listing_removed',
+        title: 'Your listing was removed',
+        body: `"${listing.title}" was removed from SafeSwap.`,
+        link: `/listings/${listing._id}`,
+      });
+    }
+
     res.json(listing);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -461,7 +489,6 @@ async function removeListing(req, res) {
 
 // ---------- verification ----------
 
-// GET /api/admin/verification-queue - fallback-path users awaiting approval, oldest first
 async function getVerificationQueue(req, res) {
   try {
     const users = await User.find({
@@ -477,7 +504,6 @@ async function getVerificationQueue(req, res) {
   }
 }
 
-// PATCH /api/admin/verification/:userId/approve
 async function approveFallbackVerification(req, res) {
   try {
     if (!isId(req.params.userId)) return res.status(400).json({ error: 'Invalid user id' });
@@ -490,26 +516,48 @@ async function approveFallbackVerification(req, res) {
       targetId: user._id,
       summary: `Approved ID verification for ${user.fullName} (${user.email})`,
     });
+
+    await notify({
+      userId: user._id,
+      actorId: req.user._id,
+      type: 'verification_approved',
+      title: "You're verified",
+      body: 'Your account is approved — you can now log in.',
+      link: '/profile',
+    });
+
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 }
 
-// PATCH /api/admin/verification/:userId/reject   body: { reason }
 async function rejectFallbackVerification(req, res) {
   try {
     if (!isId(req.params.userId)) return res.status(400).json({ error: 'Invalid user id' });
     const user = await User.findById(req.params.userId).select('fullName email');
     if (!user) return res.status(404).json({ error: 'User not found' });
+    const reason = bodyReason(req);
 
     await User.updateOne({ _id: user._id }, { fallbackRejected: true, fallbackApproved: false });
     await logAction(req, 'verification.reject', {
       targetType: 'user',
       targetId: user._id,
       summary: `Rejected ID verification for ${user.fullName} (${user.email})`,
-      reason: bodyReason(req),
+      reason,
     });
+
+    await notify({
+      userId: user._id,
+      actorId: req.user._id,
+      type: 'verification_rejected',
+      title: 'Verification not approved',
+      body: reason
+        ? `Not approved: ${reason}`
+        : 'Your verification was not approved. Please contact support or sign up again.',
+      link: '/profile',
+    });
+
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -518,7 +566,6 @@ async function rejectFallbackVerification(req, res) {
 
 // ---------- IMEI blacklist ----------
 
-// POST /api/admin/blacklist - add a test IMEI (simulated CA blacklist)
 async function addBlacklistImei(req, res) {
   try {
     const { imei } = req.body;
@@ -534,7 +581,6 @@ async function addBlacklistImei(req, res) {
   }
 }
 
-// GET /api/admin/blacklist
 async function getBlacklist(req, res) {
   try {
     const entries = await BlacklistIMEI.find().sort({ createdAt: -1 });
@@ -544,7 +590,6 @@ async function getBlacklist(req, res) {
   }
 }
 
-// DELETE /api/admin/blacklist/:id
 async function removeBlacklistImei(req, res) {
   try {
     await BlacklistIMEI.findByIdAndDelete(req.params.id);
@@ -556,7 +601,6 @@ async function removeBlacklistImei(req, res) {
 
 // ---------- payments ----------
 
-// GET /api/admin/payments?status=&search=&page=
 async function getPayments(req, res) {
   try {
     const { status = 'all', search = '' } = req.query;
@@ -609,8 +653,7 @@ async function getPayments(req, res) {
   }
 }
 
-// PATCH /api/admin/payments/:id/status   body: { status, reason }
-// Changes the RECORD only. It never moves money.
+// PATCH /api/admin/payments/:id/status
 async function updatePaymentStatus(req, res) {
   try {
     const { id } = req.params;
@@ -633,7 +676,6 @@ async function updatePaymentStatus(req, res) {
       return res.status(400).json({ error: `This payment is already ${status}` });
     }
 
-    // A listing can only have one live (held or released) payment at a time
     if (status === 'held' || status === 'released') {
       const clash = await Payment.findOne({
         listing: payment.listing,
@@ -650,10 +692,11 @@ async function updatePaymentStatus(req, res) {
     payment.status = status;
     await payment.save();
 
-    // Keep the listing consistent with the payment
     const listing = await Listing.findById(payment.listing);
+    let listingJustSold = false;
     if (listing) {
       if (status === 'released') {
+        if (listing.status !== 'sold') listingJustSold = true;
         listing.status = 'sold';
         listing.meetupConfirmed = true;
       } else if (previous === 'released' && listing.status === 'sold') {
@@ -664,7 +707,7 @@ async function updatePaymentStatus(req, res) {
         try {
           await listing.save();
         } catch (saveErr) {
-          payment.status = previous; // undo, so the two never disagree
+          payment.status = previous;
           await payment.save();
           throw saveErr;
         }
@@ -686,6 +729,60 @@ async function updatePaymentStatus(req, res) {
       },
     });
 
+    const sellerId = listing ? listing.seller : null;
+    const buyerId = payment.buyer;
+
+    if (status === 'held' && sellerId) {
+      await notify({
+        userId: sellerId,
+        actorId: req.user._id,
+        type: 'payment_status',
+        title: 'Payment received',
+        body: `A buyer has paid for "${listing.title}" — arrange the meetup.`,
+        link: `/listings/${payment.listing}`,
+      });
+    }
+    if (status === 'failed' && buyerId) {
+      await notify({
+        userId: buyerId,
+        actorId: req.user._id,
+        type: 'payment_status',
+        title: "Your payment didn't go through",
+        body: listing ? `Your payment for "${listing.title}" didn't go through.` : "Your payment didn't go through.",
+        link: `/listings/${payment.listing}`,
+      });
+    }
+    if (status === 'refunded' && buyerId) {
+      await notify({
+        userId: buyerId,
+        actorId: req.user._id,
+        type: 'payment_status',
+        title: 'Your payment was refunded',
+        body: listing ? `Your payment for "${listing.title}" was refunded.` : 'Your payment was refunded.',
+        link: `/listings/${payment.listing}`,
+      });
+    }
+    if (status === 'released' && sellerId) {
+      await notify({
+        userId: sellerId,
+        actorId: req.user._id,
+        type: 'payment_status',
+        title: 'Funds released to you',
+        body: `Payment for "${listing.title}" has been released.`,
+        link: `/listings/${payment.listing}`,
+      });
+      if (listingJustSold) {
+        await notify({
+          userId: sellerId,
+          actorId: req.user._id,
+          type: 'listing_sold',
+          title: 'Your item has been sold',
+          body: `"${listing.title}" has been marked as sold.`,
+          link: `/listings/${payment.listing}`,
+        });
+      }
+    }
+
     res.json({
       payment: await loadPaymentForAdmin(payment._id),
       message: `Payment marked ${status}.${listing ? ` Listing is now ${listing.status}.` : ''}`,
@@ -697,7 +794,6 @@ async function updatePaymentStatus(req, res) {
 
 // ---------- activity log ----------
 
-// GET /api/admin/audit-log?page=
 async function getAuditLog(req, res) {
   try {
     const { page, limit, skip } = pageParams(req.query, 30);

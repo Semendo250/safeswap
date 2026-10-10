@@ -2,10 +2,8 @@ const crypto = require('crypto');
 const { initiateStkPush } = require('../utils/mpesa');
 const Listing = require('../models/Listing');
 const paymentStore = require('../utils/paymentStore');
+const { notify } = require('../utils/notify');
 
-// Checks the secret that we put on the callback URL (see MPESA_CALLBACK_SECRET).
-// Until the secret is configured this lets callbacks through, so existing payments
-// keep working, but it warns loudly. Set the secret before real payments go live.
 function callbackTokenIsValid(provided) {
   const secret = process.env.MPESA_CALLBACK_SECRET;
   if (!secret) {
@@ -36,8 +34,6 @@ async function initiatePayment(req, res) {
       return res.status(400).json({ error: 'This listing is no longer available' });
     }
 
-    // Money is already held for this item: a second payment would strand one of them.
-    // This also stops the same buyer paying twice.
     const held = await paymentStore.getHeldByListingId(listing._id.toString());
     if (held) {
       return res.status(409).json({ error: 'A payment for this item is already in progress' });
@@ -68,7 +64,6 @@ async function initiatePayment(req, res) {
 }
 
 // POST /api/payments/callback
-// Called by Safaricom, not by the app. Protected by a secret in the URL.
 async function handleCallback(req, res) {
   try {
     if (!callbackTokenIsValid(req.query.token)) {
@@ -80,8 +75,6 @@ async function handleCallback(req, res) {
 
     const { CheckoutRequestID, ResultCode } = callback;
 
-    // On success Safaricom includes the M-Pesa receipt number; keep it so admins
-    // can find the transaction later (refunds, disputes)
     let mpesaReceipt;
     const items = callback.CallbackMetadata?.Item;
     if (Array.isArray(items)) {
@@ -89,16 +82,32 @@ async function handleCallback(req, res) {
       if (found && found.Value) mpesaReceipt = String(found.Value);
     }
 
-    // Only a pending payment can change state, so a repeated or replayed callback
-    // can't reopen a payment that was already released or failed.
-    await paymentStore.settlePending(
-      CheckoutRequestID,
-      ResultCode === 0 ? 'held' : 'failed',
-      { mpesaReceipt }
-    );
-    // ResultCode 0 = success. Status moves to 'held' - this is the
-    // escrow-lite state: payment confirmed but not yet released to the
-    // seller until handover is confirmed (see confirmMeetup in listings).
+    const newStatus = ResultCode === 0 ? 'held' : 'failed';
+    // settlePending only transitions a payment that is still 'pending', so a
+    // repeated or duplicate callback for the same payment returns null here
+    // and nothing is notified twice.
+    const result = await paymentStore.settlePending(CheckoutRequestID, newStatus, { mpesaReceipt });
+
+    if (result) {
+      const listing = await Listing.findById(result.listingId).select('title seller');
+      if (newStatus === 'held' && listing) {
+        await notify({
+          userId: listing.seller,
+          type: 'payment_status',
+          title: 'Payment received',
+          body: `A buyer has paid for "${listing.title}" — arrange the meetup.`,
+          link: `/listings/${listing._id}`,
+        });
+      } else if (newStatus === 'failed') {
+        await notify({
+          userId: result.buyerId,
+          type: 'payment_status',
+          title: "Your payment didn't go through",
+          body: listing ? `Your payment for "${listing.title}" didn't go through.` : "Your payment didn't go through.",
+          link: listing ? `/listings/${listing._id}` : '/browse',
+        });
+      }
+    }
 
     res.json({ ResultCode: 0, ResultDesc: 'Received' });
   } catch (err) {

@@ -1,24 +1,45 @@
 const { Server } = require('socket.io');
 
-// Tracks which sockets belong to which logged-in user, for online/offline status.
-// A user can have more than one tab/device open, so each maps to a Set of socket ids.
 const socketUser = new Map(); // socket.id -> userId
 const userSockets = new Map(); // userId -> Set of socket.id
+const socketRoom = new Map(); // socket.id -> last-joined chat room
+const userActiveRooms = new Map(); // userId -> Map<room, refcount>
+
+function addActiveRoom(userId, room) {
+  if (!userActiveRooms.has(userId)) userActiveRooms.set(userId, new Map());
+  const rooms = userActiveRooms.get(userId);
+  rooms.set(room, (rooms.get(room) || 0) + 1);
+}
+
+function removeActiveRoom(userId, room) {
+  const rooms = userActiveRooms.get(userId);
+  if (!rooms) return;
+  const next = (rooms.get(room) || 0) - 1;
+  if (next <= 0) rooms.delete(room);
+  else rooms.set(room, next);
+  if (rooms.size === 0) userActiveRooms.delete(userId);
+}
+
+// Used by chat.controller.js (an HTTP route, not a socket) to decide whether to
+// send a push: if the recipient already has this exact conversation open, the
+// live socket message already reached them, so a push/bell row is redundant.
+function isUserActiveInRoom(userId, room) {
+  if (!userId || !room) return false;
+  const rooms = userActiveRooms.get(String(userId));
+  return !!rooms && rooms.has(room);
+}
 
 function initSocket(server) {
   const io = new Server(server, {
-    cors: {
-      origin: '*', // tighten this to your frontend URL before real deployment
-    },
+    cors: { origin: '*' }, // tighten this to your frontend URL before real deployment
   });
 
   io.on('connection', (socket) => {
     console.log('Socket connected:', socket.id);
 
-    // Identifies this socket as belonging to a logged-in user (called once on app
-    // load and again on every reconnect, e.g. after the free-tier server sleeps/wakes)
     socket.on('register', (userId) => {
       if (!userId) return;
+      userId = String(userId);
       socketUser.set(socket.id, userId);
       if (!userSockets.has(userId)) userSockets.set(userId, new Set());
       const wasOffline = userSockets.get(userId).size === 0;
@@ -26,38 +47,39 @@ function initSocket(server) {
       if (wasOffline) io.emit('user_online', { userId });
     });
 
-    // Lets a client ask "is this user online right now" when a chat first opens
     socket.on('check_online', (userId, callback) => {
-      const online = (userSockets.get(userId)?.size || 0) > 0;
+      const online = (userSockets.get(String(userId))?.size || 0) > 0;
       if (typeof callback === 'function') callback(online);
     });
 
     // Client joins a room scoped to a specific (listing, pair of participants)
-    // conversation — this is the compound room string computed on the frontend,
-    // not just the raw listingId, so different buyers on the same listing don't
-    // share a room.
+    // conversation. Also tracks which room each user currently has open, so
+    // the HTTP side can skip sending a push for a chat someone is already in.
     socket.on('join_chat', (room) => {
+      if (!room) return;
+      const userId = socketUser.get(socket.id);
+      const previousRoom = socketRoom.get(socket.id);
+      if (previousRoom && previousRoom !== room) {
+        socket.leave(previousRoom);
+        if (userId) removeActiveRoom(userId, previousRoom);
+      }
       socket.join(room);
+      socketRoom.set(socket.id, room);
+      if (userId) addActiveRoom(userId, room);
     });
 
     socket.on('send_message', (data) => {
-      // data: { room, listingId, senderId, receiverId, content, _id, createdAt }
       io.to(data.room).emit('receive_message', data);
-
-      // If the recipient's app is connected anywhere right now, the message has
-      // reached their device — tell the sender so the tick can update
-      const recipientOnline = (userSockets.get(data.receiverId)?.size || 0) > 0;
+      const recipientOnline = (userSockets.get(String(data.receiverId))?.size || 0) > 0;
       if (recipientOnline) {
         io.to(data.room).emit('message_delivered', { messageId: data._id });
       }
     });
 
     socket.on('delete_message', (data) => {
-      // data: { room, listingId, messageId, forEveryone }
       io.to(data.room).emit('message_deleted', data);
     });
 
-    // Typing indicator, scoped to the conversation room
     socket.on('typing', ({ room }) => {
       if (room) socket.to(room).emit('typing', { room });
     });
@@ -65,7 +87,6 @@ function initSocket(server) {
       if (room) socket.to(room).emit('stop_typing', { room });
     });
 
-    // The recipient has the conversation open and has seen this message
     socket.on('message_seen', ({ room, messageId }) => {
       if (room) io.to(room).emit('message_seen', { messageId });
     });
@@ -74,6 +95,11 @@ function initSocket(server) {
       console.log('Socket disconnected:', socket.id);
       const userId = socketUser.get(socket.id);
       socketUser.delete(socket.id);
+
+      const room = socketRoom.get(socket.id);
+      socketRoom.delete(socket.id);
+      if (userId && room) removeActiveRoom(userId, room);
+
       if (userId && userSockets.has(userId)) {
         userSockets.get(userId).delete(socket.id);
         if (userSockets.get(userId).size === 0) {
@@ -87,4 +113,4 @@ function initSocket(server) {
   return io;
 }
 
-module.exports = initSocket;
+module.exports = { initSocket, isUserActiveInRoom };

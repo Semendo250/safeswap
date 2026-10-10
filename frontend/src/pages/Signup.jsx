@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { signup } from '../api/auth.api';
 import PasswordInput from '../components/PasswordInput';
 import PasswordRequirements from '../components/PasswordRequirements';
@@ -11,18 +11,18 @@ import { normalizeKenyanPhone } from '../utils/phone';
 const MAX_PICTURE_BYTES = 5 * 1024 * 1024;
 
 export default function Signup() {
-  const navigate = useNavigate();
-    const [form, setForm] = useState({ fullName: '', email: '', password: '', phone: '' });
+  const [form, setForm] = useState({ fullName: '', email: '', password: '', phone: '' });
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordFocused, setPasswordFocused] = useState(false);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
 
   const [picture, setPicture] = useState(null);
   const [preview, setPreview] = useState(null);
   const fileRef = useRef(null);
 
-  // Free the temporary preview URL when it changes or the page closes
   useEffect(() => {
     return () => {
       if (preview) URL.revokeObjectURL(preview);
@@ -35,7 +35,7 @@ export default function Signup() {
 
   function handlePick(e) {
     const file = e.target.files?.[0];
-    e.target.value = ''; // lets the same file be picked again later
+    e.target.value = '';
     if (!file) return;
     if (!/^image\/(jpeg|png|webp)$/.test(file.type)) {
       setError('Please choose a JPG, PNG or WebP image');
@@ -67,13 +67,13 @@ export default function Signup() {
       setError('Passwords do not match');
       return;
     }
-        if (!normalizeKenyanPhone(form.phone)) {
+    if (!normalizeKenyanPhone(form.phone)) {
       setError('Enter a valid Kenyan phone number, e.g. 0712 345 678');
       return;
     }
+
     const data = new FormData();
     data.append('fullName', form.fullName);
-    data.append('studentRegNo', form.studentRegNo);
     data.append('email', form.email);
     data.append('password', form.password);
     data.append('phone', form.phone.trim());
@@ -81,8 +81,11 @@ export default function Signup() {
 
     try {
       setSubmitting(true);
-      await signup(data);
-      navigate('/verify-otp', { state: { email: form.email } });
+      const res = await signup(data);
+      setSuccessMessage(
+        res.data.message || 'Your details have been submitted successfully. Kindly wait for approval.'
+      );
+      setSubmitted(true);
     } catch (err) {
       setError(err.response?.data?.error || 'Signup failed');
     } finally {
@@ -90,12 +93,48 @@ export default function Signup() {
     }
   }
 
+  if (submitted) {
+    return (
+      <div className="container">
+        <div
+          style={{
+            minHeight: '60vh',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            textAlign: 'center',
+          }}
+        >
+          <div
+            style={{
+              width: '72px',
+              height: '72px',
+              borderRadius: '50%',
+              background: 'var(--color-success-bg)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: '20px',
+            }}
+          >
+            <span style={{ fontSize: '34px', color: 'var(--color-success)' }}>&#10003;</span>
+          </div>
+          <h2 style={{ fontSize: '20px', margin: '0 0 10px' }}>Submitted for review</h2>
+          <p style={{ color: 'var(--color-muted)', maxWidth: '320px', lineHeight: 1.5 }}>{successMessage}</p>
+          <p style={{ marginTop: '18px', fontSize: '13px' }}>
+            Already approved? <Link to="/login">Log in</Link>
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="container">
       <BackButton />
       <h2>Sign up</h2>
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-        {/* Profile picture (optional) */}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
           <Avatar src={preview} name={form.fullName} size={96} style={{ border: '2px solid var(--color-border)' }} />
           <input
@@ -120,7 +159,7 @@ export default function Signup() {
 
         <input name="fullName" placeholder="Full name" value={form.fullName} onChange={handleChange} required />
         <input name="email" type="email" placeholder="Email" value={form.email} onChange={handleChange} required />
-                <input
+        <input
           name="phone"
           type="tel"
           inputMode="tel"
@@ -153,7 +192,7 @@ export default function Signup() {
 
         {error && <p style={{ color: 'var(--color-warning)' }}>{error}</p>}
         <button type="submit" disabled={submitting}>
-          {submitting ? 'Signing up...' : 'Sign up'}
+          {submitting ? 'Submitting...' : 'Sign up'}
         </button>
       </form>
     </div>

@@ -5,16 +5,22 @@ const mongoose = require('mongoose');
 const notificationSchema = new mongoose.Schema(
   {
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
-    type: {
+        type: {
       type: String,
       enum: [
         'verification_approved',
         'verification_rejected',
         'listing_approved',
         'listing_rejected',
+        'listing_removed',
+        'listing_flagged',
+        'listing_sold',
         'payment_status',
+        'meetup_confirmed',
         'new_message',
-        'new_listing_review', // admin-only: a new listing needs attention
+        'new_listing_review',
+        'new_verification_request',
+        'new_report',
       ],
       required: true,
     },

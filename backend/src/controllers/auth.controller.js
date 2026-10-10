@@ -5,6 +5,7 @@ const PasswordResetToken = require('../models/PasswordResetToken');
 const cloudinary = require('../config/cloudinary');
 const { normalizeKenyanPhone } = require('../utils/phone');
 const { generateOtp, storeOtp, verifyOtp, sendOtpEmail, isUniversityEmail } = require('../utils/otp');
+const { notifyAdmins } = require('../utils/notify');
 
 const PHONE_ERROR = 'Enter a valid Kenyan phone number, e.g. 0712 345 678';
 const EMAIL_TIMEOUT_MS = 20000;
@@ -15,8 +16,6 @@ function signToken(userId) {
   });
 }
 
-// Gives up on a promise after `ms` milliseconds. The email code can hang for minutes
-// when the mail server can't be reached; this keeps requests from hanging with it.
 function withTimeout(promise, ms, message) {
   let timer;
   const timeout = new Promise((_, reject) => {
@@ -25,7 +24,6 @@ function withTimeout(promise, ms, message) {
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
-// One consistent user shape for login, verify-otp, /me and profile updates
 function publicUser(user) {
   return {
     id: user._id,
@@ -41,7 +39,6 @@ function publicUser(user) {
   };
 }
 
-// If a request fails after its picture was already uploaded, remove the orphan
 async function discardUpload(file) {
   if (!file?.filename) return;
   try {
@@ -51,7 +48,6 @@ async function discardUpload(file) {
   }
 }
 
-// Only ever deletes images inside our own profile-picture folder
 function publicIdFromUrl(url) {
   const m = /\/upload\/(?:v\d+\/)?(safeswap-profiles\/[^.]+)\.[A-Za-z0-9]+$/.exec(url || '');
   return m ? m[1] : null;
@@ -67,11 +63,11 @@ async function deleteImageByUrl(url) {
   }
 }
 
-// POST /api/auth/signup  (JSON, or multipart when a profile picture is attached)
+// POST /api/auth/signup
 async function signup(req, res) {
-  let accountSaved = false; // once true, the uploaded picture belongs to the account
+  let accountSaved = false;
   try {
-       const { fullName, studentRegNo, email, password } = req.body;
+    const { fullName, studentRegNo, email, password } = req.body;
     const rawPhone = (req.body.phone || '').trim();
 
     const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
@@ -84,7 +80,7 @@ async function signup(req, res) {
     } else if (!passwordRegex.test(password)) {
       error =
         'Password must be at least 8 characters and include uppercase, lowercase, a number, and a special character';
-    } else if (rawPhone && !normalizeKenyanPhone(rawPhone)) {
+    } else if (!normalizeKenyanPhone(rawPhone)) {
       error = PHONE_ERROR;
     } else {
       existing = await User.findOne({ email: String(email).toLowerCase().trim() });
@@ -105,12 +101,10 @@ async function signup(req, res) {
     const emailLower = String(email).toLowerCase().trim();
     const hashedPassword = await bcrypt.hash(password, 10);
     const verificationPath = isUniversityEmail(emailLower) ? 'university_email' : 'fallback';
-    const phone = rawPhone ? normalizeKenyanPhone(rawPhone) : undefined;
+    const phone = normalizeKenyanPhone(rawPhone);
 
     let user;
     if (existing) {
-      // An unverified account left over from an earlier attempt (for example the code
-      // email never arrived). Reuse it instead of blocking the student.
       const oldPicture = existing.profilePicture;
       existing.fullName = fullName;
       existing.studentRegNo = studentRegNo;
@@ -135,20 +129,32 @@ async function signup(req, res) {
       accountSaved = true;
     }
 
+    // Best-effort OTP email. Email delivery isn't currently reliable on this
+    // hosting plan, so signup no longer waits on it or fails because of it —
+    // the account is approved manually by an admin instead (see Users / 
+    // Verification queue). If email does succeed, the code still works as a
+    // backup path via /verify-otp.
     const otp = generateOtp();
-    await storeOtp(user.email, otp);
-    try {
-      await withTimeout(sendOtpEmail(user.email, otp), EMAIL_TIMEOUT_MS, 'Email sending timed out');
-    } catch (mailErr) {
-      console.error('Signup: could not send the verification email:', mailErr.message);
-      return res.status(503).json({
-        error:
-          "We couldn't send your verification email right now. Your details are saved, so please try signing up again in a few minutes.",
+    storeOtp(user.email, otp)
+      .then(() => withTimeout(sendOtpEmail(user.email, otp), EMAIL_TIMEOUT_MS, 'Email sending timed out'))
+      .catch((mailErr) => {
+        console.error('Signup: verification email did not send (non-fatal):', mailErr.message);
       });
-    }
+
+    // Let admins know, regardless of path, since both currently need a manual
+    // approval action to become usable while email delivery is unreliable.
+    notifyAdmins({
+      type: 'new_verification_request',
+      title: 'New verification to review',
+      body: `${user.fullName} signed up (${
+        verificationPath === 'fallback' ? 'ID photo' : 'university email'
+      }) and needs approval.`,
+      link: verificationPath === 'fallback' ? '/admin/verification' : '/admin/users',
+    }).catch(() => {});
 
     res.status(201).json({
-      message: 'Signup successful. Check your email for a verification code.',
+      message:
+        'Your details have been submitted successfully. Kindly wait for approval — you will be notified once your account is approved.',
       verificationPath,
       userId: user._id,
     });
@@ -219,7 +225,9 @@ async function login(req, res) {
     if (!match) return res.status(401).json({ error: 'Incorrect password' });
 
     if (!user.emailVerified) {
-      return res.status(403).json({ error: 'Please verify your email first' });
+      return res.status(403).json({
+        error: 'Your account is pending approval. You will be notified once it is approved — please check back shortly.',
+      });
     }
     if (user.isBanned) return res.status(403).json({ error: 'Account banned' });
 
@@ -238,7 +246,7 @@ async function getMe(req, res) {
   res.json(publicUser(req.user));
 }
 
-// PATCH /api/auth/me  (multipart: phone, location, optional profilePicture)
+// PATCH /api/auth/me
 async function updateProfile(req, res) {
   try {
     const updates = {};
@@ -247,7 +255,7 @@ async function updateProfile(req, res) {
     if (phone !== undefined) {
       const trimmed = String(phone).trim();
       if (trimmed === '') {
-        updates.phone = ''; // clearing the number is allowed
+        updates.phone = '';
       } else {
         const normalized = normalizeKenyanPhone(trimmed);
         if (!normalized) {
@@ -275,7 +283,6 @@ async function updateProfile(req, res) {
       runValidators: true,
     }).select('-password');
 
-    // Replace the old picture so Cloudinary doesn't fill up with unused images
     if (req.file && oldPicture) await deleteImageByUrl(oldPicture);
 
     res.json(publicUser(user));
