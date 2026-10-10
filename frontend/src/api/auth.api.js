@@ -7,6 +7,11 @@ export function signup(data) {
   });
 }
 
+// Used on the signup success screen and the login page while waiting for approval
+export function getApprovalStatus(userId) {
+  return api.get(`/auth/approval-status/${userId}`);
+}
+
 export function verifyOtp(data) {
   return api.post('/auth/verify-otp', data);
 }

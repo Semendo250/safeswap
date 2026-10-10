@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { Link } from 'react-router-dom';
-import { signup } from '../api/auth.api';
+import { Link, useNavigate } from 'react-router-dom';
+import { signup, getApprovalStatus } from '../api/auth.api';
 import PasswordInput from '../components/PasswordInput';
 import PasswordRequirements from '../components/PasswordRequirements';
 import { isPasswordValid } from '../utils/password';
@@ -9,15 +9,37 @@ import Avatar from '../components/Avatar';
 import { normalizeKenyanPhone } from '../utils/phone';
 
 const MAX_PICTURE_BYTES = 5 * 1024 * 1024;
+const PENDING_KEY = 'safeswap_pending_signup';
+const POLL_MS = 10000;
+
+function savePending(id) {
+  try {
+    localStorage.setItem(PENDING_KEY, id);
+  } catch (err) {
+    // storage blocked, the screen still works without it
+  }
+}
+
+function clearPending() {
+  try {
+    localStorage.removeItem(PENDING_KEY);
+  } catch (err) {
+    // ignore
+  }
+}
 
 export default function Signup() {
+  const navigate = useNavigate();
   const [form, setForm] = useState({ fullName: '', email: '', password: '', phone: '' });
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordFocused, setPasswordFocused] = useState(false);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-  const [successMessage, setSuccessMessage] = useState('');
+
+  // Waiting-for-approval state: 'pending' | 'approved' | 'rejected' | 'not_found'
+  const [signupId, setSignupId] = useState(null);
+  const [approval, setApproval] = useState('pending');
 
   const [picture, setPicture] = useState(null);
   const [preview, setPreview] = useState(null);
@@ -28,6 +50,39 @@ export default function Signup() {
       if (preview) URL.revokeObjectURL(preview);
     };
   }, [preview]);
+
+  // While the success screen is open, check every 10 seconds (and whenever the tab
+  // comes back into view) whether an admin has approved the account
+  useEffect(() => {
+    if (!submitted || !signupId || approval !== 'pending') return undefined;
+    let cancelled = false;
+
+    async function check() {
+      try {
+        const res = await getApprovalStatus(signupId);
+        if (cancelled) return;
+        const status = res.data.status;
+        if (status === 'approved' || status === 'rejected' || status === 'not_found') {
+          clearPending();
+          setApproval(status);
+        }
+      } catch (err) {
+        // network hiccup: keep waiting and try again on the next check
+      }
+    }
+
+    const timer = setInterval(check, POLL_MS);
+    function onVisible() {
+      if (document.visibilityState === 'visible') check();
+    }
+    document.addEventListener('visibilitychange', onVisible);
+
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [submitted, signupId, approval]);
 
   function handleChange(e) {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -82,9 +137,10 @@ export default function Signup() {
     try {
       setSubmitting(true);
       const res = await signup(data);
-      setSuccessMessage(
-        res.data.message || 'Your details have been submitted successfully. Kindly wait for approval.'
-      );
+      const id = res.data.userId ? String(res.data.userId) : null;
+      setSignupId(id);
+      setApproval('pending');
+      if (id) savePending(id);
       setSubmitted(true);
     } catch (err) {
       setError(err.response?.data?.error || 'Signup failed');
@@ -93,7 +149,47 @@ export default function Signup() {
     }
   }
 
+  function startOver() {
+    clearPending();
+    setSignupId(null);
+    setApproval('pending');
+    setSubmitted(false);
+  }
+
   if (submitted) {
+    const tones = {
+      success: { bg: 'var(--color-success-bg)', fg: 'var(--color-success)' },
+      warning: { bg: 'var(--color-warning-bg)', fg: 'var(--color-warning)' },
+    };
+    const views = {
+      pending: {
+        tone: 'success',
+        icon: '\u2713',
+        title: 'Submitted for review',
+        text: 'Your details have been submitted. This page updates by itself the moment an admin approves your account, so you can keep it open. You can also close it and try logging in later.',
+      },
+      approved: {
+        tone: 'success',
+        icon: '\u2713',
+        title: "You're approved!",
+        text: 'Your account is ready. You can log in now.',
+      },
+      rejected: {
+        tone: 'warning',
+        icon: '\u2715',
+        title: 'Not approved',
+        text: "Your account wasn't approved. You can sign up again with the correct details, or contact support.",
+      },
+      not_found: {
+        tone: 'warning',
+        icon: '\u2715',
+        title: 'Signup not found',
+        text: "We couldn't find this signup. Please sign up again.",
+      },
+    };
+    const view = views[approval] || views.pending;
+    const colors = tones[view.tone];
+
     return (
       <div className="container">
         <div
@@ -111,20 +207,35 @@ export default function Signup() {
               width: '72px',
               height: '72px',
               borderRadius: '50%',
-              background: 'var(--color-success-bg)',
+              background: colors.bg,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               marginBottom: '20px',
             }}
           >
-            <span style={{ fontSize: '34px', color: 'var(--color-success)' }}>&#10003;</span>
+            <span style={{ fontSize: '34px', color: colors.fg }}>{view.icon}</span>
           </div>
-          <h2 style={{ fontSize: '20px', margin: '0 0 10px' }}>Submitted for review</h2>
-          <p style={{ color: 'var(--color-muted)', maxWidth: '320px', lineHeight: 1.5 }}>{successMessage}</p>
-          <p style={{ marginTop: '18px', fontSize: '13px' }}>
-            Already approved? <Link to="/login">Log in</Link>
-          </p>
+          <h2 style={{ fontSize: '20px', margin: '0 0 10px' }}>{view.title}</h2>
+          <p style={{ color: 'var(--color-muted)', maxWidth: '320px', lineHeight: 1.5 }}>{view.text}</p>
+
+          {approval === 'approved' && (
+            <button type="button" onClick={() => navigate('/login')} style={{ marginTop: '18px' }}>
+              Log in now
+            </button>
+          )}
+
+          {(approval === 'rejected' || approval === 'not_found') && (
+            <button type="button" onClick={startOver} style={{ marginTop: '18px' }}>
+              Sign up again
+            </button>
+          )}
+
+          {approval === 'pending' && (
+            <p style={{ marginTop: '18px', fontSize: '13px' }}>
+              Already approved? <Link to="/login">Log in</Link>
+            </p>
+          )}
         </div>
       </div>
     );
