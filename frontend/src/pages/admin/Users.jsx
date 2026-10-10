@@ -38,9 +38,9 @@ function UserCard({ u, me, isOpen, detail, onToggle, onBan, onUnban, onVerify, o
 
   let idChip;
   if (u.verificationPath === 'fallback') {
-    if (u.fallbackApproved) idChip = <Chip tone="success">ID approved</Chip>;
-    else if (u.fallbackRejected) idChip = <Chip tone="warning">ID rejected</Chip>;
-    else idChip = <Chip tone="gold">ID pending</Chip>;
+    if (u.fallbackApproved) idChip = <Chip tone="success">Approved</Chip>;
+    else if (u.fallbackRejected) idChip = <Chip tone="warning">Rejected</Chip>;
+    else idChip = <Chip tone="gold">Pending approval</Chip>;
   } else {
     idChip = <Chip tone="success">University email</Chip>;
   }
@@ -107,7 +107,9 @@ function UserCard({ u, me, isOpen, detail, onToggle, onBan, onUnban, onVerify, o
             <>
               <Field label="Completed sales">{detail.data.user.completedSales}</Field>
               <Field label="Phone verified">{detail.data.user.phoneVerified ? 'Yes' : 'No'}</Field>
-              <Field label="Verification">{detail.data.user.verificationPath === 'fallback' ? 'Student ID photo' : 'University email'}</Field>
+              <Field label="Verification">
+                {detail.data.user.verificationPath === 'fallback' ? 'Personal email (manual approval)' : 'University email'}
+              </Field>
 
               {detail.data.user.fallbackIdPhoto && (
                 <div style={{ margin: '8px 0' }}>
@@ -286,7 +288,7 @@ export default function Users() {
     <PageShell title="Users" subtitle={`${data.total} account${data.total === 1 ? '' : 's'}`}>
       <input
         type="search"
-        placeholder="Search name, email, or phone"
+        placeholder="Search name, email, reg no or phone"
         value={search}
         onChange={(e) => {
           setSearch(e.target.value);
