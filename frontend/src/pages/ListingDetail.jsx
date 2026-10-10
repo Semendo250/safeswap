@@ -142,7 +142,7 @@ export default function ListingDetail() {
   return (
         <div className="listing-detail-page" style={{ padding: '1rem' }}>
       <style>{`
-        .listing-detail-page { max-width: 480px; margin: 0 auto; box-sizing: border-box; }
+        .listing-detail-page { max-width: 480px; margin: 0; box-sizing: border-box; }
         @media (min-width: 700px) { .listing-detail-page { max-width: 680px; padding: 1.5rem; } }
       `}</style>
       <BackButton />
