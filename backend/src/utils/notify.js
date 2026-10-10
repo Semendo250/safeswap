@@ -3,6 +3,12 @@ const FcmToken = require('../models/FcmToken');
 const { getFirebaseAdmin, admin } = require('../config/firebase');
 
 // Sends the push only (no DB row). Internal helper, never throws.
+//
+// Sent as a DATA-ONLY message (no "notification" block). A message with a
+// "notification" block is shown automatically by the browser AND by the service
+// worker's own showNotification call, which produced duplicates. With data-only,
+// the service worker (public/firebase-messaging-sw.js) is the single place that
+// displays it.
 async function sendPush(userId, title, body, link, type) {
   try {
     const app = getFirebaseAdmin();
@@ -11,9 +17,21 @@ async function sendPush(userId, title, body, link, type) {
     const tokens = await FcmToken.find({ user: userId }).select('token').lean();
     if (tokens.length === 0) return;
 
+    // Repeated chat messages from the same conversation replace one another on the device
+    const tag = type === 'new_message' ? link || '' : '';
+
+    const data = {
+      title: String(title || 'SafeSwap'),
+      body: String(body || ''),
+      link: String(link || '/'),
+      type: String(type || ''),
+    };
+    if (tag) data.tag = String(tag);
+
     const message = {
-      notification: { title, body: body || '' },
-      data: { link: link || '/', type: type || '' },
+      data,
+      // High urgency so phones deliver it promptly instead of batching it
+      webpush: { headers: { Urgency: 'high', TTL: '86400' } },
       tokens: tokens.map((t) => t.token),
     };
 
@@ -23,7 +41,11 @@ async function sendPush(userId, title, body, link, type) {
     result.responses.forEach((r, i) => {
       if (!r.success) {
         const code = r.error?.code || '';
-        if (code.includes('registration-token-not-registered') || code.includes('invalid-argument')) {
+        if (
+          code.includes('registration-token-not-registered') ||
+          code.includes('invalid-registration-token') ||
+          code.includes('invalid-argument')
+        ) {
           deadTokens.push(tokens[i].token);
         }
       }
