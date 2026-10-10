@@ -22,7 +22,7 @@ export default function Inbox() {
   }, []);
 
   return (
-    <div className="container">
+    <div className="container" style={{ margin: 0 }}>
       <style>{`
         .inbox-row {
           border-bottom: 0.5px solid var(--color-border);
