@@ -1,6 +1,8 @@
 import { createContext, useState, useEffect } from 'react';
 import socket from '../socket';
 import api from '../api/axios';
+import { requestPushToken } from '../firebase';
+import { registerPushToken, removePushToken } from '../api/notifications.api';
 
 export const AuthContext = createContext(null);
 
@@ -47,6 +49,24 @@ export function AuthProvider({ children }) {
     return () => socket.off('connect', doRegister);
   }, [user]);
 
+    const [pushToken, setPushToken] = useState(null);
+
+  // Ask for push permission and register the device token once logged in.
+  // Silently does nothing if the person denies permission or the browser
+  // doesn't support it (e.g. iOS Safari outside of an installed PWA).
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    requestPushToken().then((token) => {
+      if (cancelled || !token) return;
+      setPushToken(token);
+      registerPushToken(token).catch(() => {});
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
+
   function login(userData, jwt) {
     setUser(userData);
     setToken(jwt);
@@ -54,7 +74,11 @@ export function AuthProvider({ children }) {
     api.defaults.headers.common['Authorization'] = `Bearer ${jwt}`;
   }
 
-  function logout() {
+    function logout() {
+    if (pushToken) {
+      removePushToken(pushToken).catch(() => {});
+      setPushToken(null);
+    }
     setUser(null);
     setToken(null);
     localStorage.removeItem('token');

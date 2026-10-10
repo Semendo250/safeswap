@@ -3,15 +3,11 @@ const cors = require('cors');
 
 const authRoutes = require('./routes/auth.routes');
 const chatRoutes = require('./routes/chat.routes');
-// Phase 2 onward will add:
 const listingsRoutes = require('./routes/listings.routes');
 const reportsRoutes = require('./routes/reports.routes');
 const adminRoutes = require('./routes/admin.routes');
 const paymentsRoutes = require('./routes/payments.routes');
-// const listingsRoutes = require('./routes/listings.routes');
-// const reportsRoutes = require('./routes/reports.routes');
-// const adminRoutes = require('./routes/admin.routes');
-// const paymentsRoutes = require('./routes/payments.routes');
+const notificationsRoutes = require('./routes/notifications.routes');
 
 const app = express();
 
@@ -33,10 +29,7 @@ app.use('/api/listings', listingsRoutes);
 app.use('/api/reports', reportsRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/payments', paymentsRoutes);
-// app.use('/api/listings', listingsRoutes);
-// app.use('/api/reports', reportsRoutes);
-// app.use('/api/admin', adminRoutes);
-// app.use('/api/payments', paymentsRoutes);
+app.use('/api/notifications', notificationsRoutes);
 
 // 404 handler
 app.use((req, res) => res.status(404).json({ error: 'Route not found' }));

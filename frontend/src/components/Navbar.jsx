@@ -2,6 +2,7 @@ import { useContext, useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { ThemeContext } from '../context/ThemeContext';
+import NotificationBell from './NotificationBell';
 
 const ADMIN_LINKS = [
   { to: '/admin', label: 'Dashboard' },
@@ -129,7 +130,8 @@ export default function Navbar() {
               Admin
             </div>
 
-            {/* Theme toggle — always visible on the admin bar too, both desktop and mobile */}
+            {/* Bell + theme toggle — always visible on the admin bar too, both desktop and mobile */}
+            <NotificationBell />
             <button
               onClick={toggleTheme}
               aria-label="Toggle dark mode"
@@ -190,6 +192,7 @@ export default function Navbar() {
                   <Link to="/create-listing" className="nav-pill">Create listing</Link>
                   {isAdmin && <Link to="/admin" className="nav-pill">Admin</Link>}
                   <Link to="/profile" className="nav-pill">Profile</Link>
+                  <NotificationBell />
                   <button onClick={askLogout} className="btn-outline">Log out</button>
                 </>
               ) : (
@@ -211,6 +214,9 @@ export default function Navbar() {
                 {theme === 'dark' ? '☀️' : '🌙'}
               </button>
             </div>
+
+            {/* Bell for phones — always visible regardless of menu state, only when logged in */}
+            {user && <NotificationBell />}
 
             {/* Theme toggle for phones — sits next to the hamburger, always visible regardless of menu state */}
             <button
