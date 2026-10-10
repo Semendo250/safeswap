@@ -10,6 +10,11 @@ const { notifyAdmins } = require('../utils/notify');
 const PHONE_ERROR = 'Enter a valid Kenyan phone number, e.g. 0712 345 678';
 const EMAIL_TIMEOUT_MS = 20000;
 
+// Verification emails can't be delivered from the current host, so by default signup
+// does not send a code and accounts are approved by an admin instead.
+// Set EMAIL_OTP_ENABLED=true in the environment once email delivery works.
+const EMAIL_OTP_ENABLED = process.env.EMAIL_OTP_ENABLED === 'true';
+
 function signToken(userId) {
   return jwt.sign({ id: userId }, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRES_IN || '7d',
@@ -140,17 +145,16 @@ async function signup(req, res) {
       accountSaved = true;
     }
 
-    // Best-effort OTP email. Email delivery isn't currently reliable on this
-    // hosting plan, so signup no longer waits on it or fails because of it —
-    // the account is approved manually by an admin instead (see Users / 
-    // Verification queue). If email does succeed, the code still works as a
-    // backup path via /verify-otp.
-    const otp = generateOtp();
-    storeOtp(user.email, otp)
-      .then(() => withTimeout(sendOtpEmail(user.email, otp), EMAIL_TIMEOUT_MS, 'Email sending timed out'))
-      .catch((mailErr) => {
-        console.error('Signup: verification email did not send (non-fatal):', mailErr.message);
-      });
+    // Verification code by email: only attempted when EMAIL_OTP_ENABLED=true.
+    // It never blocks or fails signup. When it's off, an admin approves the account.
+    if (EMAIL_OTP_ENABLED) {
+      const otp = generateOtp();
+      storeOtp(user.email, otp)
+        .then(() => withTimeout(sendOtpEmail(user.email, otp), EMAIL_TIMEOUT_MS, 'Email sending timed out'))
+        .catch((mailErr) => {
+          console.error('Signup: verification email did not send (non-fatal):', mailErr.message);
+        });
+    }
 
     // Let admins know, regardless of path, since both currently need a manual
     // approval action to become usable while email delivery is unreliable.
@@ -203,6 +207,12 @@ async function verifyOtpHandler(req, res) {
 // POST /api/auth/resend-otp
 async function resendOtp(req, res) {
   try {
+    if (!EMAIL_OTP_ENABLED) {
+      return res.status(503).json({
+        error: 'Email codes are turned off right now. An admin will approve your account and you will be notified.',
+      });
+    }
+
     const { email } = req.body;
     const user = await User.findOne({ email: email.toLowerCase() });
     if (!user) return res.status(404).json({ error: 'No account found for this email' });
