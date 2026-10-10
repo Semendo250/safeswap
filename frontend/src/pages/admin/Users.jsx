@@ -286,7 +286,7 @@ export default function Users() {
     <PageShell title="Users" subtitle={`${data.total} account${data.total === 1 ? '' : 's'}`}>
       <input
         type="search"
-        placeholder="Search name, email, reg no or phone"
+        placeholder="Search name, email, or phone"
         value={search}
         onChange={(e) => {
           setSearch(e.target.value);
