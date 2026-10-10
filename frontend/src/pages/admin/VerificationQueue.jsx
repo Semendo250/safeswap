@@ -54,9 +54,9 @@ export default function VerificationQueue() {
 
   function askReject(u) {
     setDialog({
-      title: `Reject ${u.fullName}'s ID?`,
+      title: `Reject ${u.fullName}?`,
       message:
-        'They are removed from this queue and marked "ID rejected". Their account is not blocked; use Users to ban them if needed.',
+        'They are removed from this queue and marked "Rejected". Their account is not blocked; use Users to ban them if needed.',
       confirmLabel: 'Reject',
       danger: true,
       askReason: 'optional',
@@ -90,25 +90,23 @@ export default function VerificationQueue() {
               {!u.emailVerified && <Chip tone="gold">Email not verified</Chip>}
             </div>
             <Field label="Email"><CopyText value={u.email} /></Field>
-                        {u.studentRegNo && <Field label="Reg no">{u.studentRegNo}</Field>}
+            {u.studentRegNo && <Field label="Reg no">{u.studentRegNo}</Field>}
             <Field label="Phone">{u.phone ? <CopyText value={u.phone} /> : 'Not given'}</Field>
             {u.location && <Field label="Location">{u.location}</Field>}
             <Field label="Signed up">{fmtDate(u.createdAt)}</Field>
 
-            <div style={{ margin: '10px 0' }}>
-              {u.fallbackIdPhoto ? (
+            {u.fallbackIdPhoto && (
+              <div style={{ margin: '10px 0' }}>
                 <Thumb
                   src={u.fallbackIdPhoto}
                   label="ID photo (tap to enlarge)"
                   size={120}
                   onClick={() => setViewer([{ src: u.fallbackIdPhoto, label: `${u.fullName}: ID photo` }])}
                 />
-              ) : (
-                <span style={{ fontSize: 13, color: 'var(--color-warning)' }}>No ID photo uploaded</span>
-              )}
-            </div>
+              </div>
+            )}
 
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
               <button type="button" disabled={busyId === u._id} onClick={() => approve(u)} style={btn('primary')}>
                 {busyId === u._id ? 'Approving...' : 'Approve'}
               </button>
