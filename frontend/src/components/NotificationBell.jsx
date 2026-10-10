@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useContext, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
-import { onForegroundMessage } from '../firebase';
+import { onForegroundMessage, getNotificationPermission, needsHomeScreenInstall } from '../firebase';
 import {
   getNotifications,
   getUnreadCount,
@@ -22,23 +22,26 @@ const TYPE_ICON = {
   verification_rejected: '❌',
   listing_approved: '✅',
   listing_rejected: '🚫',
+  payment_status: '💳',
+  new_message: '💬',
+  new_listing_review: '🆕',
   listing_removed: '🚫',
   listing_flagged: '🚩',
   listing_sold: '🎉',
-  payment_status: '💳',
   meetup_confirmed: '🤝',
-  new_message: '💬',
-  new_listing_review: '🆕',
   new_verification_request: '🪪',
   new_report: '⚠️',
 };
+
 export default function NotificationBell() {
-  const { user } = useContext(AuthContext);
+  const { user, enablePush } = useContext(AuthContext);
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [perm, setPerm] = useState(getNotificationPermission);
+  const [enabling, setEnabling] = useState(false);
   const wrapRef = useRef(null);
 
   const refreshCount = useCallback(() => {
@@ -80,6 +83,7 @@ export default function NotificationBell() {
     const next = !open;
     setOpen(next);
     if (next) {
+      setPerm(getNotificationPermission());
       setLoading(true);
       try {
         const res = await getNotifications(1);
@@ -108,7 +112,65 @@ export default function NotificationBell() {
     }
   }
 
+  // Runs from a button tap, which is what lets phones show the permission prompt
+  async function handleEnable() {
+    setEnabling(true);
+    try {
+      const result = await enablePush();
+      setPerm(result);
+    } finally {
+      setEnabling(false);
+    }
+  }
+
   if (!user) return null;
+
+  // What to show above the list about push notifications
+  let pushBanner = null;
+  const bannerBox = {
+    padding: '10px 14px',
+    borderBottom: '1px solid var(--color-border)',
+    background: 'var(--color-surface)',
+    fontSize: 12,
+    color: 'var(--color-muted)',
+    lineHeight: 1.5,
+  };
+  if (perm === 'unsupported' && needsHomeScreenInstall()) {
+    pushBanner = (
+      <div style={bannerBox}>
+        To get notifications on iPhone, tap Share, then "Add to Home Screen", and open SafeSwap from your Home
+        Screen.
+      </div>
+    );
+  } else if (perm === 'default') {
+    pushBanner = (
+      <div style={{ ...bannerBox, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+        <span style={{ flex: 1, minWidth: 0 }}>Get alerts on this device even when SafeSwap is closed.</span>
+        <button
+          type="button"
+          onClick={handleEnable}
+          disabled={enabling}
+          style={{
+            minWidth: 0,
+            alignSelf: 'center',
+            padding: '6px 10px',
+            fontSize: 12,
+            fontWeight: 600,
+            flexShrink: 0,
+          }}
+        >
+          {enabling ? 'Please wait...' : 'Turn on'}
+        </button>
+      </div>
+    );
+  } else if (perm === 'denied') {
+    pushBanner = (
+      <div style={bannerBox}>
+        Notifications are blocked for this site. Tap the lock icon next to the address bar, open Permissions, and
+        allow Notifications.
+      </div>
+    );
+  }
 
   return (
     <div ref={wrapRef} style={{ position: 'relative' }}>
@@ -202,6 +264,8 @@ export default function NotificationBell() {
               </button>
             )}
           </div>
+
+          {pushBanner}
 
           {loading && (
             <p style={{ padding: '20px', textAlign: 'center', fontSize: 13, color: 'var(--color-muted)' }}>

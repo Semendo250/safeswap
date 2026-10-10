@@ -17,17 +17,28 @@ firebase.initializeApp({
 const messaging = firebase.messaging();
 
 // Background message handler: shows the OS-level notification when the app
-// isn't the focused tab. Foreground messages are handled separately in app.js.
+// isn't the focused tab. The backend now sends data-only messages, so this is
+// the ONLY place a notification is displayed (no duplicates).
+// Foreground messages are handled separately in the page (firebase.js).
 messaging.onBackgroundMessage((payload) => {
-  const title = payload.notification?.title || 'SafeSwap';
-  const body = payload.notification?.body || '';
-  const link = payload.data?.link || '/';
+  const data = payload.data || {};
+  const title = data.title || payload.notification?.title || 'SafeSwap';
+  const body = data.body || payload.notification?.body || '';
+  const link = data.link || '/';
 
-  self.registration.showNotification(title, {
+  const options = {
     body,
-    icon: '/favicon-s.svg',
+    // Chrome on Android doesn't show SVG icons, so this must be a PNG in /public
+    icon: '/icon-192.png',
     data: { link },
-  });
+  };
+  // Messages with the same tag replace each other (used to collapse repeated chat messages)
+  if (data.tag) {
+    options.tag = data.tag;
+    options.renotify = true;
+  }
+
+  return self.registration.showNotification(title, options);
 });
 
 // Tapping the OS notification opens (or focuses) the app at the right page
