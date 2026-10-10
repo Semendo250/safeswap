@@ -24,6 +24,15 @@ function withTimeout(promise, ms, message) {
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
+// Treat empty values and the text "undefined" / "null" (left behind by bad form
+// submissions) as "no reg number", so they are never stored or shown
+function cleanRegNo(value) {
+  if (value === undefined || value === null) return undefined;
+  const v = String(value).trim();
+  if (!v || ['undefined', 'null'].includes(v.toLowerCase())) return undefined;
+  return v.slice(0, 40);
+}
+
 function publicUser(user) {
   return {
     id: user._id,
@@ -67,7 +76,8 @@ async function deleteImageByUrl(url) {
 async function signup(req, res) {
   let accountSaved = false;
   try {
-    const { fullName, studentRegNo, email, password } = req.body;
+    const { fullName, email, password } = req.body;
+    const regNo = cleanRegNo(req.body.studentRegNo);
     const rawPhone = (req.body.phone || '').trim();
 
     const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
@@ -107,7 +117,8 @@ async function signup(req, res) {
     if (existing) {
       const oldPicture = existing.profilePicture;
       existing.fullName = fullName;
-      existing.studentRegNo = studentRegNo;
+      // Keep a real reg number if there is one; drop leftover junk like "undefined"
+      existing.studentRegNo = regNo || cleanRegNo(existing.studentRegNo);
       existing.password = hashedPassword;
       existing.phone = phone;
       existing.verificationPath = verificationPath;
@@ -119,7 +130,7 @@ async function signup(req, res) {
     } else {
       user = await User.create({
         fullName,
-        studentRegNo,
+        studentRegNo: regNo,
         email: emailLower,
         password: hashedPassword,
         phone,
