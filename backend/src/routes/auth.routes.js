@@ -4,6 +4,7 @@ const authMiddleware = require('../middleware/auth.middleware');
 const uploadProfilePicture = require('../middleware/profileUpload.middleware');
 const {
   signup,
+  getApprovalStatus,
   verifyOtpHandler,
   login,
   getMe,
@@ -18,6 +19,7 @@ router.get('/me', authMiddleware, getMe);
 router.patch('/me', authMiddleware, uploadProfilePicture, updateProfile);
 
 router.post('/signup', uploadProfilePicture, signup);
+router.get('/approval-status/:userId', getApprovalStatus);
 router.post('/verify-otp', verifyOtpHandler);
 router.post('/resend-otp', resendOtp);
 router.post('/login', login);

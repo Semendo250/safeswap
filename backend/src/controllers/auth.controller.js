@@ -127,6 +127,9 @@ async function signup(req, res) {
       existing.password = hashedPassword;
       existing.phone = phone;
       existing.verificationPath = verificationPath;
+      // Signing up again puts the account back in the review queue
+      existing.fallbackApproved = false;
+      existing.fallbackRejected = false;
       if (req.file) existing.profilePicture = req.file.path;
       await existing.save();
       accountSaved = true;
@@ -168,13 +171,35 @@ async function signup(req, res) {
     }).catch(() => {});
 
     res.status(201).json({
-      message:
-        'Your details have been submitted successfully. Kindly wait for approval — you will be notified once your account is approved.',
+      message: 'Your details have been submitted successfully. Kindly wait for approval.',
       verificationPath,
       userId: user._id,
     });
   } catch (err) {
     if (!accountSaved) await discardUpload(req.file);
+    res.status(500).json({ error: err.message });
+  }
+}
+
+// GET /api/auth/approval-status/:userId
+// Public on purpose: the signup screen uses it before the person can log in.
+// It returns one status word only, never any account details.
+async function getApprovalStatus(req, res) {
+  try {
+    res.set('Cache-Control', 'no-store');
+    const { userId } = req.params;
+    if (!/^[a-f\d]{24}$/i.test(userId)) return res.json({ status: 'not_found' });
+
+    const user = await User.findById(userId).select('emailVerified isBanned fallbackRejected').lean();
+    if (!user) return res.json({ status: 'not_found' });
+
+    let status = 'pending';
+    if (user.isBanned) status = 'rejected';
+    else if (user.emailVerified) status = 'approved';
+    else if (user.fallbackRejected) status = 'rejected';
+
+    res.json({ status });
+  } catch (err) {
     res.status(500).json({ error: err.message });
   }
 }
@@ -209,7 +234,7 @@ async function resendOtp(req, res) {
   try {
     if (!EMAIL_OTP_ENABLED) {
       return res.status(503).json({
-        error: 'Email codes are turned off right now. An admin will approve your account and you will be notified.',
+        error: 'Email codes are turned off right now. An admin will approve your account.',
       });
     }
 
@@ -247,7 +272,7 @@ async function login(req, res) {
 
     if (!user.emailVerified) {
       return res.status(403).json({
-        error: 'Your account is pending approval. You will be notified once it is approved — please check back shortly.',
+        error: 'Your account is still waiting for admin approval. Please try again a little later.',
       });
     }
     if (user.isBanned) return res.status(403).json({ error: 'Account banned' });
@@ -371,6 +396,7 @@ async function resetPassword(req, res) {
 
 module.exports = {
   signup,
+  getApprovalStatus,
   verifyOtpHandler,
   login,
   getMe,

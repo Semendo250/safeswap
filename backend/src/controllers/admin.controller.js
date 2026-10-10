@@ -510,7 +510,11 @@ async function approveFallbackVerification(req, res) {
     const user = await User.findById(req.params.userId).select('fullName email');
     if (!user) return res.status(404).json({ error: 'User not found' });
 
-    await User.updateOne({ _id: user._id }, { fallbackApproved: true, fallbackRejected: false });
+    // emailVerified is what login checks, so approving here also lets them log in
+    await User.updateOne(
+      { _id: user._id },
+      { fallbackApproved: true, fallbackRejected: false, emailVerified: true }
+    );
     await logAction(req, 'verification.approve', {
       targetType: 'user',
       targetId: user._id,
