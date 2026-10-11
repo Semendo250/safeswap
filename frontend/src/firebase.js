@@ -32,6 +32,20 @@ export function needsHomeScreenInstall() {
   return ios && !standalone;
 }
 
+// In production the PWA service worker (which includes the Firebase push handlers)
+// is the one registration for the site, so reuse it. In dev there is no PWA worker,
+// and if it isn't ready in time, fall back to registering the Firebase worker directly.
+async function getServiceWorkerRegistration() {
+  if (import.meta.env.PROD) {
+    const ready = await Promise.race([
+      navigator.serviceWorker.ready,
+      new Promise((resolve) => setTimeout(() => resolve(null), 8000)),
+    ]);
+    if (ready) return ready;
+  }
+  return navigator.serviceWorker.register('/firebase-messaging-sw.js');
+}
+
 // Gets a device token to register with the backend.
 //
 // By default this is SILENT: it only returns a token if the person has already allowed
@@ -53,7 +67,7 @@ export async function requestPushToken({ prompt = false } = {}) {
     const supported = await isSupported();
     if (!supported) return null;
 
-    const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+    const registration = await getServiceWorkerRegistration();
     const messaging = getMessaging(app);
     const token = await getToken(messaging, { vapidKey: VAPID_KEY, serviceWorkerRegistration: registration });
     return token || null;
