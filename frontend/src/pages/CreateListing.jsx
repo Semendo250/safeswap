@@ -76,6 +76,8 @@ export default function CreateListing() {
   const [proofPhoto, setProofPhoto] = useState(null);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  // Set after a phone listing is sent for review: { id, flagged }
+  const [reviewInfo, setReviewInfo] = useState(null);
 
   const proofInputRef = useRef(null);
   const photosInputRef = useRef(null);
@@ -107,7 +109,12 @@ export default function CreateListing() {
     try {
       setSubmitting(true);
       const res = await createListing(formData);
-      navigate(`/listings/${res.data._id}`);
+      if (res.data.underReview) {
+        // Phone listings wait for admin approval, so show a "submitted" screen instead of a live page
+        setReviewInfo({ id: res.data._id, flagged: !!res.data.flagged });
+      } else {
+        navigate(`/listings/${res.data._id}`);
+      }
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to create listing');
     } finally {
@@ -115,8 +122,55 @@ export default function CreateListing() {
     }
   }
 
+  if (reviewInfo) {
+    return (
+      <div style={{ maxWidth: '640px', margin: '0 auto', padding: '16px', boxSizing: 'border-box' }}>
+        <div
+          style={{
+            minHeight: '60vh',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            textAlign: 'center',
+          }}
+        >
+          <div
+            style={{
+              width: '72px',
+              height: '72px',
+              borderRadius: '50%',
+              background: 'var(--color-gold-bg)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: '20px',
+            }}
+          >
+            <span style={{ fontSize: '34px' }}>&#9203;</span>
+          </div>
+          <h2 style={{ fontSize: '20px', margin: '0 0 10px' }}>Submitted for review</h2>
+          <p style={{ color: 'var(--color-muted)', maxWidth: '340px', lineHeight: 1.5, margin: 0 }}>
+            {reviewInfo.flagged
+              ? 'This device was flagged, so an admin will check it carefully before it can go live. '
+              : 'Phone listings are checked by an admin before they go live. '}
+            You will get a notification as soon as it is approved. Until then, only you can see it.
+          </p>
+          <div style={{ display: 'flex', gap: '10px', marginTop: '20px', flexWrap: 'wrap', justifyContent: 'center' }}>
+            <button type="button" onClick={() => navigate(`/listings/${reviewInfo.id}`)}>
+              View my listing
+            </button>
+            <button type="button" className="btn-outline" onClick={() => navigate('/browse')}>
+              Browse listings
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-        <div style={{ maxWidth: '640px', margin: '0 auto', padding: '16px', boxSizing: 'border-box' }}>
+    <div style={{ maxWidth: '640px', margin: '0 auto', padding: '16px', boxSizing: 'border-box' }}>
       <BackButton />
       <h1 style={{ fontSize: 26, margin: '0 0 16px' }}>Create listing</h1>
 
@@ -256,6 +310,12 @@ export default function CreateListing() {
           </div>
         </div>
 
+        {category === 'phone' && (
+          <p style={{ fontSize: 13, color: 'var(--color-muted)', lineHeight: 1.5, margin: '0 0 12px' }}>
+            Phone listings are checked by an admin before they go live. You will be notified when yours is approved.
+          </p>
+        )}
+
         {error && <p style={{ color: 'var(--color-warning)', marginBottom: 12 }}>{error}</p>}
 
         <button
@@ -270,7 +330,13 @@ export default function CreateListing() {
             boxShadow: '0 4px 14px color-mix(in srgb, var(--color-primary) 25%, transparent)',
           }}
         >
-          {submitting ? 'Publishing...' : 'Publish listing'}
+          {category === 'phone'
+            ? submitting
+              ? 'Submitting...'
+              : 'Submit for review'
+            : submitting
+            ? 'Publishing...'
+            : 'Publish listing'}
         </button>
       </form>
     </div>

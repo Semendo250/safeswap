@@ -72,7 +72,22 @@ export default function Chat() {
     // so messages from a different buyer about the same item don't arrive here
     const room = roomFor(listingId, user.id, receiverId);
     if (!room) return;
-    socket.emit('join_chat', room);
+
+    // Join the room and tell the server whether this tab is actually being looked at.
+    // Runs again after every reconnect, because the server forgets rooms when a socket drops.
+    function joinRoom() {
+      socket.emit('join_chat', room);
+      socket.emit('chat_focus', { active: document.visibilityState === 'visible' });
+    }
+    // Tab hidden (phone locked, switched app) or shown again: the server uses this to
+    // decide whether a new message still needs a push
+    function handleVisibility() {
+      socket.emit('chat_focus', { active: document.visibilityState === 'visible' });
+    }
+
+    joinRoom();
+    socket.on('connect', joinRoom);
+    document.addEventListener('visibilitychange', handleVisibility);
 
     function handleIncoming(data) {
       if (data.senderId === user.id) return;
@@ -121,6 +136,10 @@ export default function Chat() {
     socket.on('user_online', handleUserOnline);
     socket.on('user_offline', handleUserOffline);
     return () => {
+      socket.off('connect', joinRoom);
+      document.removeEventListener('visibilitychange', handleVisibility);
+      // Tell the server we left, so new messages here get a push again
+      if (socket.connected) socket.emit('leave_chat', room);
       socket.off('receive_message', handleIncoming);
       socket.off('message_deleted', handleDeleted);
       socket.off('message_delivered', handleDelivered);

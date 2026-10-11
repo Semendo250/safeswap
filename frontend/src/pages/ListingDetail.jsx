@@ -16,6 +16,7 @@ export default function ListingDetail() {
   const navigate = useNavigate();
   const [listing, setListing] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
 
   const [phone, setPhone] = useState('');
   const [checkoutId, setCheckoutId] = useState(null);
@@ -36,9 +37,14 @@ export default function ListingDetail() {
   useEffect(() => {
     if (authLoading) return;
     let cancelled = false;
-    getListingById(id).then((res) => {
-      if (!cancelled) setListing(res.data);
-    });
+    setNotFound(false);
+    getListingById(id)
+      .then((res) => {
+        if (!cancelled) setListing(res.data);
+      })
+      .catch(() => {
+        if (!cancelled) setNotFound(true);
+      });
     setLoading(false);
     return () => {
       cancelled = true;
@@ -69,6 +75,15 @@ export default function ListingDetail() {
       document.removeEventListener('keydown', onKey);
     };
   }, [viewerOpen, photoCount]);
+
+  if (notFound) {
+    return (
+      <div style={{ padding: '1rem' }}>
+        <BackButton />
+        <p style={{ color: 'var(--color-muted)' }}>This listing isn't available.</p>
+      </div>
+    );
+  }
 
   if (loading || !listing) return <p>Loading...</p>;
 
@@ -167,6 +182,26 @@ export default function ListingDetail() {
       </div>
 
       <h2>{listing.title}</h2>
+
+      {listing.status === 'under_review' && (
+        <p
+          role="status"
+          style={{
+            background: 'var(--color-gold-bg)',
+            color: 'var(--color-gold)',
+            padding: '10px 12px',
+            borderRadius: '8px',
+            fontSize: '13px',
+            lineHeight: 1.5,
+            margin: '0 0 12px',
+          }}
+        >
+          {isOwnListing
+            ? "Waiting for approval. Only you can see this listing until an admin approves it. We'll notify you once it's live."
+            : 'This listing is waiting for approval and is visible to admins only.'}
+        </p>
+      )}
+
       <p style={{ fontSize: '18px', fontWeight: 600 }}>KES {listing.price}</p>
             <p style={{ color: 'var(--color-muted)' }}>{listing.description}</p>
 
