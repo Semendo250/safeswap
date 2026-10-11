@@ -2,6 +2,32 @@ const Notification = require('../models/Notification');
 const FcmToken = require('../models/FcmToken');
 const { getFirebaseMessaging } = require('../config/firebase');
 
+// Short readable label for a saved browser user-agent, used only in logs
+function deviceLabel(ua) {
+  const s = String(ua || '');
+  const os = /android/i.test(s)
+    ? 'Android'
+    : /iphone|ipad|ipod/i.test(s)
+    ? 'iOS'
+    : /windows/i.test(s)
+    ? 'Windows'
+    : /mac os/i.test(s)
+    ? 'Mac'
+    : /linux/i.test(s)
+    ? 'Linux'
+    : 'Unknown';
+  const browser = /edg\//i.test(s)
+    ? 'Edge'
+    : /firefox/i.test(s)
+    ? 'Firefox'
+    : /chrome|crios/i.test(s)
+    ? 'Chrome'
+    : /safari/i.test(s)
+    ? 'Safari'
+    : 'browser';
+  return `${os} ${browser}`;
+}
+
 // Sends the push only (no DB row). Internal helper, never throws.
 //
 // Sent as a DATA-ONLY message (no "notification" block). A message with a
@@ -20,9 +46,10 @@ async function sendPush(userId, title, body, link, type) {
       return;
     }
 
-    const tokenDocs = await FcmToken.find({ user: userId }).select('token').lean();
-    const tokens = (tokenDocs || []).map((t) => t.token).filter(Boolean);
-    if (tokens.length === 0) return;
+    const tokenDocs = await FcmToken.find({ user: userId }).select('token userAgent').lean();
+    const devices = (tokenDocs || []).filter((t) => t.token);
+    if (devices.length === 0) return;
+    const tokens = devices.map((t) => t.token);
 
     // Repeated chat messages from the same conversation replace one another on the device
     const tag = type === 'new_message' ? link || '' : '';
@@ -55,7 +82,7 @@ async function sendPush(userId, title, body, link, type) {
       }
       const code = String((r.reason && r.reason.code) || '');
       console.error(
-        `sendPush: device ${i + 1}/${tokens.length} failed:`,
+        `sendPush: device ${i + 1}/${tokens.length} (${deviceLabel(devices[i].userAgent)}) failed:`,
         code || (r.reason && r.reason.message) || r.reason
       );
       // Only remove tokens Firebase says no longer exist. Other errors (such as
@@ -67,7 +94,11 @@ async function sendPush(userId, title, body, link, type) {
 
     if (deadTokens.length) await FcmToken.deleteMany({ token: { $in: deadTokens } });
 
-    console.log(`sendPush: ${sent}/${tokens.length} delivered to user ${userId} (${type || 'n/a'})`);
+    console.log(
+      `sendPush: ${sent}/${tokens.length} delivered to user ${userId} (${type || 'n/a'}) devices: ${devices
+        .map((d) => deviceLabel(d.userAgent))
+        .join(', ')}`
+    );
   } catch (err) {
     console.error('sendPush failed:', err.stack || err.message);
   }
