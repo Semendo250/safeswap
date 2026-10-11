@@ -11,14 +11,15 @@ const { getFirebaseAdmin, admin } = require('../config/firebase');
 // displays it.
 async function sendPush(userId, title, body, link, type) {
   try {
-    console.log('sendPush: starting for user', userId);
     const app = getFirebaseAdmin();
-    console.log('sendPush: firebase app is', app ? 'initialized' : 'NULL');
-    if (!app) return;
+    if (!app) {
+      throw new Error('PUSH TEST: Firebase app is NULL — FIREBASE_SERVICE_ACCOUNT is likely missing or invalid');
+    }
 
     const tokens = await FcmToken.find({ user: userId }).select('token').lean();
-    console.log('sendPush: found', tokens.length, 'token(s) for this user');
-    if (tokens.length === 0) return;
+    if (tokens.length === 0) {
+      throw new Error('PUSH TEST: zero FCM tokens found for user ' + userId);
+    }
 
     // Repeated chat messages from the same conversation replace one another on the device
     const tag = type === 'new_message' ? link || '' : '';
