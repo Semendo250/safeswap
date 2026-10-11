@@ -42,6 +42,8 @@ export default function NotificationBell() {
   const [loading, setLoading] = useState(false);
   const [perm, setPerm] = useState(getNotificationPermission);
   const [enabling, setEnabling] = useState(false);
+  // Result of the last "Turn on" tap (null until the person taps it)
+  const [attempt, setAttempt] = useState(null);
   const wrapRef = useRef(null);
 
   const refreshCount = useCallback(() => {
@@ -117,7 +119,8 @@ export default function NotificationBell() {
     setEnabling(true);
     try {
       const result = await enablePush();
-      setPerm(result);
+      setPerm(result.permission);
+      setAttempt(result);
     } finally {
       setEnabling(false);
     }
@@ -125,8 +128,6 @@ export default function NotificationBell() {
 
   if (!user) return null;
 
-  // What to show above the list about push notifications
-  let pushBanner = null;
   const bannerBox = {
     padding: '10px 14px',
     borderBottom: '1px solid var(--color-border)',
@@ -135,6 +136,17 @@ export default function NotificationBell() {
     color: 'var(--color-muted)',
     lineHeight: 1.5,
   };
+  const smallBtn = {
+    minWidth: 0,
+    alignSelf: 'center',
+    padding: '6px 10px',
+    fontSize: 12,
+    fontWeight: 600,
+    flexShrink: 0,
+  };
+
+  // What to show above the list about push notifications
+  let pushBanner = null;
   if (perm === 'unsupported' && needsHomeScreenInstall()) {
     pushBanner = (
       <div style={bannerBox}>
@@ -146,28 +158,29 @@ export default function NotificationBell() {
     pushBanner = (
       <div style={{ ...bannerBox, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
         <span style={{ flex: 1, minWidth: 0 }}>Get alerts on this device even when SafeSwap is closed.</span>
-        <button
-          type="button"
-          onClick={handleEnable}
-          disabled={enabling}
-          style={{
-            minWidth: 0,
-            alignSelf: 'center',
-            padding: '6px 10px',
-            fontSize: 12,
-            fontWeight: 600,
-            flexShrink: 0,
-          }}
-        >
+        <button type="button" onClick={handleEnable} disabled={enabling} style={smallBtn}>
           {enabling ? 'Please wait...' : 'Turn on'}
+        </button>
+      </div>
+    );
+  } else if (perm === 'granted' && attempt && !attempt.registered) {
+    // Allowed in the browser, but the device wasn't saved on the server
+    pushBanner = (
+      <div style={{ ...bannerBox, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+        <span style={{ flex: 1, minWidth: 0 }}>
+          Notifications are allowed, but this device couldn't be registered yet. Check your connection and try again.
+        </span>
+        <button type="button" onClick={handleEnable} disabled={enabling} style={smallBtn}>
+          {enabling ? 'Please wait...' : 'Try again'}
         </button>
       </div>
     );
   } else if (perm === 'denied') {
     pushBanner = (
       <div style={bannerBox}>
-        Notifications are blocked for this site. Tap the lock icon next to the address bar, open Permissions, and
-        allow Notifications.
+        Notifications are blocked for this site. In Chrome, tap the icon at the left of the address bar, then
+        Permissions, then Notifications. If you can't see it, open the ⋮ menu, then Settings, Site settings,
+        Notifications, and allow this site. Then reload the page.
       </div>
     );
   }
