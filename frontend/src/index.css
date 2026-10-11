@@ -284,3 +284,192 @@ textarea,
 [data-theme="dark"] .nav-pill:hover {
   color: #0e1518;
 }
+/* ===== Status screens (waiting for approval, approved, not approved) ===== */
+.status-page {
+  min-height: 70vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 0;
+}
+.status-card {
+  --tone: var(--color-success);
+  --tone-bg: var(--color-success-bg);
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  max-width: 420px;
+  margin: 0 auto;
+  padding: 36px 24px 24px;
+  text-align: center;
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  box-shadow: 0 10px 32px rgba(18, 101, 103, 0.1);
+}
+.status-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: var(--tone);
+}
+.status-card.tone-warning {
+  --tone: var(--color-warning);
+  --tone-bg: var(--color-warning-bg);
+}
+.status-card.tone-gold {
+  --tone: var(--color-gold);
+  --tone-bg: var(--color-gold-bg);
+}
+.status-icon {
+  width: 84px;
+  height: 84px;
+  margin: 0 auto 18px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--tone-bg);
+  color: var(--tone);
+  box-shadow: 0 0 0 8px color-mix(in srgb, var(--tone) 12%, transparent);
+}
+.status-icon.pulse {
+  animation: status-pulse 2.4s ease-in-out infinite;
+}
+@keyframes status-pulse {
+  0%, 100% { box-shadow: 0 0 0 8px color-mix(in srgb, var(--tone) 12%, transparent); }
+  50% { box-shadow: 0 0 0 16px color-mix(in srgb, var(--tone) 5%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .status-icon.pulse { animation: none; }
+}
+.status-pill {
+  display: inline-block;
+  margin-bottom: 10px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  background: var(--tone-bg);
+  color: var(--tone);
+}
+.status-title {
+  font-size: 22px;
+  margin: 0 0 10px;
+}
+.status-text {
+  max-width: 330px;
+  margin: 0 auto;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--color-muted);
+}
+.status-steps {
+  list-style: none;
+  margin: 24px auto 0;
+  padding: 0;
+  max-width: 240px;
+  text-align: left;
+}
+.status-steps li {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 18px;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--color-muted);
+}
+.status-steps li:last-child {
+  padding-bottom: 0;
+}
+.status-steps li:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  left: 10px;
+  top: 22px;
+  bottom: 0;
+  width: 2px;
+  background: var(--color-border);
+}
+.status-steps .dot {
+  position: relative;
+  z-index: 1;
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid var(--color-border);
+  background: var(--color-card);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: #fff;
+}
+.status-steps li.done {
+  color: var(--color-ink);
+}
+.status-steps li.done .dot {
+  background: var(--color-success);
+  border-color: var(--color-success);
+}
+.status-steps li.done::after {
+  background: var(--color-success);
+}
+.status-steps li.current {
+  color: var(--color-ink);
+  font-weight: 600;
+}
+.status-steps li.current .dot {
+  border-color: var(--color-gold);
+}
+.status-steps li.current .dot::after {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-gold);
+}
+.status-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 24px;
+}
+button.status-btn {
+  width: 100%;
+  align-self: stretch;
+  padding: 12px 20px;
+  font-size: 14.5px;
+  border-radius: 10px;
+}
+.status-btn-outline {
+  display: block;
+  width: 100%;
+  padding: 11px 20px;
+  border: 1px solid var(--color-teal);
+  border-radius: 10px;
+  color: var(--color-teal);
+  font-size: 14.5px;
+  font-weight: 600;
+  text-align: center;
+}
+.status-btn-outline:hover {
+  background: var(--color-teal);
+  color: #fff;
+  text-decoration: none;
+}
+[data-theme="dark"] .status-btn-outline:hover {
+  color: #0e1518;
+}
+.status-note {
+  margin: 18px 0 0;
+  font-size: 12px;
+  color: var(--color-muted);
+}

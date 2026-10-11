@@ -28,6 +28,35 @@ function clearPending() {
   }
 }
 
+const ICON_PATHS = {
+  clock: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 2" />
+    </>
+  ),
+  check: <path d="M5 12.5l4.5 4.5L19 7.5" />,
+  cross: <path d="M6 6l12 12M18 6L6 18" />,
+};
+
+function StatusIcon({ name }) {
+  return (
+    <svg
+      width="40"
+      height="40"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {ICON_PATHS[name]}
+    </svg>
+  );
+}
+
 export default function Signup() {
   const navigate = useNavigate();
   const [form, setForm] = useState({ fullName: '', email: '', password: '', phone: '' });
@@ -157,85 +186,92 @@ export default function Signup() {
   }
 
   if (submitted) {
-    const tones = {
-      success: { bg: 'var(--color-success-bg)', fg: 'var(--color-success)' },
-      warning: { bg: 'var(--color-warning-bg)', fg: 'var(--color-warning)' },
-    };
     const views = {
       pending: {
-        tone: 'success',
-        icon: '\u2713',
+        tone: 'gold',
+        icon: 'clock',
+        pill: 'In review',
         title: 'Submitted for review',
         text: 'Your details have been submitted. This page updates by itself the moment an admin approves your account, so you can keep it open. You can also close it and try logging in later.',
       },
       approved: {
         tone: 'success',
-        icon: '\u2713',
+        icon: 'check',
+        pill: 'All set',
         title: "You're approved!",
         text: 'Your account is ready. You can log in now.',
       },
       rejected: {
         tone: 'warning',
-        icon: '\u2715',
+        icon: 'cross',
+        pill: 'Action needed',
         title: 'Not approved',
         text: "Your account wasn't approved. You can sign up again with the correct details, or contact support.",
       },
       not_found: {
         tone: 'warning',
-        icon: '\u2715',
+        icon: 'cross',
+        pill: 'Action needed',
         title: 'Signup not found',
         text: "We couldn't find this signup. Please sign up again.",
       },
     };
     const view = views[approval] || views.pending;
-    const colors = tones[view.tone];
 
     return (
       <div className="container">
-        <div
-          style={{
-            minHeight: '60vh',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            textAlign: 'center',
-          }}
-        >
-          <div
-            style={{
-              width: '72px',
-              height: '72px',
-              borderRadius: '50%',
-              background: colors.bg,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              marginBottom: '20px',
-            }}
-          >
-            <span style={{ fontSize: '34px', color: colors.fg }}>{view.icon}</span>
+        <div className="status-page">
+          <div className={`status-card tone-${view.tone}`} role="status" aria-live="polite">
+            <div className={`status-icon ${approval === 'pending' ? 'pulse' : ''}`}>
+              <StatusIcon name={view.icon} />
+            </div>
+            <span className="status-pill">{view.pill}</span>
+            <h2 className="status-title">{view.title}</h2>
+            <p className="status-text">{view.text}</p>
+
+            {approval === 'pending' && (
+              <>
+                <ol className="status-steps">
+                  <li className="done">
+                    <span className="dot">&#10003;</span>
+                    Details submitted
+                  </li>
+                  <li className="current">
+                    <span className="dot" />
+                    Admin review
+                  </li>
+                  <li>
+                    <span className="dot" />
+                    Account approved
+                  </li>
+                </ol>
+                <div className="status-actions">
+                  <Link to="/login" className="status-btn-outline">
+                    Already approved? Log in
+                  </Link>
+                </div>
+              </>
+            )}
+
+            {approval === 'approved' && (
+              <div className="status-actions">
+                <button type="button" className="status-btn" onClick={() => navigate('/login')}>
+                  Log in now
+                </button>
+              </div>
+            )}
+
+            {(approval === 'rejected' || approval === 'not_found') && (
+              <div className="status-actions">
+                <button type="button" className="status-btn" onClick={startOver}>
+                  Sign up again
+                </button>
+                <Link to="/login" className="status-btn-outline">
+                  Back to log in
+                </Link>
+              </div>
+            )}
           </div>
-          <h2 style={{ fontSize: '20px', margin: '0 0 10px' }}>{view.title}</h2>
-          <p style={{ color: 'var(--color-muted)', maxWidth: '320px', lineHeight: 1.5 }}>{view.text}</p>
-
-          {approval === 'approved' && (
-            <button type="button" onClick={() => navigate('/login')} style={{ marginTop: '18px' }}>
-              Log in now
-            </button>
-          )}
-
-          {(approval === 'rejected' || approval === 'not_found') && (
-            <button type="button" onClick={startOver} style={{ marginTop: '18px' }}>
-              Sign up again
-            </button>
-          )}
-
-          {approval === 'pending' && (
-            <p style={{ marginTop: '18px', fontSize: '13px' }}>
-              Already approved? <Link to="/login">Log in</Link>
-            </p>
-          )}
         </div>
       </div>
     );
