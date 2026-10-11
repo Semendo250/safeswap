@@ -7,13 +7,41 @@ export default function Browse() {
   const [category, setCategory] = useState('phone');
   const [listings, setListings] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
+    let cancelled = false;
     setLoading(true);
+    setError(false);
     getListings(category)
-      .then((res) => setListings(res.data))
-      .finally(() => setLoading(false));
-  }, [category]);
+      .then((res) => {
+        if (!cancelled) setListings(res.data);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setListings([]);
+          setError(true);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [category, reloadKey]);
+
+  // Reload automatically when the connection comes back
+  useEffect(() => {
+    function handleOnline() {
+      setReloadKey((k) => k + 1);
+    }
+    window.addEventListener('online', handleOnline);
+    return () => window.removeEventListener('online', handleOnline);
+  }, []);
+
+  const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
 
   return (
     <div className="browse-page">
@@ -55,7 +83,21 @@ export default function Browse() {
       <CategoryTabs value={category} onChange={setCategory} />
 
       {loading && <p style={{ color: 'var(--color-muted)' }}>Loading...</p>}
-      {!loading && listings.length === 0 && (
+
+      {!loading && error && (
+        <div style={{ color: 'var(--color-muted)' }}>
+          <p>
+            {offline
+              ? "You're offline. Listings will load when you're back online."
+              : "Couldn't load listings. Check your connection and try again."}
+          </p>
+          <button type="button" onClick={() => setReloadKey((k) => k + 1)}>
+            Try again
+          </button>
+        </div>
+      )}
+
+      {!loading && !error && listings.length === 0 && (
         <p style={{ color: 'var(--color-muted)' }}>No listings yet in this category.</p>
       )}
 
