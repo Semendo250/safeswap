@@ -35,7 +35,7 @@ const TONES = {
   warning: { background: 'var(--color-warning-bg)', color: 'var(--color-warning)' },
   gold: { background: 'var(--color-gold-bg)', color: 'var(--color-gold)' },
   muted: { background: 'var(--color-border)', color: 'var(--color-muted)' },
-  teal: { background: 'color-mix(in srgb, var(--color-teal) 12%, #fff)', color: 'var(--color-teal)' },
+  teal: { background: 'color-mix(in srgb, var(--color-teal) 14%, var(--color-card))', color: 'var(--color-teal)' },
 };
 
 export const LISTING_TONE = { active: 'success', under_review: 'gold', removed: 'warning', sold: 'teal' };
@@ -74,8 +74,8 @@ export function btn(kind = 'outline', extra) {
   };
   const kinds = {
     primary: { background: 'var(--color-primary)', color: '#fff', border: '1px solid var(--color-primary)' },
-    outline: { background: '#fff', color: 'var(--color-ink)', border: '1px solid var(--color-border)' },
-    danger: { background: '#fff', color: 'var(--color-warning)', border: '1px solid var(--color-warning)' },
+    outline: { background: 'var(--color-card)', color: 'var(--color-ink)', border: '1px solid var(--color-border)' },
+    danger: { background: 'var(--color-card)', color: 'var(--color-warning)', border: '1px solid var(--color-warning)' },
     dangerSolid: { background: 'var(--color-warning)', color: '#fff', border: '1px solid var(--color-warning)' },
   };
   return { ...base, ...kinds[kind], ...extra };
@@ -471,7 +471,7 @@ export function Thumb({ src, label, onClick, size = 72 }) {
         width: size,
         alignSelf: 'auto',
         border: '1px solid var(--color-border)',
-        background: '#fff',
+        background: 'var(--color-card)',
         borderRadius: 8,
         overflow: 'hidden',
         cursor: 'zoom-in',

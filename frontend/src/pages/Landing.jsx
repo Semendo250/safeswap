@@ -257,11 +257,11 @@ export default function Landing() {
 const CSS = `
 .lp {
   /* Maseno University colours */
-  --lp-primary: #126567;  /* deep teal */
+  --lp-primary: var(--color-primary);  /* deep teal */
   --lp-light: #65C1CF;    /* light teal (tints only) */
   --lp-gold: #F0B256;     /* gold accent */
   --lp-dark: #0B2E30;     /* text on gold */
-  --lp-tint: color-mix(in srgb, var(--lp-light) 16%, #fff);
+  --lp-tint: color-mix(in srgb, var(--lp-light) 16%, var(--color-bg));
   color: var(--color-ink);
 }
 .lp *, .lp *::before, .lp *::after { box-sizing: border-box; }
@@ -282,7 +282,7 @@ const CSS = `
 }
 .lp-btn-primary { background: var(--lp-primary); color: #fff; border: 1.5px solid var(--lp-primary); }
 .lp-btn-primary:hover { background: color-mix(in srgb, var(--lp-primary) 86%, #000); }
-.lp-btn-outline { background: #fff; color: var(--lp-primary); border: 1.5px solid var(--lp-primary); }
+.lp-btn-outline { background: var(--color-card); color: var(--lp-primary); border: 1.5px solid var(--lp-primary); }
 .lp-btn-outline:hover { background: var(--lp-tint); }
 /* Main button in the dark band is gold (class name kept so the page code doesn't change) */
 .lp-btn-light { background: var(--lp-gold); color: var(--lp-dark); border: 1.5px solid var(--lp-gold); }
@@ -295,7 +295,7 @@ const CSS = `
 }
 
 /* Hero */
-.lp-hero { padding: 36px 0 44px; background: linear-gradient(180deg, var(--lp-tint) 0%, #fff 100%); }
+.lp-hero { padding: 36px 0 44px; background: linear-gradient(180deg, var(--lp-tint) 0%, var(--color-bg) 100%); }
 .lp-hero-grid { display: grid; gap: 36px; align-items: center; }
 .lp-h1 { font-size: clamp(32px, 8vw, 54px); line-height: 1.08; font-weight: 800; letter-spacing: -0.025em; }
 .lp-lead {
@@ -307,7 +307,7 @@ const CSS = `
 
 /* Sample listing card */
 .lp-mock {
-  width: 100%; max-width: 380px; margin: 0 auto; background: #fff;
+  width: 100%; max-width: 380px; margin: 0 auto; background: var(--color-card);
   border: 1px solid var(--color-border); border-radius: 16px; overflow: hidden;
   box-shadow: 0 14px 34px rgba(0,0,0,0.08);
 }
@@ -315,7 +315,7 @@ const CSS = `
 .lp-mock-photo {
   height: 140px; display: flex; align-items: center; justify-content: center;
   color: var(--lp-primary);
-  background: color-mix(in srgb, var(--lp-light) 22%, #fff);
+  background: color-mix(in srgb, var(--lp-light) 22%, var(--color-card));
 }
 .lp-mock-body { padding: 16px 18px 18px; }
 .lp-mock-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
@@ -362,14 +362,13 @@ const CSS = `
 /* Safe zones */
 .lp-zones-wrap { padding-bottom: 48px; }
 .lp-zones {
-  display: grid; gap: 20px; padding: 28px 22px; border-radius: 16px;
   background: var(--lp-tint);
-  border: 1px solid color-mix(in srgb, var(--lp-light) 45%, #fff);
+  border: 1px solid color-mix(in srgb, var(--lp-light) 45%, var(--color-bg));
 }
 .lp-pills { display: flex; flex-wrap: wrap; gap: 10px; }
 .lp-pill {
   display: inline-flex; align-items: center; gap: 6px; padding: 9px 14px; border-radius: 999px;
-  background: #fff; border: 1px solid var(--color-border); font-size: 14px; font-weight: 600;
+  background: var(--color-card); border: 1px solid var(--color-border); font-size: 14px; font-weight: 600;
 }
 
 /* Final call to action */

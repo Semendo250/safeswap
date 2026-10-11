@@ -279,69 +279,122 @@ export default function Signup() {
 
   return (
     <div className="container">
-      <BackButton />
-      <h2>Sign up</h2>
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
-          <Avatar src={preview} name={form.fullName} size={96} style={{ border: '2px solid var(--color-border)' }} />
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            onChange={handlePick}
-            style={{ display: 'none' }}
-          />
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button type="button" className="btn-outline" onClick={() => fileRef.current?.click()}>
-              {picture ? 'Change photo' : 'Add profile photo'}
+      <div className="auth-page">
+        <div className="auth-card wide">
+          <div className="auth-back">
+            <BackButton />
+          </div>
+
+          <img src="/logo-icon.svg" alt="SafeSwap" className="auth-logo" />
+          <h2 className="auth-title">Create your account</h2>
+          <p className="auth-subtitle">Join SafeSwap to buy and sell safely.</p>
+
+          <form onSubmit={handleSubmit} className="auth-form">
+            <div className="auth-avatar">
+              <Avatar src={preview} name={form.fullName} size={96} style={{ border: '2px solid var(--color-border)' }} />
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={handlePick}
+                style={{ display: 'none' }}
+              />
+              <div className="auth-avatar-actions">
+                <button type="button" className="btn-outline" onClick={() => fileRef.current?.click()}>
+                  {picture ? 'Change photo' : 'Add profile photo'}
+                </button>
+                {picture && (
+                  <button type="button" className="btn-outline" onClick={removePicture}>
+                    Remove
+                  </button>
+                )}
+              </div>
+              <span className="auth-hint">Optional. JPG, PNG or WebP, up to 5 MB.</span>
+            </div>
+
+            <div className="auth-field">
+              <label className="auth-label" htmlFor="signup-name">
+                Full name
+              </label>
+              <input
+                id="signup-name"
+                name="fullName"
+                placeholder="Your full name"
+                value={form.fullName}
+                onChange={handleChange}
+                required
+              />
+            </div>
+
+            <div className="auth-field">
+              <label className="auth-label" htmlFor="signup-email">
+                Email
+              </label>
+              <input
+                id="signup-email"
+                name="email"
+                type="email"
+                placeholder="you@example.com"
+                value={form.email}
+                onChange={handleChange}
+                required
+              />
+            </div>
+
+            <div className="auth-field">
+              <label className="auth-label" htmlFor="signup-phone">
+                Phone number
+              </label>
+              <input
+                id="signup-phone"
+                name="phone"
+                type="tel"
+                inputMode="tel"
+                placeholder="e.g. 0712 345 678"
+                value={form.phone}
+                onChange={handleChange}
+                required
+              />
+            </div>
+
+            <div className="auth-field">
+              <label className="auth-label">Password</label>
+              <PasswordInput
+                name="password"
+                placeholder="Create a password"
+                value={form.password}
+                onChange={handleChange}
+                onFocus={() => setPasswordFocused(true)}
+                onBlur={() => setPasswordFocused(false)}
+              />
+              <div className={`password-requirements ${passwordFocused ? 'open' : ''}`}>
+                <PasswordRequirements password={form.password} />
+              </div>
+            </div>
+
+            <div className="auth-field">
+              <label className="auth-label">Confirm password</label>
+              <PasswordInput
+                name="confirmPassword"
+                placeholder="Re-enter your password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+              />
+            </div>
+
+            {error && <p className="auth-error">{error}</p>}
+
+            <button type="submit" className="auth-submit" disabled={submitting}>
+              {submitting ? 'Submitting...' : 'Sign up'}
             </button>
-            {picture && (
-              <button type="button" className="btn-outline" onClick={removePicture}>
-                Remove
-              </button>
-            )}
-          </div>
-          <span style={{ fontSize: '12px', color: 'var(--color-muted)' }}>Optional. JPG, PNG or WebP, up to 5 MB.</span>
+          </form>
+
+          <div className="auth-divider">Already have an account?</div>
+          <Link to="/login" className="auth-alt">
+            Log in
+          </Link>
         </div>
-
-        <input name="fullName" placeholder="Full name" value={form.fullName} onChange={handleChange} required />
-        <input name="email" type="email" placeholder="Email" value={form.email} onChange={handleChange} required />
-        <input
-          name="phone"
-          type="tel"
-          inputMode="tel"
-          placeholder="Phone number e.g. 0712 345 678"
-          value={form.phone}
-          onChange={handleChange}
-          required
-        />
-
-        <div>
-          <PasswordInput
-            name="password"
-            placeholder="Password"
-            value={form.password}
-            onChange={handleChange}
-            onFocus={() => setPasswordFocused(true)}
-            onBlur={() => setPasswordFocused(false)}
-          />
-          <div className={`password-requirements ${passwordFocused ? 'open' : ''}`}>
-            <PasswordRequirements password={form.password} />
-          </div>
-        </div>
-
-        <PasswordInput
-          name="confirmPassword"
-          placeholder="Confirm password"
-          value={confirmPassword}
-          onChange={(e) => setConfirmPassword(e.target.value)}
-        />
-
-        {error && <p style={{ color: 'var(--color-warning)' }}>{error}</p>}
-        <button type="submit" disabled={submitting}>
-          {submitting ? 'Submitting...' : 'Sign up'}
-        </button>
-      </form>
+      </div>
     </div>
   );
 }

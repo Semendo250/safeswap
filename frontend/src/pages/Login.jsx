@@ -98,11 +98,11 @@ export default function Login() {
   return (
     <div className="container">
       <div className="auth-page">
-        <div className="auth-back">
-          <BackButton />
-        </div>
-
         <div className="auth-card">
+          <div className="auth-back">
+            <BackButton />
+          </div>
+
           <img src="/logo-icon.svg" alt="SafeSwap" className="auth-logo" />
           <h2 className="auth-title">Welcome back</h2>
           <p className="auth-subtitle">Log in to buy and sell safely on SafeSwap.</p>

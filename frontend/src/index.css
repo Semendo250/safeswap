@@ -483,9 +483,10 @@ button.status-btn {
   padding: 8px 0 24px;
 }
 .auth-back {
-  width: 100%;
-  max-width: 420px;
-  margin-bottom: 12px;
+  margin: 0 0 14px;
+}
+.auth-back > * {
+  margin: 0 !important;
 }
 .auth-card {
   width: 100%;
@@ -604,4 +605,26 @@ button.auth-submit {
 }
 [data-theme="dark"] .auth-alt:hover {
   color: #0e1518;
+}
+/* ===== Signup form additions ===== */
+.auth-card.wide {
+  max-width: 460px;
+}
+.auth-avatar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 6px;
+}
+.auth-avatar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+.auth-hint {
+  font-size: 12px;
+  text-align: center;
+  color: var(--color-muted);
 }
