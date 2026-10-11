@@ -235,21 +235,6 @@ export default function Landing() {
           </div>
         </div>
       </section>
-
-      <footer className="lp-footer">
-        <div className="lp-wrap lp-footer-inner">
-          <p>SafeSwap. Verified secondhand for Maseno University students.</p>
-          <nav aria-label="Footer">
-            <Link to="/browse">Browse</Link>
-            {!user && (
-              <>
-                <Link to="/login">Log in</Link>
-                <Link to="/signup">Sign up</Link>
-              </>
-            )}
-          </nav>
-        </div>
-      </footer>
     </div>
   );
 }
