@@ -46,7 +46,7 @@ function ListingCard({ l, onView, onApprove, onRemove }) {
   const canRemove = l.status !== 'removed';
 
   return (
-    <div style={{ border: '1px solid var(--color-border)', borderRadius: 10, padding: 12, marginBottom: 10, background: '#fff' }}>
+    <div style={{ border: '1px solid var(--color-border)', borderRadius: 10, padding: 12, marginBottom: 10, background: 'var(--color-card)' }}>
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 8 }}>
         {photos[0] && (
           <Thumb

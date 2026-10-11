@@ -160,7 +160,7 @@ export default function Payments() {
       {data.payments.map((p) => (
         <div
           key={p._id}
-          style={{ border: '1px solid var(--color-border)', borderRadius: 10, padding: 12, marginBottom: 10, background: '#fff' }}
+          style={{ border: '1px solid var(--color-border)', borderRadius: 10, padding: 12, marginBottom: 10, background: 'var(--color-card)' }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'flex-start', marginBottom: 6 }}>
             <div style={{ minWidth: 0 }}>

@@ -36,7 +36,7 @@ export default function Activity() {
       {data.entries.map((e) => (
         <div
           key={e._id}
-          style={{ border: '1px solid var(--color-border)', borderRadius: 10, padding: 12, marginBottom: 8, background: '#fff' }}
+          style={{ border: '1px solid var(--color-border)', borderRadius: 10, padding: 12, marginBottom: 8, background: 'var(--color-card)' }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center', marginBottom: 4 }}>
             <Chip tone="teal">{e.action}</Chip>

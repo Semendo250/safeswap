@@ -5,7 +5,7 @@ import { createListing } from '../api/listings.api';
 import BackButton from '../components/BackButton';
 
 const cardStyle = {
-  background: '#fff',
+  background: 'var(--color-card)',
   border: '1px solid var(--color-border)',
   borderRadius: 14,
   padding: 18,

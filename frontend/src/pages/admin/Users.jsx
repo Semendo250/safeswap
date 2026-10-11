@@ -46,7 +46,7 @@ function UserCard({ u, me, isOpen, detail, onToggle, onBan, onUnban, onVerify, o
   }
 
   return (
-    <div style={{ border: '1px solid var(--color-border)', borderRadius: 10, padding: 12, marginBottom: 10, background: '#fff' }}>
+    <div style={{ border: '1px solid var(--color-border)', borderRadius: 10, padding: 12, marginBottom: 10, background: 'var(--color-card)' }}>
       <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
         <Avatar src={u.profilePicture} name={u.fullName} size={44} />
         <div style={{ minWidth: 0, flex: 1 }}>
