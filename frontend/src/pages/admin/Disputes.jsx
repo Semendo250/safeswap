@@ -11,11 +11,8 @@ import {
   Chip,
   Pager,
   Notice,
-  Tabs,
-  Field,
   Modal,
   ConfirmDialog,
-  CopyText,
   btn,
   errText,
   fmtDate,
@@ -47,15 +44,41 @@ const STATUS_TONE = { open: 'gold', in_progress: 'teal', resolved: 'success', cl
 const PRIORITY_LABEL = { low: 'Low', normal: 'Normal', high: 'High' };
 const SOURCE_LABEL = { whatsapp: 'WhatsApp', email: 'Email', in_app: 'In-app', other: 'Other' };
 
-const box = {
-  border: '1px solid var(--color-border)',
-  borderRadius: 10,
-  padding: 12,
-  background: 'var(--color-card)',
-  marginBottom: 10,
-};
-
 const miniLabel = { fontSize: 11, color: 'var(--color-muted)', display: 'block', marginBottom: 2 };
+
+// A value with a quiet "Copy" link next to it (long-press copying is switched off app-wide)
+function CopyValue({ value }) {
+  const [copied, setCopied] = useState(false);
+  if (!value) return <span style={{ color: 'var(--color-muted)' }}>-</span>;
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(String(value));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch (err) {
+      // clipboard blocked by the browser
+    }
+  }
+
+  return (
+    <span className="dsp-copywrap">
+      <span className="dsp-copytext">{value}</span>
+      <button type="button" className="dsp-copy" onClick={copy}>
+        {copied ? 'Copied' : 'Copy'}
+      </button>
+    </span>
+  );
+}
+
+function MetaItem({ label, children, wide = false }) {
+  return (
+    <div className={wide ? 'dsp-meta-item dsp-wide' : 'dsp-meta-item'}>
+      <span className="dsp-meta-label">{label}</span>
+      <span className="dsp-meta-value">{children}</span>
+    </div>
+  );
+}
 
 // ---------- log a complaint ----------
 
@@ -155,6 +178,8 @@ function DisputeCard({ d, admins, onStatus, onAssign, onPriority, onNote }) {
   const [showNotes, setShowNotes] = useState(false);
   const notes = d.notes || [];
 
+  const hasMeta = d.contactName || d.contactInfo || d.user || d.resolution || d.resolvedAt;
+
   async function submitNote() {
     const text = note.trim();
     if (!text || busy) return;
@@ -165,43 +190,47 @@ function DisputeCard({ d, admins, onStatus, onAssign, onPriority, onNote }) {
   }
 
   return (
-    <div style={box}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-          <strong style={{ fontSize: 13 }}>{d.ref}</strong>
+    <div className="dsp-card">
+      <div className="dsp-head">
+        <div className="dsp-chips">
+          <strong className="dsp-ref">{d.ref}</strong>
           <Chip tone={STATUS_TONE[d.status]}>{STATUS_LABEL[d.status]}</Chip>
           <Chip tone="teal">{SOURCE_LABEL[d.source] || d.source}</Chip>
           {d.priority === 'high' && <Chip tone="warning">High priority</Chip>}
           {d.priority === 'low' && <Chip tone="muted">Low priority</Chip>}
         </div>
-        <span style={{ fontSize: 12, color: 'var(--color-muted)' }}>{fmtDate(d.createdAt)}</span>
+        <span className="dsp-date">{fmtDate(d.createdAt)}</span>
       </div>
 
-      <strong style={{ fontSize: 15, wordBreak: 'break-word' }}>{d.subject}</strong>
-      {d.details && (
-        <p style={{ margin: '4px 0 8px', fontSize: 13, color: 'var(--color-muted)', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-          {d.details}
-        </p>
+      <strong className="dsp-subject">{d.subject}</strong>
+      {d.details && <p className="dsp-details">{d.details}</p>}
+
+      {hasMeta && (
+        <div className="dsp-meta">
+          {d.contactName && <MetaItem label="From">{d.contactName}</MetaItem>}
+          {d.contactInfo && (
+            <MetaItem label="Contact">
+              <CopyValue value={d.contactInfo} />
+            </MetaItem>
+          )}
+          {d.user && (
+            <MetaItem label="Account">
+              {d.user.fullName} ({d.user.email})
+            </MetaItem>
+          )}
+          {d.resolvedAt && <MetaItem label="Closed">{fmtDate(d.resolvedAt)}</MetaItem>}
+          {d.resolution && (
+            <MetaItem label="Resolution" wide>
+              {d.resolution}
+            </MetaItem>
+          )}
+        </div>
       )}
 
-      {d.contactName && <Field label="From">{d.contactName}</Field>}
-      {d.contactInfo && (
-        <Field label="Contact">
-          <CopyText value={d.contactInfo} />
-        </Field>
-      )}
-      {d.user && (
-        <Field label="Account">
-          {d.user.fullName} ({d.user.email})
-        </Field>
-      )}
-      {d.resolution && <Field label="Resolution">{d.resolution}</Field>}
-      {d.resolvedAt && <Field label="Closed">{fmtDate(d.resolvedAt)}</Field>}
-
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', margin: '10px 0' }}>
-        <div style={{ flex: '1 1 110px' }}>
-          <label style={miniLabel}>Status</label>
-          <select value={d.status} onChange={(e) => onStatus(d, e.target.value)}>
+      <div className="dsp-controls">
+        <div className="dsp-control">
+          <label className="dsp-meta-label">Status</label>
+          <select className="dsp-select" value={d.status} onChange={(e) => onStatus(d, e.target.value)}>
             {Object.keys(STATUS_LABEL).map((s) => (
               <option key={s} value={s}>
                 {STATUS_LABEL[s]}
@@ -209,9 +238,13 @@ function DisputeCard({ d, admins, onStatus, onAssign, onPriority, onNote }) {
             ))}
           </select>
         </div>
-        <div style={{ flex: '1 1 110px' }}>
-          <label style={miniLabel}>Assigned to</label>
-          <select value={d.assignedTo ? d.assignedTo._id : ''} onChange={(e) => onAssign(d, e.target.value)}>
+        <div className="dsp-control">
+          <label className="dsp-meta-label">Assigned to</label>
+          <select
+            className="dsp-select"
+            value={d.assignedTo ? d.assignedTo._id : ''}
+            onChange={(e) => onAssign(d, e.target.value)}
+          >
             <option value="">Nobody</option>
             {admins.map((a) => (
               <option key={a._id} value={a._id}>
@@ -220,9 +253,9 @@ function DisputeCard({ d, admins, onStatus, onAssign, onPriority, onNote }) {
             ))}
           </select>
         </div>
-        <div style={{ flex: '1 1 90px' }}>
-          <label style={miniLabel}>Priority</label>
-          <select value={d.priority} onChange={(e) => onPriority(d, e.target.value)}>
+        <div className="dsp-control">
+          <label className="dsp-meta-label">Priority</label>
+          <select className="dsp-select" value={d.priority} onChange={(e) => onPriority(d, e.target.value)}>
             {Object.keys(PRIORITY_LABEL).map((p) => (
               <option key={p} value={p}>
                 {PRIORITY_LABEL[p]}
@@ -232,15 +265,19 @@ function DisputeCard({ d, admins, onStatus, onAssign, onPriority, onNote }) {
         </div>
       </div>
 
-      <button type="button" onClick={() => setShowNotes((v) => !v)} style={btn('outline')}>
-        {showNotes ? 'Hide notes' : `Notes (${notes.length})`}
-      </button>
+      <div style={{ marginTop: 12 }}>
+        <button type="button" onClick={() => setShowNotes((v) => !v)} style={btn('outline')}>
+          {showNotes ? 'Hide notes' : `Notes (${notes.length})`}
+        </button>
+      </div>
 
       {showNotes && (
-        <div style={{ marginTop: 10 }}>
-          {notes.length === 0 && <p style={{ fontSize: 13, color: 'var(--color-muted)', margin: '0 0 8px' }}>No notes yet.</p>}
-          {notes.map((n) => (
-            <div key={n._id} style={{ padding: '6px 0', borderTop: '1px solid var(--color-border)' }}>
+        <div className="dsp-notes">
+          {notes.length === 0 && (
+            <p style={{ fontSize: 13, color: 'var(--color-muted)', margin: '0 0 8px' }}>No notes yet.</p>
+          )}
+          {notes.map((n, i) => (
+            <div key={n._id} className={i === 0 ? 'dsp-note dsp-note-first' : 'dsp-note'}>
               <div style={{ fontSize: 12, color: 'var(--color-muted)' }}>
                 {n.adminName || 'Admin'} on {fmtDate(n.createdAt)}
               </div>
@@ -367,15 +404,107 @@ export default function Disputes() {
 
   const counts = data.counts || {};
   const totalAll = Object.values(counts).reduce((a, b) => a + b, 0);
-  const statusTabs = STATUS_TABS.map(([v, label]) => [
-    v,
-    `${label} (${v === 'all' ? totalAll : counts[v] || 0})`,
-  ]);
+  const filtersActive = !!debounced.trim() || source !== 'all' || assigned !== 'all';
+
+  // What the empty state should say
+  let emptyTitle = 'No complaints match';
+  let emptyText = 'Try a different filter or search.';
+  let canShowAll = false;
+  if (!filtersActive && totalAll === 0) {
+    emptyTitle = 'No complaints yet';
+    emptyText = 'Log one with the button above.';
+  } else if (!filtersActive && status !== 'all') {
+    emptyTitle = `No ${STATUS_LABEL[status].toLowerCase()} complaints`;
+    emptyText = 'Nothing here right now.';
+    canShowAll = totalAll > 0;
+  }
 
   return (
     <PageShell title="Complaints" subtitle="Log and follow up complaints from WhatsApp, email and the app.">
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-        <button type="button" onClick={() => setCreateOpen(true)} style={btn('primary', { padding: '9px 16px' })}>
+      <style>{`
+        .dsp-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .dsp-toolbar input[type="search"] { flex: 1; min-width: 180px; height: 40px; }
+
+        .dsp-filter { display: flex; align-items: center; gap: 10px; }
+        .dsp-filter-label {
+          width: 52px; flex-shrink: 0; font-size: 11px; font-weight: 700;
+          text-transform: uppercase; letter-spacing: 0.04em; color: var(--color-muted);
+        }
+        .dsp-pills { display: flex; gap: 6px; overflow-x: auto; padding: 4px 0; margin: 10px 0; min-width: 0; flex: 1; }
+
+        .dsp-selects { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+        .dsp-selects > div { flex: 0 1 200px; min-width: 150px; }
+
+        .dsp-card {
+          border: 1px solid var(--color-border); border-radius: 12px; padding: 14px;
+          margin-bottom: 14px; background: var(--color-card);
+        }
+        .dsp-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-wrap: wrap; }
+        .dsp-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+        .dsp-ref { font-size: 13px; }
+        .dsp-date { font-size: 12px; color: var(--color-muted); }
+        .dsp-subject { display: block; margin-top: 10px; font-size: 15px; word-break: break-word; }
+        .dsp-details {
+          margin: 4px 0 0; font-size: 13px; color: var(--color-muted);
+          white-space: pre-wrap; word-break: break-word;
+        }
+
+        .dsp-meta {
+          display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+          gap: 10px 20px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--color-border);
+        }
+        .dsp-meta-item { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+        .dsp-meta-item.dsp-wide { grid-column: 1 / -1; }
+        .dsp-meta-label {
+          display: block; font-size: 11px; font-weight: 600; text-transform: uppercase;
+          letter-spacing: 0.04em; color: var(--color-muted); margin-bottom: 2px;
+        }
+        .dsp-meta-item .dsp-meta-label { margin-bottom: 0; }
+        .dsp-meta-value { font-size: 13px; color: var(--color-ink); word-break: break-word; }
+
+        .dsp-controls {
+          display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+          gap: 10px 14px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--color-border);
+        }
+        .dsp-control { min-width: 0; }
+        select.dsp-select, .dsp-selects select { padding: 7px 10px; font-size: 13px; }
+
+        .dsp-notes {
+          margin-top: 12px; padding: 12px; border-radius: 10px;
+          background: var(--color-surface); border: 1px solid var(--color-border);
+        }
+        .dsp-note { padding: 8px 0; border-top: 1px solid var(--color-border); }
+        .dsp-note.dsp-note-first { border-top: none; padding-top: 0; }
+
+        .dsp-copywrap { display: inline-flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+        .dsp-copytext { word-break: break-all; }
+        button.dsp-copy {
+          min-width: 0; padding: 0 2px; border: none; background: transparent; color: var(--color-teal);
+          font-size: 11px; font-weight: 600; cursor: pointer; align-self: auto;
+        }
+        button.dsp-copy:hover { background: transparent; color: var(--color-teal); text-decoration: underline; }
+
+        .dsp-empty {
+          text-align: center; padding: 32px 16px; border: 1px dashed var(--color-border);
+          border-radius: 12px; color: var(--color-muted);
+        }
+        .dsp-empty-icon { font-size: 30px; margin-bottom: 6px; }
+        .dsp-empty-title { margin: 0 0 4px; font-size: 14px; font-weight: 600; color: var(--color-ink); }
+        .dsp-empty-text { margin: 0; font-size: 13px; }
+
+        @media (max-width: 600px) {
+          .dsp-filter { flex-direction: column; align-items: stretch; gap: 0; }
+          .dsp-filter-label { width: auto; margin-top: 6px; }
+          .dsp-selects > div { flex: 1 1 140px; }
+        }
+      `}</style>
+
+      <div className="dsp-toolbar">
+        <button
+          type="button"
+          onClick={() => setCreateOpen(true)}
+          style={btn('primary', { height: 40, padding: '0 18px' })}
+        >
           Log a complaint
         </button>
         <input
@@ -386,40 +515,94 @@ export default function Disputes() {
             setSearch(e.target.value);
             setPage(1);
           }}
-          style={{ flex: 1, minWidth: 180 }}
         />
       </div>
 
-      <Tabs
-        options={statusTabs}
-        value={status}
-        onChange={(v) => {
-          setStatus(v);
-          setPage(1);
-        }}
-      />
-      <Tabs
-        options={SOURCE_TABS}
-        value={source}
-        onChange={(v) => {
-          setSource(v);
-          setPage(1);
-        }}
-      />
-      <Tabs
-        options={ASSIGN_TABS}
-        value={assigned}
-        onChange={(v) => {
-          setAssigned(v);
-          setPage(1);
-        }}
-      />
+      <div className="dsp-filter">
+        <span className="dsp-filter-label">Status</span>
+        <div className="dsp-pills">
+          {STATUS_TABS.map(([v, label]) => {
+            const count = v === 'all' ? totalAll : counts[v] || 0;
+            const active = status === v;
+            return (
+              <button
+                key={v}
+                type="button"
+                onClick={() => {
+                  setStatus(v);
+                  setPage(1);
+                }}
+                style={btn(active ? 'primary' : 'outline', {
+                  borderRadius: 999,
+                  whiteSpace: 'nowrap',
+                  flexShrink: 0,
+                  opacity: !active && count === 0 ? 0.55 : 1,
+                })}
+              >
+                {label} ({count})
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="dsp-selects">
+        <div>
+          <label className="dsp-meta-label">Source</label>
+          <select
+            value={source}
+            onChange={(e) => {
+              setSource(e.target.value);
+              setPage(1);
+            }}
+          >
+            {SOURCE_TABS.map(([v, label]) => (
+              <option key={v} value={v}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="dsp-meta-label">Assigned</label>
+          <select
+            value={assigned}
+            onChange={(e) => {
+              setAssigned(e.target.value);
+              setPage(1);
+            }}
+          >
+            {ASSIGN_TABS.map(([v, label]) => (
+              <option key={v} value={v}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
 
       {notice && <Notice onClose={() => setNotice('')}>{notice}</Notice>}
       {error && <Notice tone="warning">{error}</Notice>}
       {loading && data.disputes.length === 0 && <p style={{ color: 'var(--color-muted)' }}>Loading...</p>}
+
       {!loading && !error && data.disputes.length === 0 && (
-        <p style={{ color: 'var(--color-muted)' }}>No complaints match.</p>
+        <div className="dsp-empty">
+          <div className="dsp-empty-icon">📭</div>
+          <p className="dsp-empty-title">{emptyTitle}</p>
+          <p className="dsp-empty-text">{emptyText}</p>
+          {canShowAll && (
+            <button
+              type="button"
+              onClick={() => {
+                setStatus('all');
+                setPage(1);
+              }}
+              style={btn('outline', { marginTop: 12 })}
+            >
+              Show all complaints
+            </button>
+          )}
+        </div>
       )}
 
       {data.disputes.map((d) => (
