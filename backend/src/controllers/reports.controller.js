@@ -4,6 +4,8 @@ const { notify, notifyAdmins } = require('../utils/notify');
 
 const REPORT_THRESHOLD = 3;
 
+const isId = (v) => typeof v === 'string' && /^[a-f\d]{24}$/i.test(v);
+
 // POST /api/reports
 async function createReport(req, res) {
   try {
@@ -12,9 +14,23 @@ async function createReport(req, res) {
     if (!listingId || !reason) {
       return res.status(400).json({ error: 'listingId and reason are required' });
     }
+    if (!isId(String(listingId))) {
+      return res.status(400).json({ error: 'Invalid listing id' });
+    }
 
     const listing = await Listing.findById(listingId);
     if (!listing) return res.status(404).json({ error: 'Listing not found' });
+
+    if (String(listing.seller) === String(req.user._id)) {
+      return res.status(400).json({ error: "You can't report your own listing" });
+    }
+
+    // One report per person per listing, so a single account can't push a listing
+    // over the review threshold by itself
+    const alreadyReported = await Report.exists({ listing: listingId, reportedBy: req.user._id });
+    if (alreadyReported) {
+      return res.status(409).json({ error: "You've already reported this listing" });
+    }
 
     const report = await Report.create({
       listing: listingId,

@@ -3,6 +3,16 @@ const Listing = require('../models/Listing');
 const { notifyNewMessage } = require('../utils/notify');
 const { isUserActiveInRoom } = require('../socket');
 
+const MAX_MESSAGE_LENGTH = 2000;
+
+const isId = (v) => typeof v === 'string' && /^[a-f\d]{24}$/i.test(v);
+
+// True when the user is the sender or the receiver of this message
+function isParticipant(message, userId) {
+  const me = String(userId);
+  return String(message.sender) === me || String(message.receiver) === me;
+}
+
 // GET /api/chat/:listingId/:otherUserId
 async function getConversation(req, res) {
   try {
@@ -37,10 +47,47 @@ async function getConversation(req, res) {
 async function sendMessage(req, res) {
   try {
     const { listingId } = req.params;
-    const { receiverId, content } = req.body;
+    const { receiverId } = req.body;
+    const content = typeof req.body.content === 'string' ? req.body.content.trim() : '';
 
     if (!receiverId || !content) {
       return res.status(400).json({ error: 'receiverId and content are required' });
+    }
+    if (content.length > MAX_MESSAGE_LENGTH) {
+      return res.status(400).json({ error: `Messages can be up to ${MAX_MESSAGE_LENGTH} characters` });
+    }
+    if (!isId(listingId) || !isId(String(receiverId))) {
+      return res.status(400).json({ error: 'Invalid listing or user' });
+    }
+
+    const senderId = String(req.user._id);
+    if (String(receiverId) === senderId) {
+      return res.status(400).json({ error: "You can't message yourself" });
+    }
+
+    const listing = await Listing.findById(listingId).select('title seller');
+    if (!listing) return res.status(404).json({ error: 'Listing not found' });
+
+    // Messages about a listing go between its seller and one other person
+    const sellerId = String(listing.seller);
+    const senderIsSeller = senderId === sellerId;
+    const receiverIsSeller = String(receiverId) === sellerId;
+    if (!senderIsSeller && !receiverIsSeller) {
+      return res.status(403).json({ error: 'Messages about a listing go between the buyer and the seller' });
+    }
+
+    // A seller can only reply to someone who has already messaged them about this listing
+    if (senderIsSeller) {
+      const hasWrittenFirst = await Message.exists({
+        listing: listingId,
+        sender: receiverId,
+        receiver: req.user._id,
+      });
+      if (!hasWrittenFirst) {
+        return res
+          .status(403)
+          .json({ error: 'You can only reply to buyers who have messaged you about this listing' });
+      }
     }
 
     const message = await Message.create({
@@ -55,14 +102,13 @@ async function sendMessage(req, res) {
     // Fire-and-forget: a notification failure must never affect the response above
     (async () => {
       try {
-        const listing = await Listing.findById(listingId).select('title');
-        const room = [listingId, [req.user._id.toString(), String(receiverId)].sort().join('-')].join(':');
+        const room = [listingId, [senderId, String(receiverId)].sort().join('-')].join(':');
         await notifyNewMessage({
           recipientId: receiverId,
           senderId: req.user._id,
           senderName: req.user.fullName,
           listingId,
-          listingTitle: listing?.title || 'an item',
+          listingTitle: listing.title || 'an item',
           room,
           isUserActiveInRoom,
         });
@@ -76,10 +122,17 @@ async function sendMessage(req, res) {
 }
 
 // PATCH /api/chat/:messageId/read
+// Only the two people in the conversation can use this; everyone else gets "not found"
 async function markAsRead(req, res) {
   try {
-    const message = await Message.findByIdAndUpdate(
-      req.params.messageId,
+    const { messageId } = req.params;
+    if (!isId(messageId)) return res.status(404).json({ error: 'Message not found' });
+
+    const message = await Message.findOneAndUpdate(
+      {
+        _id: messageId,
+        $or: [{ sender: req.user._id }, { receiver: req.user._id }],
+      },
       { read: true },
       { new: true }
     );
@@ -132,12 +185,17 @@ async function getConversations(req, res) {
 }
 
 // DELETE /api/chat/message/:messageId
+// Only the two people in the conversation can delete; "for everyone" is sender-only
 async function deleteMessage(req, res) {
   try {
     const { messageId } = req.params;
     const { forEveryone } = req.body;
+    if (!isId(messageId)) return res.status(404).json({ error: 'Message not found' });
+
     const message = await Message.findById(messageId);
-    if (!message) return res.status(404).json({ error: 'Message not found' });
+    if (!message || !isParticipant(message, req.user._id)) {
+      return res.status(404).json({ error: 'Message not found' });
+    }
 
     if (forEveryone) {
       if (message.sender.toString() !== req.user._id.toString()) {

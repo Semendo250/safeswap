@@ -72,26 +72,41 @@ async function createListing(req, res) {
       listingData.imeiStatus = imeiStatus;
       listingData.proofPhoto = proofFile.path;
 
-      if (imeiStatus === 'blacklisted') {
-        listingData.status = 'under_review';
-        const listing = await Listing.create(listingData);
-
-        await notifyAdmins({
-          type: 'new_listing_review',
-          title: 'New listing to review',
-          body: `"${listing.title}" was flagged (blacklisted IMEI) and needs review.`,
-          link: '/admin/listings',
-          actorId: req.user._id,
-        });
-
-        return res.status(403).json({
-          error: 'This device has been flagged. Your listing was submitted for review.',
-          listing,
-        });
-      }
+      // Every phone listing waits for an admin to approve it before it goes live
+      listingData.status = 'under_review';
     }
 
     const listing = await Listing.create(listingData);
+
+    if (category === 'phone') {
+      const flagged = listing.imeiStatus === 'blacklisted';
+
+      // Tell admins there is a phone waiting (the Flagged queue is where these listings sit)
+      await notifyAdmins({
+        type: 'new_listing_review',
+        title: 'New listing to review',
+        body: flagged
+          ? `"${listing.title}" was flagged (blacklisted IMEI) and needs review.`
+          : `"${listing.title}" is a phone listing waiting for approval.`,
+        link: '/admin/flagged',
+        actorId: req.user._id,
+      });
+
+      // Tell the seller what is happening. The "live" or "not approved" message
+      // follows when an admin decides (see the admin controller).
+      await notify({
+        userId: listing.seller,
+        type: 'listing_flagged',
+        title: 'Your listing is under review',
+        body: flagged
+          ? `"${listing.title}": this device was flagged, so an admin will check it before it can go live.`
+          : `"${listing.title}" will go live once an admin approves it.`,
+        link: `/listings/${listing._id}`,
+      });
+
+      return res.status(201).json({ ...listing.toObject(), underReview: true, flagged });
+    }
+
     res.status(201).json(listing);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -123,6 +138,15 @@ async function getListingById(req, res) {
   try {
     const listing = await loadListingForViewer(req.params.id, req.user);
     if (!listing) return res.status(404).json({ error: 'Listing not found' });
+
+    // A listing waiting for approval is visible only to its seller and to admins
+    if (listing.status === 'under_review') {
+      const ref = listing.seller;
+      const sellerId = ref && ref._id ? String(ref._id) : String(ref);
+      const allowed = req.user && (req.user.role === 'admin' || String(req.user._id) === sellerId);
+      if (!allowed) return res.status(404).json({ error: 'Listing not found' });
+    }
+
     res.json(listing);
   } catch (err) {
     res.status(500).json({ error: err.message });

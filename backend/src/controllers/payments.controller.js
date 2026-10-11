@@ -116,10 +116,24 @@ async function handleCallback(req, res) {
 }
 
 // GET /api/payments/status/:checkoutRequestId
+// Only the buyer who made the payment, the seller of that listing, and admins may read it.
+// Everyone else gets the same "No record found" as for an unknown ID, so the endpoint
+// doesn't reveal whether a payment exists.
 async function getPaymentStatus(req, res) {
   try {
-    const record = await paymentStore.getByCheckoutId(req.params.checkoutRequestId);
+    const record = await paymentStore.getByCheckoutId(String(req.params.checkoutRequestId));
     if (!record) return res.status(404).json({ error: 'No record found' });
+
+    const me = String(req.user._id);
+    let allowed = req.user.role === 'admin' || String(record.buyerId) === me;
+
+    if (!allowed) {
+      const listing = await Listing.findById(record.listingId).select('seller').lean();
+      allowed = !!listing && String(listing.seller) === me;
+    }
+
+    if (!allowed) return res.status(404).json({ error: 'No record found' });
+
     res.json(record);
   } catch (err) {
     res.status(500).json({ error: err.message });
