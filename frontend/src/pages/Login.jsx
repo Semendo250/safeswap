@@ -97,37 +97,64 @@ export default function Login() {
 
   return (
     <div className="container">
-      <BackButton />
-      <h2>Log in</h2>
-
-      {banner && (
-        <div
-          role="status"
-          style={{
-            margin: '0 0 12px',
-            padding: '10px 12px',
-            borderRadius: '8px',
-            fontSize: '13px',
-            background: bannerColors.bg,
-            color: bannerColors.fg,
-          }}
-        >
-          {banner.text}
+      <div className="auth-page">
+        <div className="auth-back">
+          <BackButton />
         </div>
-      )}
 
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-        <input name="email" type="email" placeholder="Email" value={form.email} onChange={handleChange} required />
-        <PasswordInput name="password" placeholder="Password" value={form.password} onChange={handleChange} />
-        {error && <p style={{ color: 'var(--color-warning)' }}>{error}</p>}
-        <button type="submit" disabled={submitting}>
-          {submitting ? 'Logging in...' : 'Log in'}
-        </button>
-      </form>
-      <p style={{ marginTop: '10px', fontSize: '13px' }}>
-        <Link to="/forgot-password">Forgot password?</Link>
-      </p>
-      <p style={{ fontSize: '13px' }}>No account? <Link to="/signup">Sign up</Link></p>
+        <div className="auth-card">
+          <img src="/logo-icon.svg" alt="SafeSwap" className="auth-logo" />
+          <h2 className="auth-title">Welcome back</h2>
+          <p className="auth-subtitle">Log in to buy and sell safely on SafeSwap.</p>
+
+          {banner && (
+            <div
+              role="status"
+              className="auth-banner"
+              style={{ background: bannerColors.bg, color: bannerColors.fg }}
+            >
+              {banner.text}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="auth-form">
+            <div className="auth-field">
+              <label className="auth-label" htmlFor="login-email">
+                Email
+              </label>
+              <input
+                id="login-email"
+                name="email"
+                type="email"
+                placeholder="you@example.com"
+                value={form.email}
+                onChange={handleChange}
+                required
+              />
+            </div>
+
+            <div className="auth-field">
+              <label className="auth-label">Password</label>
+              <PasswordInput name="password" placeholder="Enter your password" value={form.password} onChange={handleChange} />
+            </div>
+
+            <div className="auth-forgot">
+              <Link to="/forgot-password">Forgot password?</Link>
+            </div>
+
+            {error && <p className="auth-error">{error}</p>}
+
+            <button type="submit" className="auth-submit" disabled={submitting}>
+              {submitting ? 'Logging in...' : 'Log in'}
+            </button>
+          </form>
+
+          <div className="auth-divider">New to SafeSwap?</div>
+          <Link to="/signup" className="auth-alt">
+            Create an account
+          </Link>
+        </div>
+      </div>
     </div>
   );
 }
