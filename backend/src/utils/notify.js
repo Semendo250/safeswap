@@ -9,17 +9,20 @@ const { getFirebaseAdmin, admin } = require('../config/firebase');
 // worker's own showNotification call, which produced duplicates. With data-only,
 // the service worker (public/firebase-messaging-sw.js) is the single place that
 // displays it.
+//
+// Each device is sent to separately so one bad token can't affect the others, and
+// every outcome is logged so a failure can be traced.
 async function sendPush(userId, title, body, link, type) {
   try {
     const app = getFirebaseAdmin();
     if (!app) {
-      throw new Error('PUSH TEST: Firebase app is NULL — FIREBASE_SERVICE_ACCOUNT is likely missing or invalid');
+      console.warn('sendPush skipped: Firebase Admin is not configured');
+      return;
     }
 
-    const tokens = await FcmToken.find({ user: userId }).select('token').lean();
-    if (tokens.length === 0) {
-      throw new Error('PUSH TEST: zero FCM tokens found for user ' + userId);
-    }
+    const tokenDocs = await FcmToken.find({ user: userId }).select('token').lean();
+    const tokens = (tokenDocs || []).map((t) => t.token).filter(Boolean);
+    if (tokens.length === 0) return;
 
     // Repeated chat messages from the same conversation replace one another on the device
     const tag = type === 'new_message' ? link || '' : '';
@@ -32,31 +35,43 @@ async function sendPush(userId, title, body, link, type) {
     };
     if (tag) data.tag = String(tag);
 
-    const message = {
-      data,
-      // High urgency so phones deliver it promptly instead of batching it
-      webpush: { headers: { Urgency: 'high', TTL: '86400' } },
-      tokens: tokens.map((t) => t.token),
-    };
+    const messaging = admin.messaging(app);
 
-    const result = await admin.messaging().sendEachForMulticast(message);
+    const results = await Promise.allSettled(
+      tokens.map((token) =>
+        messaging.send({
+          token,
+          data,
+          // High urgency so phones deliver it promptly instead of batching it
+          webpush: { headers: { Urgency: 'high', TTL: '86400' } },
+        })
+      )
+    );
 
     const deadTokens = [];
-    result.responses.forEach((r, i) => {
-      if (!r.success) {
-        const code = r.error?.code || '';
-        if (
-          code.includes('registration-token-not-registered') ||
-          code.includes('invalid-registration-token') ||
-          code.includes('invalid-argument')
-        ) {
-          deadTokens.push(tokens[i].token);
-        }
+    let sent = 0;
+    results.forEach((r, i) => {
+      if (r.status === 'fulfilled') {
+        sent += 1;
+        return;
+      }
+      const code = String((r.reason && r.reason.code) || '');
+      console.error(
+        `sendPush: device ${i + 1}/${tokens.length} failed:`,
+        code || (r.reason && r.reason.message) || r.reason
+      );
+      // Only remove tokens Firebase says no longer exist. Other errors (such as
+      // "invalid-argument") can mean the message was bad, not the device.
+      if (code.includes('registration-token-not-registered') || code.includes('invalid-registration-token')) {
+        deadTokens.push(tokens[i]);
       }
     });
+
     if (deadTokens.length) await FcmToken.deleteMany({ token: { $in: deadTokens } });
+
+    console.log(`sendPush: ${sent}/${tokens.length} delivered to user ${userId} (${type || 'n/a'})`);
   } catch (err) {
-    console.error('sendPush failed:', err.message);
+    console.error('sendPush failed:', err.stack || err.message);
   }
 }
 
