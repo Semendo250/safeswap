@@ -407,10 +407,10 @@ export default function BlacklistManager() {
                 {entry.reason}
               </MetaItem>
             )}
-            <MetaItem label="Added">
-              {fmtDate(entry.createdAt)}
-              {entry.addedBy && entry.addedBy.fullName ? ` by ${entry.addedBy.fullName}` : ''}
-            </MetaItem>
+            <MetaItem label="Added">{fmtDate(entry.createdAt)}</MetaItem>
+            {entry.addedBy && entry.addedBy.fullName && (
+              <MetaItem label="Added by">{entry.addedBy.fullName}</MetaItem>
+            )}
           </div>
         </div>
       ))}
