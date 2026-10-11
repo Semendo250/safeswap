@@ -4,10 +4,13 @@ const authMiddleware = require('../middleware/auth.middleware');
 const optionalAuth = require('../middleware/optionalAuth.middleware');
 const upload = require('../middleware/upload.middleware');
 const listingsCtrl = require('../controllers/listings.controller');
+const safeZonesCtrl = require('../controllers/safeZones.controller');
 
 // Public: anyone can browse listings without logging in
 router.get('/', listingsCtrl.getListings);
 router.get('/mine', authMiddleware, listingsCtrl.getMyListings);
+// Must stay above '/:id', otherwise "safe-zones" would be read as a listing id
+router.get('/safe-zones', safeZonesCtrl.getPublicZones);
 // Public, but if a valid token is sent we know who is asking (used to show the seller's phone)
 router.get('/:id', optionalAuth, listingsCtrl.getListingById);
 

@@ -12,6 +12,9 @@ const ADMIN_LINKS = [
   { to: '/admin/flagged', label: 'Flagged queue' },
   { to: '/admin/payments', label: 'Payments' },
   { to: '/admin/blacklist', label: 'IMEI blacklist' },
+  { to: '/admin/disputes', label: 'Complaints' },
+  { to: '/admin/broadcast', label: 'Broadcast' },
+  { to: '/admin/safe-zones', label: 'Meetup spots' },
   { to: '/admin/activity', label: 'Activity log' },
 ];
 

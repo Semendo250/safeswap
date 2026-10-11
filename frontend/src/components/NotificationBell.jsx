@@ -31,6 +31,9 @@ const TYPE_ICON = {
   meetup_confirmed: '🤝',
   new_verification_request: '🪪',
   new_report: '⚠️',
+  announcement: '📢',
+  dispute_update: '📝',
+  new_dispute: '📩',
 };
 
 export default function NotificationBell() {

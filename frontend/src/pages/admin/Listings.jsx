@@ -18,6 +18,7 @@ import {
   useDebounced,
   LISTING_TONE,
 } from '../../components/admin/AdminUi';
+import { useRisk, RiskFlags } from '../../components/admin/RiskFlags';
 
 const STATUS_TABS = [
   ['all', 'All'],
@@ -35,11 +36,13 @@ const CATEGORY_TABS = [
 
 const IMEI_TONE = { clean: 'success', unchecked: 'muted', flagged: 'gold', blacklisted: 'warning' };
 
-function ListingCard({ l, onView, onApprove, onRemove }) {
+function ListingCard({ l, risk, onView, onApprove, onRemove }) {
   const photos = l.photos || [];
   const images = [
     ...photos.map((src, i) => ({ src, label: `${l.title}: photo ${i + 1}` })),
-               ...(l.proofPhoto ? [{ src: l.proofPhoto, label: `${l.title}: proof ( IMEI + ID) — check IMEI matches ${l.imei || 'listed IMEI'}` }] : []),
+    ...(l.proofPhoto
+      ? [{ src: l.proofPhoto, label: `${l.title}: proof (IMEI + ID). Check IMEI matches ${l.imei || 'listed IMEI'}` }]
+      : []),
   ];
   const seller = l.seller || null;
   const canApprove = l.status === 'under_review' || l.status === 'removed';
@@ -55,7 +58,7 @@ function ListingCard({ l, onView, onApprove, onRemove }) {
             onClick={() => onView(images, 0)}
           />
         )}
-                        {l.proofPhoto && (
+        {l.proofPhoto && (
           <Thumb src={l.proofPhoto} label="Proof photo (IMEI + ID)" onClick={() => onView(images, photos.length)} />
         )}
         <div style={{ minWidth: 0, flex: 1 }}>
@@ -72,8 +75,12 @@ function ListingCard({ l, onView, onApprove, onRemove }) {
         </div>
       </div>
 
+      <RiskFlags risk={risk} />
+
       {l.category === 'phone' && (
-        <Field label="IMEI">{l.imei ? <CopyText value={l.imei} /> : 'Not given'}</Field>
+        <div style={{ marginTop: 8 }}>
+          <Field label="IMEI">{l.imei ? <CopyText value={l.imei} /> : 'Not given'}</Field>
+        </div>
       )}
       <Field label="Seller">
         {seller ? (
@@ -122,6 +129,8 @@ export default function Listings() {
   const [dialog, setDialog] = useState(null);
   const [viewer, setViewer] = useState(null);
 
+  const risk = useRisk(data.listings);
+
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -146,7 +155,9 @@ export default function Listings() {
   }
 
   function askApprove(l) {
-    const risky = l.imeiStatus === 'blacklisted' || l.imeiStatus === 'flagged';
+    const r = risk[l._id];
+    const imeiRisky = l.imeiStatus === 'blacklisted' || l.imeiStatus === 'flagged';
+    const risky = imeiRisky || (r && r.level === 'high');
     if (!risky) {
       approveListing(l._id)
         .then(() => {
@@ -158,7 +169,9 @@ export default function Listings() {
     }
     setDialog({
       title: `Approve "${l.title}"?`,
-      message: `This phone's IMEI is ${l.imeiStatus}. Only approve it if you have checked the proof photo and are sure it is legitimate.`,
+      message: imeiRisky
+        ? `This phone's IMEI is ${l.imeiStatus}. Only approve it if you have checked the proof photo and are sure it is legitimate.`
+        : 'This listing has high-risk signals (see the red box on the card). Only approve it if you have checked and are sure it is legitimate.',
       confirmLabel: 'Approve anyway',
       danger: true,
       askReason: 'required',
@@ -225,6 +238,7 @@ export default function Listings() {
         <ListingCard
           key={l._id}
           l={l}
+          risk={risk[l._id]}
           onView={(images, index) => setViewer({ images, index })}
           onApprove={() => askApprove(l)}
           onRemove={() => askRemove(l)}

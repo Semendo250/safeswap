@@ -2,6 +2,7 @@ import { useContext, useEffect, useState } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import Avatar from '../../components/Avatar';
 import { getUsers, getUserById, setUserBan, verifyUserEmail, deleteUser } from '../../api/admin.api';
+import ExportButton from '../../components/admin/ExportButton';
 import {
   PageShell,
   Chip,
@@ -303,6 +304,15 @@ export default function Users() {
           setPage(1);
         }}
       />
+            <div style={{ margin: '4px 0 10px' }}>
+        <ExportButton
+          kind="users"
+          label="Export users CSV"
+          params={{ filter, search: debounced }}
+          onDone={setNotice}
+          onError={setError}
+        />
+      </div>
 
       {notice && <Notice onClose={() => setNotice('')}>{notice}</Notice>}
       {error && <Notice tone="warning">{error}</Notice>}

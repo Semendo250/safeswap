@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import BackButton from '../components/BackButton';
 import { WHATSAPP_URL, WHATSAPP_LABEL, PHONE_LABEL, PHONE_TEL, PHONE_SMS, SUPPORT_EMAIL } from '../utils/contact';
-
+import ComplaintForm from '../components/ComplaintForm';
 export default function Support() {
   return (
     <div className="legal-page">
@@ -128,6 +128,7 @@ export default function Support() {
           them again in your browser or phone settings for SafeSwap, then reload the app.
         </p>
       </details>
+            <ComplaintForm />
 
       <p style={{ marginTop: 24 }}>
         Read our <Link to="/terms">Terms and Conditions</Link> and <Link to="/privacy">Privacy Policy</Link>.

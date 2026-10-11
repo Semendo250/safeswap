@@ -2,6 +2,7 @@ const Listing = require('../models/Listing');
 const { checkImeiStatus } = require('../utils/imei');
 const paymentStore = require('../utils/paymentStore');
 const { notify, notifyAdmins } = require('../utils/notify');
+const { getActiveZoneNames } = require('../utils/safeZones');
 
 const SELLER_PUBLIC_FIELDS = 'fullName trustScore verificationPath completedSales profilePicture';
 
@@ -195,8 +196,10 @@ const SAFE_ZONES = ['Library entrance', 'Main gate', 'Student center', 'Hostel c
 // PATCH /api/listings/:id/meetup
 async function setMeetup(req, res) {
   try {
-    const { safeZone } = req.body;
-    if (!SAFE_ZONES.includes(safeZone)) {
+    
+        const { safeZone } = req.body;
+    const allowedZones = await getActiveZoneNames();
+    if (!allowedZones.includes(safeZone)) {
       return res.status(400).json({ error: 'Invalid safe zone selection' });
     }
 

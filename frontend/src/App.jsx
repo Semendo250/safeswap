@@ -19,6 +19,9 @@ import Users from './pages/admin/Users';
 import Listings from './pages/admin/Listings';
 import Payments from './pages/admin/Payments';
 import Activity from './pages/admin/Activity';
+import Disputes from './pages/admin/Disputes';
+import Broadcast from './pages/admin/Broadcast';
+import SafeZones from './pages/admin/SafeZones';
 import Inbox from './pages/Inbox';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
@@ -58,6 +61,9 @@ function App() {
           <Route path="/admin/flagged" element={<FlaggedQueue />} />
           <Route path="/admin/payments" element={<Payments />} />
           <Route path="/admin/blacklist" element={<BlacklistManager />} />
+          <Route path="/admin/disputes" element={<Disputes />} />
+          <Route path="/admin/broadcast" element={<Broadcast />} />
+          <Route path="/admin/safe-zones" element={<SafeZones />} />
           <Route path="/admin/activity" element={<Activity />} />
           <Route path="/" element={<Landing />} />
           <Route path="/browse" element={<Browse />} />

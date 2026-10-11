@@ -1,0 +1,56 @@
+const mongoose = require('mongoose');
+
+const noteSchema = new mongoose.Schema(
+  {
+    admin: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    adminName: { type: String },
+    text: { type: String, required: true, trim: true, maxlength: 1000 },
+  },
+  { timestamps: { createdAt: true, updatedAt: false } }
+);
+
+// A complaint logged by an admin (from WhatsApp, email, etc.) or submitted by a user in the app
+const disputeSchema = new mongoose.Schema(
+  {
+    ref: { type: String, required: true, unique: true }, // short code like D-7K3QX
+    source: { type: String, enum: ['whatsapp', 'email', 'in_app', 'other'], required: true },
+    subject: { type: String, required: true, trim: true, maxlength: 120 },
+    details: { type: String, trim: true, maxlength: 2000 },
+    contactName: { type: String, trim: true, maxlength: 80 },
+    contactInfo: { type: String, trim: true, maxlength: 120 }, // phone or email
+    user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, // linked account, if known
+    status: { type: String, enum: ['open', 'in_progress', 'resolved', 'closed'], default: 'open' },
+    priority: { type: String, enum: ['low', 'normal', 'high'], default: 'normal' },
+    assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    notes: [noteSchema],
+    resolution: { type: String, trim: true, maxlength: 500 },
+    resolvedAt: { type: Date },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  },
+  { timestamps: true }
+);
+
+disputeSchema.index({ status: 1, createdAt: -1 });
+disputeSchema.index({ assignedTo: 1 });
+
+const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+
+function newRef() {
+  let s = '';
+  for (let i = 0; i < 5; i += 1) s += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)];
+  return `D-${s}`;
+}
+
+// Creates a dispute with a unique short reference code (retries on the rare clash)
+disputeSchema.statics.createWithRef = async function createWithRef(data) {
+  for (let i = 0; i < 5; i += 1) {
+    try {
+      return await this.create({ ...data, ref: newRef() });
+    } catch (err) {
+      if (err.code !== 11000) throw err;
+    }
+  }
+  throw new Error('Could not generate a reference code. Try again.');
+};
+
+module.exports = mongoose.model('Dispute', disputeSchema);

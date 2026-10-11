@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getPayments, updatePaymentStatus } from '../../api/admin.api';
+import ExportButton from '../../components/admin/ExportButton';
 import {
   PageShell,
   Chip,
@@ -108,6 +109,8 @@ export default function Payments() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [editing, setEditing] = useState(null);
+    const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -151,6 +154,25 @@ export default function Payments() {
           setPage(1);
         }}
       />
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end', margin: '4px 0 10px' }}>
+        <div>
+          <label style={{ fontSize: 11, color: 'var(--color-muted)', display: 'block', marginBottom: 2 }}>
+            Export from
+          </label>
+          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} style={{ width: 'auto' }} />
+        </div>
+        <div>
+          <label style={{ fontSize: 11, color: 'var(--color-muted)', display: 'block', marginBottom: 2 }}>to</label>
+          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} style={{ width: 'auto' }} />
+        </div>
+        <ExportButton
+          kind="payments"
+          label="Export payments CSV"
+          params={{ status, from, to }}
+          onDone={setNotice}
+          onError={setError}
+        />
+      </div>
 
       {notice && <Notice onClose={() => setNotice('')}>{notice}</Notice>}
       {error && <Notice tone="warning">{error}</Notice>}

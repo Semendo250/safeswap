@@ -8,6 +8,7 @@ const blacklistImeiSchema = new mongoose.Schema(
     imei: { type: String, required: true, unique: true, trim: true },
     reportedDate: { type: Date, default: Date.now },
     source: { type: String, default: 'simulated' },
+    reason: { type: String, trim: true, maxlength: 200 },
     addedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, // admin who added it
   },
   { timestamps: true }

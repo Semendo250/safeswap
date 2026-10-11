@@ -5,7 +5,7 @@ const mongoose = require('mongoose');
 const notificationSchema = new mongoose.Schema(
   {
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
-        type: {
+    type: {
       type: String,
       enum: [
         'verification_approved',
@@ -21,6 +21,9 @@ const notificationSchema = new mongoose.Schema(
         'new_listing_review',
         'new_verification_request',
         'new_report',
+        'announcement',
+        'dispute_update',
+        'new_dispute',
       ],
       required: true,
     },
