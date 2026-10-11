@@ -1,6 +1,6 @@
 const Notification = require('../models/Notification');
 const FcmToken = require('../models/FcmToken');
-const { getFirebaseAdmin, admin } = require('../config/firebase');
+const { getFirebaseMessaging } = require('../config/firebase');
 
 // Sends the push only (no DB row). Internal helper, never throws.
 //
@@ -14,9 +14,9 @@ const { getFirebaseAdmin, admin } = require('../config/firebase');
 // every outcome is logged so a failure can be traced.
 async function sendPush(userId, title, body, link, type) {
   try {
-    const app = getFirebaseAdmin();
-    if (!app) {
-      console.warn('sendPush skipped: Firebase Admin is not configured');
+    const messaging = getFirebaseMessaging();
+    if (!messaging) {
+      console.warn('sendPush skipped: Firebase is not configured');
       return;
     }
 
@@ -34,8 +34,6 @@ async function sendPush(userId, title, body, link, type) {
       type: String(type || ''),
     };
     if (tag) data.tag = String(tag);
-
-    const messaging = admin.messaging(app);
 
     const results = await Promise.allSettled(
       tokens.map((token) =>

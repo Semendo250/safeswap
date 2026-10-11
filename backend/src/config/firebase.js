@@ -1,5 +1,3 @@
-const admin = require('firebase-admin');
-
 let firebaseApp = null;
 let warned = false;
 
@@ -39,23 +37,29 @@ function getFirebaseAdmin() {
   }
 
   try {
+    // Loaded here (not at the top of the file) so a missing package can't crash the server
+    const { initializeApp, cert, getApps, getApp } = require('firebase-admin/app');
     const serviceAccount = parseServiceAccount(raw);
-    firebaseApp = admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
+    firebaseApp = getApps().length ? getApp() : initializeApp({ credential: cert(serviceAccount) });
     console.log('Firebase Admin initialised for project:', serviceAccount.project_id);
     return firebaseApp;
   } catch (err) {
-    // If the app was already created elsewhere, reuse it
-    if (err && err.code === 'app/duplicate-app') {
-      try {
-        firebaseApp = admin.app();
-        return firebaseApp;
-      } catch (e) {
-        // fall through to the warning below
-      }
-    }
     warnOnce('Firebase Admin setup failed: push notifications are disabled: ' + err.message);
     return null;
   }
 }
 
-module.exports = { getFirebaseAdmin, admin };
+// Returns the Firebase Messaging client, or null when Firebase isn't configured
+function getFirebaseMessaging() {
+  const app = getFirebaseAdmin();
+  if (!app) return null;
+  try {
+    const { getMessaging } = require('firebase-admin/messaging');
+    return getMessaging(app);
+  } catch (err) {
+    warnOnce('Firebase Messaging unavailable: ' + err.message);
+    return null;
+  }
+}
+
+module.exports = { getFirebaseAdmin, getFirebaseMessaging };
