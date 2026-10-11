@@ -13,7 +13,6 @@ import {
   ConfirmDialog,
   PhotoLightbox,
   Thumb,
-  CopyText,
   btn,
   errText,
   fmtDate,
@@ -29,6 +28,40 @@ const FILTERS = [
   ['banned', 'Banned'],
   ['admins', 'Admins'],
 ];
+
+// A value with a quiet "Copy" link next to it (long-press copying is switched off app-wide)
+function CopyValue({ value }) {
+  const [copied, setCopied] = useState(false);
+  if (!value) return <span style={{ color: 'var(--color-muted)' }}>-</span>;
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(String(value));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch (err) {
+      // clipboard blocked by the browser
+    }
+  }
+
+  return (
+    <span className="usr-copywrap">
+      <span className="usr-copytext">{value}</span>
+      <button type="button" className="usr-copy" onClick={copy}>
+        {copied ? 'Copied' : 'Copy'}
+      </button>
+    </span>
+  );
+}
+
+function MetaItem({ label, children }) {
+  return (
+    <div className="usr-meta-item">
+      <span className="usr-meta-label">{label}</span>
+      <span className="usr-meta-value">{children}</span>
+    </div>
+  );
+}
 
 function UserCard({ u, me, isOpen, detail, onToggle, onBan, onUnban, onVerify, onDelete, onViewPhoto }) {
   const canAct = u.role !== 'admin' && u._id !== me?.id;
@@ -47,63 +80,73 @@ function UserCard({ u, me, isOpen, detail, onToggle, onBan, onUnban, onVerify, o
   }
 
   return (
-    <div style={{ border: '1px solid var(--color-border)', borderRadius: 10, padding: 12, marginBottom: 10, background: 'var(--color-card)' }}>
-      <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-        <Avatar src={u.profilePicture} name={u.fullName} size={44} />
-        <div style={{ minWidth: 0, flex: 1 }}>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
-            <strong style={{ fontSize: 15 }}>{u.fullName}</strong>
+    <div className="usr-card">
+      <div className="usr-top">
+        <Avatar src={u.profilePicture} name={u.fullName} size={48} />
+
+        <div className="usr-main">
+          <strong style={{ fontSize: 15, wordBreak: 'break-word' }}>{u.fullName}</strong>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 5 }}>
             {u.role === 'admin' && <Chip tone="teal">Admin</Chip>}
             {u.isBanned && <Chip tone="warning">Banned</Chip>}
             {!u.emailVerified && <Chip tone="gold">Email not verified</Chip>}
             {idChip}
           </div>
-          <div style={{ fontSize: 13, color: 'var(--color-muted)', marginTop: 4, display: 'grid', gap: 2 }}>
-            <CopyText value={u.email} />
-            {u.phone ? <CopyText value={u.phone} /> : <span>No phone number</span>}
-            {u.location && <span>📍 {u.location}</span>}
-          </div>
+        </div>
+
+        <div className="usr-actions">
+          <button type="button" onClick={onToggle} style={btn('outline')}>
+            {isOpen ? 'Hide details' : 'Details'}
+          </button>
+          {canAct && !u.emailVerified && (
+            <button type="button" onClick={onVerify} style={btn('outline')}>
+              Mark verified
+            </button>
+          )}
+          {canAct &&
+            (u.isBanned ? (
+              <button type="button" onClick={onUnban} style={btn('outline')}>
+                Unban
+              </button>
+            ) : (
+              <button type="button" onClick={onBan} style={btn('danger')}>
+                Ban
+              </button>
+            ))}
+          {canAct && (
+            <button type="button" onClick={onDelete} style={btn('danger')}>
+              Delete
+            </button>
+          )}
         </div>
       </div>
 
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 14px', fontSize: 12, color: 'var(--color-muted)', margin: '10px 0' }}>
-        {reg && <span>Reg {reg}</span>}
-        <span>{u.listingCount} listing{u.listingCount === 1 ? '' : 's'}</span>
-        <span>Trust {u.trustScore}</span>
-        <span>{u.reportCount} report{u.reportCount === 1 ? '' : 's'}</span>
+      <div className="usr-meta">
+        <MetaItem label="Email">
+          <CopyValue value={u.email} />
+        </MetaItem>
+        <MetaItem label="Phone">{u.phone ? <CopyValue value={u.phone} /> : 'No phone number'}</MetaItem>
+        {u.location && <MetaItem label="Location">📍 {u.location}</MetaItem>}
+        {reg && <MetaItem label="Reg no">{reg}</MetaItem>}
+      </div>
+
+      <div className="usr-stats">
+        <span>
+          <strong>{u.listingCount}</strong> listing{u.listingCount === 1 ? '' : 's'}
+        </span>
+        <span>
+          Trust <strong>{u.trustScore}</strong>
+        </span>
+        <span>
+          <strong>{u.reportCount}</strong> report{u.reportCount === 1 ? '' : 's'}
+        </span>
         <span>Joined {fmtDate(u.createdAt)}</span>
       </div>
 
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-        <button type="button" onClick={onToggle} style={btn('outline')}>
-          {isOpen ? 'Hide details' : 'Details'}
-        </button>
-        {canAct && !u.emailVerified && (
-          <button type="button" onClick={onVerify} style={btn('outline')}>
-            Mark verified
-          </button>
-        )}
-        {canAct &&
-          (u.isBanned ? (
-            <button type="button" onClick={onUnban} style={btn('outline')}>
-              Unban
-            </button>
-          ) : (
-            <button type="button" onClick={onBan} style={btn('danger')}>
-              Ban
-            </button>
-          ))}
-        {canAct && (
-          <button type="button" onClick={onDelete} style={btn('danger')}>
-            Delete
-          </button>
-        )}
-      </div>
-
       {isOpen && (
-        <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--color-border)' }}>
-          {(!detail || detail.loading) && <p style={{ fontSize: 13, color: 'var(--color-muted)' }}>Loading details...</p>}
-          {detail && detail.error && <p style={{ fontSize: 13, color: 'var(--color-warning)' }}>{detail.error}</p>}
+        <div className="usr-details">
+          {(!detail || detail.loading) && <p style={{ fontSize: 13, color: 'var(--color-muted)', margin: 0 }}>Loading details...</p>}
+          {detail && detail.error && <p style={{ fontSize: 13, color: 'var(--color-warning)', margin: 0 }}>{detail.error}</p>}
           {detail && detail.data && (
             <>
               <Field label="Completed sales">{detail.data.user.completedSales}</Field>
@@ -287,6 +330,61 @@ export default function Users() {
 
   return (
     <PageShell title="Users" subtitle={`${data.total} account${data.total === 1 ? '' : 's'}`}>
+      <style>{`
+        .usr-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .usr-filter-label {
+          flex-shrink: 0; font-size: 11px; font-weight: 700; text-transform: uppercase;
+          letter-spacing: 0.04em; color: var(--color-muted);
+        }
+        .usr-tabs { min-width: 0; flex: 1 1 auto; }
+        .usr-export { margin-left: auto; flex-shrink: 0; }
+
+        .usr-card {
+          border: 1px solid var(--color-border); border-radius: 12px; padding: 14px;
+          margin-bottom: 14px; background: var(--color-card);
+        }
+        .usr-top { display: flex; gap: 12px; align-items: flex-start; }
+        .usr-main { min-width: 0; flex: 1; }
+        .usr-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; max-width: 300px; flex-shrink: 0; }
+
+        .usr-meta {
+          display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+          gap: 10px 20px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--color-border);
+        }
+        .usr-meta-item { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+        .usr-meta-label {
+          font-size: 11px; font-weight: 600; text-transform: uppercase;
+          letter-spacing: 0.04em; color: var(--color-muted);
+        }
+        .usr-meta-value { font-size: 13px; color: var(--color-ink); word-break: break-word; }
+
+        .usr-stats {
+          display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 12px;
+          font-size: 12px; color: var(--color-muted);
+        }
+        .usr-stats strong { color: var(--color-ink); font-weight: 600; }
+
+        .usr-details {
+          margin-top: 12px; padding: 12px; border-radius: 10px;
+          background: var(--color-surface); border: 1px solid var(--color-border);
+        }
+
+        .usr-copywrap { display: inline-flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+        .usr-copytext { word-break: break-all; }
+        button.usr-copy {
+          min-width: 0; padding: 0 2px; border: none; background: transparent; color: var(--color-teal);
+          font-size: 11px; font-weight: 600; cursor: pointer; align-self: auto;
+        }
+        button.usr-copy:hover { background: transparent; color: var(--color-teal); text-decoration: underline; }
+
+        @media (max-width: 600px) {
+          .usr-top { flex-wrap: wrap; }
+          .usr-main { flex: 1 1 140px; }
+          .usr-actions { flex-basis: 100%; max-width: none; justify-content: flex-start; }
+          .usr-export { margin-left: 0; }
+        }
+      `}</style>
+
       <input
         type="search"
         placeholder="Search name, email, or phone"
@@ -296,22 +394,28 @@ export default function Users() {
           setPage(1);
         }}
       />
-      <Tabs
-        options={FILTERS}
-        value={filter}
-        onChange={(f) => {
-          setFilter(f);
-          setPage(1);
-        }}
-      />
-            <div style={{ margin: '4px 0 10px' }}>
-        <ExportButton
-          kind="users"
-          label="Export users CSV"
-          params={{ filter, search: debounced }}
-          onDone={setNotice}
-          onError={setError}
-        />
+
+      <div className="usr-toolbar">
+        <span className="usr-filter-label">Filter</span>
+        <div className="usr-tabs">
+          <Tabs
+            options={FILTERS}
+            value={filter}
+            onChange={(f) => {
+              setFilter(f);
+              setPage(1);
+            }}
+          />
+        </div>
+        <div className="usr-export">
+          <ExportButton
+            kind="users"
+            label="Export users CSV"
+            params={{ filter, search: debounced }}
+            onDone={setNotice}
+            onError={setError}
+          />
+        </div>
       </div>
 
       {notice && <Notice onClose={() => setNotice('')}>{notice}</Notice>}
