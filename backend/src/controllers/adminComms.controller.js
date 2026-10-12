@@ -433,6 +433,7 @@ async function deleteDispute(req, res) {
 module.exports = {
   getAnnouncements,
   sendAnnouncement,
+  deleteAnnouncement,
   getAdminList,
   getDisputes,
   createDispute,
