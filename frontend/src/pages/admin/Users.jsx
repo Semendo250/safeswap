@@ -134,8 +134,11 @@ function UserCard({ u, me, isOpen, detail, onToggle, onBan, onUnban, onVerify, o
         <span>
           <strong>{u.listingCount}</strong> listing{u.listingCount === 1 ? '' : 's'}
         </span>
-        <span>
-          Trust <strong>{u.trustScore}</strong>
+                <span>
+          Trust{' '}
+          <strong style={u.role === 'admin' ? { color: 'var(--color-success)' } : undefined}>
+            {u.role === 'admin' ? 99 : u.trustScore}
+          </strong>
         </span>
         <span>
           <strong>{u.reportCount}</strong> report{u.reportCount === 1 ? '' : 's'}

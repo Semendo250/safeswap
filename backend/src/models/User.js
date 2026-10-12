@@ -33,4 +33,10 @@ const userSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// Admins always show a trust score of 99, whatever the recalculation says
+userSchema.pre('save', function (next) {
+  if (this.role === 'admin') this.trustScore = 99;
+  next();
+});
+
 module.exports = mongoose.model('User', userSchema);
