@@ -226,14 +226,14 @@ export default function Payments() {
       }
       setDialog({
         title: `Clean up ${n} old pending payment${n === 1 ? '' : 's'}?`,
-        message:
-          'These payments have been pending for over 24 hours, so the buyer never completed them. They will be marked failed. Nobody is notified, and no money moves. You can still change any of them back with Change status.',
+                message:
+          'These payments have been pending for over 24 hours, so the buyer never completed them. They will be marked failed and each buyer gets a notification. No money moves. You can still change any of them back with Change status.',
         confirmLabel: 'Mark as failed',
         danger: true,
         onConfirm: async () => {
           const r = await expireStalePayments(24);
           setDialog(null);
-          setNotice(`${r.data.expired} old pending payment${r.data.expired === 1 ? '' : 's'} marked as failed. Nobody was notified.`);
+                    setNotice(`${r.data.expired} old pending payment${r.data.expired === 1 ? '' : 's'} marked as failed. The buyers are being notified.`);
           setReloadKey((k) => k + 1);
         },
       });
