@@ -25,18 +25,13 @@ function shortDate(key) {
   return new Date(`${key}T00:00:00`).toLocaleDateString([], { day: 'numeric', month: 'short' });
 }
 
-const card = {
-  border: '1px solid var(--color-border)',
-  borderRadius: 'var(--radius)',
-  padding: 14,
-  background: 'var(--color-surface)',
-  boxSizing: 'border-box',
-};
-
-const linkReset = { textDecoration: 'none', color: 'inherit', display: 'block' };
-
-function SectionTitle({ children }) {
-  return <h3 style={{ margin: '26px 0 10px', fontSize: 16, textAlign: 'left' }}>{children}</h3>;
+function SectionTitle({ children, hint }) {
+  return (
+    <div className="dash-section">
+      <h3>{children}</h3>
+      {hint && <span className="dash-hint">{hint}</span>}
+    </div>
+  );
 }
 
 function SectionError({ children }) {
@@ -81,16 +76,19 @@ function BarChart({ data, color, format }) {
 
 function ChartCard({ title, total, series, pick, color, format }) {
   const data = series.map((s) => ({ date: s.date, value: pick(s) }));
+  if (data.length === 0) return null;
   return (
-    <div style={card}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
-        <span style={{ fontSize: 13, fontWeight: 600 }}>{title}</span>
-        <span style={{ fontSize: 15, fontWeight: 700, color }}>{format(total)}</span>
+    <div className="dash-card">
+      <div className="dash-chart-head">
+        <span className="dash-chart-title">{title}</span>
+        <span className="dash-chart-total" style={{ color }}>
+          {format(total)}
+        </span>
       </div>
-      <div style={{ margin: '10px 0 6px' }}>
+      <div style={{ margin: '12px 0 6px' }}>
         <BarChart data={data} color={color} format={format} />
       </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--color-muted)' }}>
+      <div className="dash-chart-range">
         <span>{shortDate(data[0].date)}</span>
         <span>{shortDate(data[data.length - 1].date)}</span>
       </div>
@@ -108,6 +106,7 @@ export default function Dashboard() {
   const [moneyData, setMoneyData] = useState(null);
   const [errors, setErrors] = useState({});
   const [loaded, setLoaded] = useState(false);
+  const [updatedAt, setUpdatedAt] = useState(null);
 
   const [days, setDays] = useState(7);
   const [trends, setTrends] = useState(null);
@@ -131,6 +130,7 @@ export default function Dashboard() {
           attention: a.status === 'rejected' ? loadError(a.reason) : '',
           money: m.status === 'rejected' ? loadError(m.reason) : '',
         });
+        setUpdatedAt(new Date());
         setLoaded(true);
       }
     );
@@ -183,11 +183,11 @@ export default function Dashboard() {
   // ----- needs attention -----
   const attentionItems = attention
     ? [
-        { label: 'Listings waiting for review', count: attention.pendingListings, to: '/admin/flagged' },
-        { label: 'Open reports', count: attention.openReports, to: '/admin/flagged' },
-        { label: 'ID verifications waiting', count: attention.pendingVerifications, to: '/admin/verification' },
-        { label: 'Payments held over 3 days', count: attention.heldOverThreeDays, to: '/admin/payments' },
-        { label: 'Payments pending over 30 min', count: attention.stuckPending, to: '/admin/payments' },
+        { icon: '📝', label: 'Listings waiting for review', count: attention.pendingListings, to: '/admin/flagged' },
+        { icon: '🚩', label: 'Open reports', count: attention.openReports, to: '/admin/flagged' },
+        { icon: '🪪', label: 'ID verifications waiting', count: attention.pendingVerifications, to: '/admin/verification' },
+        { icon: '💳', label: 'Payments held over 3 days', count: attention.heldOverThreeDays, to: '/admin/payments' },
+        { icon: '⏳', label: 'Payments pending over 30 min', count: attention.stuckPending, to: '/admin/payments' },
       ]
     : [];
   const urgent = attentionItems.filter((i) => i.count > 0);
@@ -195,10 +195,10 @@ export default function Dashboard() {
   // ----- summary cards -----
   const summaryCards = overview
     ? [
-        { label: 'Active listings', value: overview.activeListings, to: '/admin/listings' },
-        { label: 'Pending reviews', value: overview.pendingReviews, to: '/admin/flagged' },
-        { label: 'Open reports', value: overview.openReports, to: '/admin/flagged' },
-        { label: 'Signups today', value: overview.signupsToday, to: '/admin/users' },
+        { icon: '📋', label: 'Active listings', value: overview.activeListings, to: '/admin/listings' },
+        { icon: '🔍', label: 'Pending reviews', value: overview.pendingReviews, to: '/admin/flagged', alert: true },
+        { icon: '🚩', label: 'Open reports', value: overview.openReports, to: '/admin/flagged', alert: true },
+        { icon: '👤', label: 'Signups today', value: overview.signupsToday, to: '/admin/users' },
       ]
     : [];
 
@@ -237,51 +237,115 @@ export default function Dashboard() {
   const sum = (key) => series.reduce((n, s) => n + s[key], 0);
   const count = (n) => String(n);
 
+  const updatedText = updatedAt
+    ? updatedAt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+    : '';
+
   return (
     <PageShell title="Admin dashboard" subtitle="What needs you today, where the money is, and how the app is growing.">
-      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+      <style>{`
+        .dash-toolbar {
+          display: flex; align-items: center; justify-content: space-between;
+          gap: 10px; flex-wrap: wrap;
+        }
+        .dash-updated { font-size: 12px; color: var(--color-muted); }
+
+        .dash-section { display: flex; align-items: baseline; gap: 8px; margin: 26px 0 10px; }
+        .dash-section h3 { margin: 0; font-size: 16px; text-align: left; }
+        .dash-hint { font-size: 12px; color: var(--color-muted); }
+
+        a.dash-link { display: block; text-decoration: none; color: inherit; }
+        a.dash-link:hover { text-decoration: none; }
+
+        .dash-card {
+          border: 1px solid var(--color-border); border-radius: 12px; padding: 14px;
+          background: var(--color-card); box-sizing: border-box; transition: border-color 0.15s;
+        }
+        a.dash-link:hover .dash-card { border-color: var(--color-teal); }
+
+        .dash-grid { display: grid; gap: 12px; }
+        .dash-grid-stats { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+        .dash-grid-money { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+        .dash-grid-charts { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+
+        .dash-stat-label {
+          display: flex; align-items: center; gap: 6px; margin: 0;
+          font-size: 12px; color: var(--color-muted);
+        }
+        .dash-stat-value { margin: 6px 0 0; font-size: 26px; font-weight: 700; line-height: 1.1; }
+
+        .dash-money { border-left: 3px solid var(--accent, var(--color-teal)); }
+        .dash-money-label { margin: 0; font-size: 12px; color: var(--color-muted); }
+        .dash-money-amount { margin: 6px 0 2px; font-size: 20px; font-weight: 700; line-height: 1.2; }
+        .dash-money-sub { margin: 0; font-size: 12px; color: var(--color-muted); }
+
+        .dash-attn-list { display: grid; gap: 8px; }
+        .dash-attn {
+          display: flex; align-items: center; gap: 12px; padding: 12px 14px;
+          border: 1px solid var(--color-warning); border-radius: 12px;
+          background: var(--color-card); transition: background 0.15s;
+        }
+        a.dash-link:hover .dash-attn { background: var(--color-warning-bg); }
+        .dash-attn-icon { font-size: 18px; flex-shrink: 0; }
+        .dash-attn-label { flex: 1; min-width: 0; font-size: 14px; }
+        .dash-attn-count {
+          font-size: 14px; font-weight: 700; color: var(--color-warning);
+          background: var(--color-warning-bg); border-radius: 999px; padding: 2px 10px;
+        }
+        .dash-attn-arrow { color: var(--color-muted); font-size: 18px; line-height: 1; }
+
+        .dash-clear {
+          display: flex; align-items: center; gap: 10px; padding: 14px;
+          border: 1px solid var(--color-success); border-radius: 12px;
+          background: var(--color-success-bg); color: var(--color-success);
+          font-size: 14px; font-weight: 600;
+        }
+
+        .dash-filter { display: flex; align-items: center; gap: 10px; }
+        .dash-filter-label {
+          width: 52px; flex-shrink: 0; font-size: 11px; font-weight: 700;
+          text-transform: uppercase; letter-spacing: 0.04em; color: var(--color-muted);
+        }
+        .dash-filter > div:last-child { min-width: 0; flex: 1; }
+
+        .dash-chart-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+        .dash-chart-title { font-size: 13px; font-weight: 600; }
+        .dash-chart-total { font-size: 16px; font-weight: 700; }
+        .dash-chart-range { display: flex; justify-content: space-between; font-size: 11px; color: var(--color-muted); }
+
+        @media (max-width: 600px) {
+          .dash-filter { flex-direction: column; align-items: stretch; gap: 0; }
+          .dash-filter-label { width: auto; margin-top: 6px; }
+        }
+      `}</style>
+
+      <div className="dash-toolbar">
+        <span className="dash-updated">{updatedText ? `Updated ${updatedText}` : ''}</span>
         <button type="button" onClick={() => setReloadKey((k) => k + 1)} style={btn('outline')}>
           Refresh
         </button>
       </div>
 
       {/* Needs attention */}
-      <SectionTitle>Needs your attention</SectionTitle>
+      <SectionTitle hint={urgent.length > 0 ? `${urgent.length} item${urgent.length === 1 ? '' : 's'}` : ''}>
+        Needs your attention
+      </SectionTitle>
       {errors.attention ? (
         <SectionError>{errors.attention}</SectionError>
       ) : urgent.length === 0 ? (
-        <div style={{ ...card, borderColor: 'var(--color-success)', background: 'var(--color-success-bg)' }}>
-          <span style={{ fontSize: 14, color: 'var(--color-success)', fontWeight: 600 }}>
-            All clear. Nothing is waiting on you.
-          </span>
+        <div className="dash-clear">
+          <span style={{ fontSize: 18 }}>✅</span>
+          <span>All clear. Nothing is waiting on you.</span>
         </div>
       ) : (
-        <div style={{ display: 'grid', gap: 8 }}>
+        <div className="dash-attn-list">
           {urgent.map((i) => (
-            <Link key={i.label} to={i.to} style={linkReset}>
-              <div
-                style={{
-                  ...card,
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  gap: 10,
-                  borderColor: 'var(--color-warning)',
-                }}
-              >
-                <span style={{ fontSize: 14 }}>{i.label}</span>
-                <span
-                  style={{
-                    fontSize: 15,
-                    fontWeight: 700,
-                    color: 'var(--color-warning)',
-                    background: 'var(--color-warning-bg)',
-                    borderRadius: 999,
-                    padding: '2px 10px',
-                  }}
-                >
-                  {i.count}
-                </span>
+            <Link key={i.label} to={i.to} className="dash-link">
+              <div className="dash-attn">
+                <span className="dash-attn-icon">{i.icon}</span>
+                <span className="dash-attn-label">{i.label}</span>
+                <span className="dash-attn-count">{i.count}</span>
+                <span className="dash-attn-arrow">›</span>
               </div>
             </Link>
           ))}
@@ -293,12 +357,18 @@ export default function Dashboard() {
       {errors.overview ? (
         <SectionError>{errors.overview}</SectionError>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
+        <div className="dash-grid dash-grid-stats">
           {summaryCards.map((c) => (
-            <Link key={c.label} to={c.to} style={linkReset}>
-              <div style={card}>
-                <p style={{ margin: 0, fontSize: 12, color: 'var(--color-muted)' }}>{c.label}</p>
-                <p style={{ margin: '4px 0 0', fontSize: 22, fontWeight: 700, color: 'var(--color-primary)' }}>
+            <Link key={c.label} to={c.to} className="dash-link">
+              <div className="dash-card">
+                <p className="dash-stat-label">
+                  <span>{c.icon}</span>
+                  <span>{c.label}</span>
+                </p>
+                <p
+                  className="dash-stat-value"
+                  style={{ color: c.alert && c.value > 0 ? 'var(--color-warning)' : 'var(--color-primary)' }}
+                >
                   {c.value}
                 </p>
               </div>
@@ -312,15 +382,15 @@ export default function Dashboard() {
       {errors.money ? (
         <SectionError>{errors.money}</SectionError>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10 }}>
+        <div className="dash-grid dash-grid-money">
           {moneyCards.map((c) => (
-            <Link key={c.label} to="/admin/payments" style={linkReset}>
-              <div style={card}>
-                <p style={{ margin: 0, fontSize: 12, color: 'var(--color-muted)' }}>{c.label}</p>
-                <p style={{ margin: '4px 0 2px', fontSize: 20, fontWeight: 700, color: c.color }}>
+            <Link key={c.label} to="/admin/payments" className="dash-link">
+              <div className="dash-card dash-money" style={{ '--accent': c.color }}>
+                <p className="dash-money-label">{c.label}</p>
+                <p className="dash-money-amount" style={{ color: c.color }}>
                   {money(c.amount)}
                 </p>
-                <p style={{ margin: 0, fontSize: 12, color: 'var(--color-muted)' }}>{c.sub}</p>
+                <p className="dash-money-sub">{c.sub}</p>
               </div>
             </Link>
           ))}
@@ -329,20 +399,23 @@ export default function Dashboard() {
 
       {/* Trends */}
       <SectionTitle>Trends</SectionTitle>
-      <Tabs
-        options={[
-          [7, 'Last 7 days'],
-          [30, 'Last 30 days'],
-        ]}
-        value={days}
-        onChange={setDays}
-      />
+      <div className="dash-filter">
+        <span className="dash-filter-label">Period</span>
+        <Tabs
+          options={[
+            [7, 'Last 7 days'],
+            [30, 'Last 30 days'],
+          ]}
+          value={days}
+          onChange={setDays}
+        />
+      </div>
       {trendsError ? (
         <SectionError>{trendsError}</SectionError>
       ) : !trends || trends.days !== days ? (
         <Muted>Loading charts...</Muted>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 10 }}>
+        <div className="dash-grid dash-grid-charts">
           <ChartCard
             title="New signups"
             total={sum('signups')}

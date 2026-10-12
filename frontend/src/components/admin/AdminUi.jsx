@@ -87,14 +87,22 @@ export function PageShell({ title, subtitle, children }) {
       <style>{`
         .admin-page-shell { max-width: 720px; }
         @media (min-width: 1024px) { .admin-page-shell { max-width: 960px; padding-left: 24px; padding-right: 24px; } }
+
+        .admin-page-head { margin-bottom: 16px; }
+        .admin-page-title {
+          margin: 0 0 4px; font-size: 22px; font-weight: 700; line-height: 1.25;
+          letter-spacing: -0.01em; text-align: left;
+        }
+        .admin-page-subtitle {
+          margin: 0; max-width: 70ch; font-size: 13px; line-height: 1.5;
+          color: var(--color-muted); text-align: left;
+        }
       `}</style>
       <div className="admin-page-shell" style={{ margin: 0, padding: '20px 16px 60px', boxSizing: 'border-box' }}>
-        <h2 style={{ textAlign: 'left', margin: '0 0 4px' }}>{title}</h2>
-        {subtitle && (
-          <p style={{ textAlign: 'left', margin: '0 0 14px', fontSize: 13, color: 'var(--color-muted)' }}>
-            {subtitle}
-          </p>
-        )}
+        <div className="admin-page-head">
+          <h2 className="admin-page-title">{title}</h2>
+          {subtitle && <p className="admin-page-subtitle">{subtitle}</p>}
+        </div>
         {children}
       </div>
     </>
@@ -103,18 +111,46 @@ export function PageShell({ title, subtitle, children }) {
 
 export function Tabs({ options, value, onChange }) {
   return (
-    <div style={{ display: 'flex', gap: 6, overflowX: 'auto', padding: '4px 0', margin: '10px 0' }}>
-      {options.map(([v, label]) => (
-        <button
-          key={v}
-          type="button"
-          onClick={() => onChange(v)}
-          style={btn(value === v ? 'primary' : 'outline', { borderRadius: 999, whiteSpace: 'nowrap', flexShrink: 0 })}
-        >
-          {label}
-        </button>
-      ))}
-    </div>
+    <>
+      <style>{`
+        .adm-tabs {
+          display: flex; gap: 8px; margin: 10px 0; padding: 4px 0;
+          overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none;
+        }
+        .adm-tabs::-webkit-scrollbar { display: none; }
+
+        button.adm-tab {
+          flex-shrink: 0; min-width: 0; min-height: 34px; padding: 6px 14px; align-self: auto;
+          border-radius: 999px; white-space: nowrap; font-size: 13px; font-weight: 600; line-height: 1.2;
+          background: var(--color-card); color: var(--color-ink); border: 1px solid var(--color-border);
+          transition: border-color 0.15s, color 0.15s, background 0.15s;
+        }
+        button.adm-tab:hover:not(.adm-tab-active) {
+          background: var(--color-card); color: var(--color-teal); border-color: var(--color-teal);
+        }
+        button.adm-tab.adm-tab-active {
+          background: var(--color-primary); border-color: var(--color-primary); color: #fff;
+        }
+        button.adm-tab.adm-tab-active:hover { background: var(--color-primary-dark); border-color: var(--color-primary-dark); }
+        button.adm-tab:focus-visible { outline: 2px solid var(--color-teal); outline-offset: 2px; }
+      `}</style>
+      <div className="adm-tabs">
+        {options.map(([v, label]) => {
+          const active = value === v;
+          return (
+            <button
+              key={v}
+              type="button"
+              onClick={() => onChange(v)}
+              aria-pressed={active}
+              className={active ? 'adm-tab adm-tab-active' : 'adm-tab'}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
+    </>
   );
 }
 
@@ -243,7 +279,7 @@ export function Modal({ title, children, onClose, busy = false }) {
         aria-modal="true"
         aria-label={title}
         onClick={(e) => e.stopPropagation()}
-                style={{
+        style={{
           background: 'var(--color-card)',
           borderRadius: 16,
           padding: 24,

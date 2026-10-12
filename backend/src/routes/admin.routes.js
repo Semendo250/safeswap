@@ -8,6 +8,7 @@ const fraud = require('../controllers/adminFraud.controller');
 const comms = require('../controllers/adminComms.controller');
 const exp = require('../controllers/adminExport.controller');
 const zones = require('../controllers/safeZones.controller');
+const audit = require('../controllers/adminAudit.controller');
 
 router.use(authMiddleware, adminMiddleware); // every admin route requires admin role
 
@@ -50,13 +51,15 @@ router.delete('/safe-zones/:id', zones.adminDelete);
 
 router.get('/announcements', comms.getAnnouncements);
 router.post('/announcements', comms.sendAnnouncement);
+router.delete('/announcements/:id', comms.deleteAnnouncement);
 
 router.get('/admin-list', comms.getAdminList);
 router.get('/disputes', comms.getDisputes);
 router.post('/disputes', comms.createDispute);
 router.patch('/disputes/:id', comms.updateDispute);
+router.delete('/disputes/:id', comms.deleteDispute);
 router.post('/disputes/:id/notes', comms.addDisputeNote);
 
-router.get('/audit-log', ctrl.getAuditLog);
+router.get('/audit-log', audit.getAuditLog);
 
 module.exports = router;

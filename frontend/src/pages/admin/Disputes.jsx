@@ -7,17 +7,13 @@ import {
   getAdminList,
 } from '../../api/admin.api';
 import {
-  PageShell,
-  Chip,
-  Pager,
-  Notice,
-  Modal,
-  ConfirmDialog,
-  btn,
-  errText,
-  fmtDate,
-  useDebounced,
-} from '../../components/admin/AdminUi';
+  getDisputes,
+  createDispute,
+  updateDispute,
+  addDisputeNote,
+  deleteDispute,
+  getAdminList,
+} from '../../api/admin.api';
 
 const STATUS_TABS = [
   ['all', 'All'],
@@ -172,7 +168,7 @@ function CreateModal({ admins, onClose, onCreated }) {
 
 // ---------- one complaint ----------
 
-function DisputeCard({ d, admins, onStatus, onAssign, onPriority, onNote }) {
+function DisputeCard({ d, admins, onStatus, onAssign, onPriority, onNote, onDelete }) {
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [showNotes, setShowNotes] = useState(false);
@@ -265,10 +261,15 @@ function DisputeCard({ d, admins, onStatus, onAssign, onPriority, onNote }) {
         </div>
       </div>
 
-      <div style={{ marginTop: 12 }}>
+            <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <button type="button" onClick={() => setShowNotes((v) => !v)} style={btn('outline')}>
           {showNotes ? 'Hide notes' : `Notes (${notes.length})`}
         </button>
+        {(d.status === 'resolved' || d.status === 'closed') && (
+          <button type="button" onClick={() => onDelete(d)} style={btn('danger')}>
+            Delete
+          </button>
+        )}
       </div>
 
       {showNotes && (
@@ -388,6 +389,21 @@ export default function Disputes() {
 
   function changePriority(d, priority) {
     patch(d, { priority });
+  }
+    function askDelete(d) {
+    setDialog({
+      title: `Delete ${d.ref}?`,
+      message: 'This removes the complaint and its notes for good. The reference, subject and your reason stay in the activity log.',
+      confirmLabel: 'Delete complaint',
+      danger: true,
+      askReason: 'required',
+      onConfirm: async (reason) => {
+        await deleteDispute(d._id, reason);
+        setDialog(null);
+        setNotice(`${d.ref} was deleted.`);
+        reload();
+      },
+    });
   }
 
   async function addNote(d, text) {
@@ -614,6 +630,7 @@ export default function Disputes() {
           onAssign={changeAssign}
           onPriority={changePriority}
           onNote={addNote}
+                    onDelete={askDelete}
         />
       ))}
 

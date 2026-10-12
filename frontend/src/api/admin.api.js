@@ -127,6 +127,9 @@ export function getAnnouncements(params) {
 export function sendAnnouncement(payload) {
   return api.post('/admin/announcements', payload);
 }
+export function deleteAnnouncement(id, reason) {
+  return api.delete(`/admin/announcements/${id}`, { data: { reason } });
+}
 
 // ----- disputes -----
 export function getAdminList() {
@@ -147,6 +150,9 @@ export function updateDispute(id, payload) {
 
 export function addDisputeNote(id, text) {
   return api.post(`/admin/disputes/${id}/notes`, { text });
+}
+export function deleteDispute(id, reason) {
+  return api.delete(`/admin/disputes/${id}`, { data: { reason } });
 }
 
 // ----- activity log -----

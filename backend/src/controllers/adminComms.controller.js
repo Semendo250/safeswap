@@ -40,7 +40,7 @@ async function logAction(req, action, targetType, { targetId, summary, meta } = 
 
 // ---------- announcements ----------
 
-const audienceQuery = { isBanned: { $ne: true } };
+const audienceQuery = { isBanned: { $ne: true }, role: { $ne: 'admin' } };
 
 // Sends the push notifications a few at a time, after the admin already has their answer
 async function pushInBatches(ids, title, body, link) {
@@ -132,6 +132,36 @@ async function sendAnnouncement(req, res) {
       body,
       link || '/'
     ).catch((err) => console.error('Announcement push failed:', err.message));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+}
+// DELETE /api/admin/announcements/:id  { reason }
+// Removes the record and pulls the notification out of every student's bell.
+// A push alert already delivered to a phone can't be recalled.
+async function deleteAnnouncement(req, res) {
+  try {
+    if (!isId(req.params.id)) return res.status(400).json({ error: 'Invalid id' });
+    const reason = String(req.body?.reason || '').trim().slice(0, 300);
+
+    const a = await Announcement.findById(req.params.id);
+    if (!a) return res.status(404).json({ error: 'Announcement not found' });
+
+    const removed = await Notification.deleteMany({
+      type: 'announcement',
+      'meta.announcementId': String(a._id),
+    });
+    await a.deleteOne();
+
+    await logAction(req, 'announcement.delete', 'announcement', {
+      targetId: a._id,
+      summary: `Deleted announcement "${a.title}" and removed ${removed.deletedCount} bell notifications${
+        reason ? `. Reason: ${reason}` : ''
+      }`,
+      meta: { title: a.title, sentByName: a.sentByName || null, recipientCount: a.recipientCount },
+    });
+
+    res.json({ ok: true, removedNotifications: removed.deletedCount });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -370,6 +400,35 @@ async function addDisputeNote(req, res) {
     res.status(500).json({ error: err.message });
   }
 }
+// DELETE /api/admin/disputes/:id  { reason }
+async function deleteDispute(req, res) {
+  try {
+    if (!isId(req.params.id)) return res.status(400).json({ error: 'Invalid id' });
+
+    const reason = String(req.body?.reason || '').trim().slice(0, 300);
+    if (reason.length < 3) {
+      return res.status(400).json({ error: 'Please give a reason for deleting this complaint' });
+    }
+
+    const d = await Dispute.findById(req.params.id);
+    if (!d) return res.status(404).json({ error: 'Complaint not found' });
+    if (!DONE.includes(d.status)) {
+      return res.status(409).json({ error: 'Only resolved or closed complaints can be deleted. Close it first.' });
+    }
+
+    await d.deleteOne();
+
+    await logAction(req, 'dispute.delete', 'dispute', {
+      targetId: d._id,
+      summary: `Deleted complaint ${d.ref}: ${d.subject}. Reason: ${reason}`,
+      meta: { source: d.source, status: d.status, resolution: d.resolution || null },
+    });
+
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+}
 
 module.exports = {
   getAnnouncements,
@@ -379,4 +438,5 @@ module.exports = {
   createDispute,
   updateDispute,
   addDisputeNote,
+  deleteDispute,
 };
