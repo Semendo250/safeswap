@@ -9,6 +9,7 @@ const comms = require('../controllers/adminComms.controller');
 const exp = require('../controllers/adminExport.controller');
 const zones = require('../controllers/safeZones.controller');
 const audit = require('../controllers/adminAudit.controller');
+const payAdmin = require('../controllers/adminPayments.controller');
 
 router.use(authMiddleware, adminMiddleware); // every admin route requires admin role
 
@@ -40,6 +41,8 @@ router.delete('/blacklist/:id', fraud.removeBlacklistImei);
 
 router.get('/payments', ctrl.getPayments);
 router.patch('/payments/:id/status', ctrl.updatePaymentStatus);
+router.get('/payments/stale-count', payAdmin.getStaleCount);
+router.post('/payments/expire-stale', payAdmin.expireStale);
 
 router.get('/export/payments.csv', exp.exportPayments);
 router.get('/export/users.csv', exp.exportUsers);

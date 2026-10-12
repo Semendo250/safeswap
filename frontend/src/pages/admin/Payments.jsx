@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getPayments, updatePaymentStatus } from '../../api/admin.api';
+import { getPayments, updatePaymentStatus, getStalePayments, expireStalePayments } from '../../api/admin.api';
 import ExportButton from '../../components/admin/ExportButton';
 import {
   PageShell,
@@ -8,6 +8,7 @@ import {
   Notice,
   Tabs,
   Modal,
+  ConfirmDialog,
   btn,
   errText,
   fmtDate,
@@ -191,6 +192,7 @@ export default function Payments() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [editing, setEditing] = useState(null);
+    const [dialog, setDialog] = useState(null);
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
 
@@ -212,6 +214,33 @@ export default function Payments() {
       cancelled = true;
     };
   }, [debounced, status, page, reloadKey]);
+    async function askCleanUp() {
+    setError('');
+    setNotice('');
+    try {
+      const res = await getStalePayments(24);
+      const n = res.data.count;
+      if (!n) {
+        setNotice('Nothing to clean up. No payment has been pending for more than 24 hours.');
+        return;
+      }
+      setDialog({
+        title: `Clean up ${n} old pending payment${n === 1 ? '' : 's'}?`,
+        message:
+          'These payments have been pending for over 24 hours, so the buyer never completed them. They will be marked failed. Nobody is notified, and no money moves. You can still change any of them back with Change status.',
+        confirmLabel: 'Mark as failed',
+        danger: true,
+        onConfirm: async () => {
+          const r = await expireStalePayments(24);
+          setDialog(null);
+          setNotice(`${r.data.expired} old pending payment${r.data.expired === 1 ? '' : 's'} marked as failed. Nobody was notified.`);
+          setReloadKey((k) => k + 1);
+        },
+      });
+    } catch (err) {
+      setError(errText(err, 'Could not check for old payments.'));
+    }
+  }
 
   const counts = data.counts || {};
   const allCount = Object.values(counts).reduce((a, b) => a + b, 0);
@@ -312,6 +341,11 @@ export default function Payments() {
           onError={setError}
         />
       </div>
+            <div style={{ margin: '0 0 10px' }}>
+        <button type="button" onClick={askCleanUp} style={btn('outline')}>
+          Clean up old pending
+        </button>
+      </div>
 
       {notice && <Notice onClose={() => setNotice('')}>{notice}</Notice>}
       {error && <Notice tone="warning">{error}</Notice>}
@@ -335,6 +369,7 @@ export default function Payments() {
           }}
         />
       )}
+            {dialog && <ConfirmDialog {...dialog} onCancel={() => setDialog(null)} />}
     </PageShell>
   );
 }

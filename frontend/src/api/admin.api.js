@@ -96,6 +96,13 @@ export function getPayments(params) {
 export function updatePaymentStatus(id, status, reason) {
   return api.patch(`/admin/payments/${id}/status`, { status, reason });
 }
+export function getStalePayments(hours = 24) {
+  return api.get('/admin/payments/stale-count', { params: { hours } });
+}
+
+export function expireStalePayments(hours = 24) {
+  return api.post('/admin/payments/expire-stale', { hours });
+}
 
 // ----- CSV export (kind is 'payments' or 'users') -----
 export function downloadExport(kind, params) {

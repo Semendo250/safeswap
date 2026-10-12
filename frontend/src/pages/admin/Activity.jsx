@@ -23,6 +23,7 @@ const ACTION_LABEL = {
   'user.verify': 'User verified',
   'user.delete': 'User deleted',
   'payment.status': 'Payment status changed',
+    'payment.expire': 'Old pending payments cleaned up',
   'blacklist.add': 'IMEI blacklisted',
   'blacklist.bulk': 'IMEIs blacklisted in bulk',
   'blacklist.remove': 'IMEI unblocked',
