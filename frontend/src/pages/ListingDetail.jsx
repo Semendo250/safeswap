@@ -10,6 +10,53 @@ import BackButton from '../components/BackButton';
 import Avatar from '../components/Avatar';
 import { formatPhone, telHref } from '../utils/phone';
 
+const ICON_PATHS = {
+  lock: (
+    <>
+      <rect x="3" y="11" width="18" height="11" rx="2" />
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </>
+  ),
+  phone: (
+    <>
+      <rect x="5" y="2" width="14" height="20" rx="2" />
+      <path d="M12 18h.01" />
+    </>
+  ),
+  chat: <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />,
+  check: <path d="M20 6 9 17l-5-5" />,
+  shield: (
+    <>
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+      <path d="m9 12 2 2 4-4" />
+    </>
+  ),
+  pin: (
+    <>
+      <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z" />
+      <circle cx="12" cy="10" r="3" />
+    </>
+  ),
+};
+
+function Icon({ name, size = 18 }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {ICON_PATHS[name]}
+    </svg>
+  );
+}
+
 export default function ListingDetail() {
   const { id } = useParams();
   const { user, loading: authLoading } = useContext(AuthContext);
@@ -155,10 +202,77 @@ export default function ListingDetail() {
   }
 
   return (
-        <div className="listing-detail-page" style={{ padding: '1rem' }}>
+    <div className="listing-detail-page" style={{ padding: '1rem' }}>
       <style>{`
         .listing-detail-page { max-width: 480px; margin: 0; box-sizing: border-box; }
         @media (min-width: 700px) { .listing-detail-page { max-width: 680px; padding: 1.5rem; } }
+
+        .ld-card {
+          border: 1px solid var(--color-border); border-radius: 12px; padding: 14px;
+          background: var(--color-card); margin-top: 12px;
+        }
+        .ld-seller-card { margin-top: 16px; }
+        .ld-seller { display: flex; align-items: center; gap: 12px; }
+        .ld-name { margin: 0; font-size: 16px; font-weight: 600; line-height: 1.3; }
+        .ld-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+        .ld-contact {
+          display: flex; flex-direction: column; gap: 6px; margin-top: 12px; padding-top: 12px;
+          border-top: 1px solid var(--color-border); font-size: 13px; color: var(--color-muted);
+        }
+        .ld-contact a { color: var(--color-teal); font-weight: 600; }
+        .ld-login-line { display: flex; align-items: center; gap: 10px; }
+        .ld-login-line svg { flex-shrink: 0; }
+
+        button.ld-msg-btn {
+          display: flex; align-items: center; justify-content: center; gap: 8px;
+          width: 100%; min-width: 0; height: 46px; margin-top: 12px; align-self: auto;
+          background: transparent; border: 1px solid var(--color-teal); color: var(--color-teal); font-size: 15px;
+        }
+        button.ld-msg-btn:hover { background: var(--color-teal); border-color: var(--color-teal); color: #fff; }
+        [data-theme="dark"] button.ld-msg-btn:hover { color: #0e1518; }
+
+        .ld-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+        .ld-head-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
+        .ld-tile {
+          width: 42px; height: 42px; flex-shrink: 0; border-radius: 10px;
+          display: flex; align-items: center; justify-content: center;
+          background: color-mix(in srgb, var(--color-teal) 14%, var(--color-card)); color: var(--color-teal);
+        }
+
+        .ld-meetup select { width: 100%; height: 44px; font-size: 15px; }
+        button.ld-confirm-btn {
+          display: flex; align-items: center; justify-content: center; gap: 8px;
+          width: 100%; min-width: 0; height: 44px; margin-top: 10px; align-self: auto;
+          background: var(--color-card); border: 1px solid var(--color-border); color: var(--color-ink); font-size: 14px;
+        }
+        button.ld-confirm-btn:hover { background: var(--color-surface); border-color: var(--color-teal); color: var(--color-ink); }
+
+        .ld-pay-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+        .ld-pay-title { margin: 0; font-size: 15px; font-weight: 600; line-height: 1.3; }
+        .ld-pay-sub { margin: 2px 0 0; font-size: 12px; color: var(--color-muted); }
+        .ld-sandbox {
+          padding: 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 600;
+          background: var(--color-gold-bg); color: var(--color-gold); flex-shrink: 0;
+        }
+        .ld-label { display: block; margin-bottom: 6px; font-size: 12px; color: var(--color-muted); }
+        .ld-input-wrap { position: relative; }
+        .ld-input-wrap svg {
+          position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+          color: var(--color-muted); pointer-events: none;
+        }
+        .ld-input-wrap input { height: 46px; font-size: 15px; padding-left: 38px; }
+        button.ld-pay-btn {
+          display: flex; align-items: center; justify-content: center; gap: 8px;
+          width: 100%; min-width: 0; height: 48px; margin-top: 12px; align-self: auto; font-size: 16px;
+        }
+        .ld-hint { margin: 8px 0 0; font-size: 12px; color: var(--color-muted); line-height: 1.5; }
+        .ld-safe {
+          display: flex; gap: 6px; align-items: flex-start; margin: 10px 0 0;
+          font-size: 12px; color: var(--color-muted); line-height: 1.5;
+        }
+        .ld-safe svg { flex-shrink: 0; margin-top: 1px; color: var(--color-teal); }
+        .ld-error { margin: 8px 0 0; font-size: 13px; color: var(--color-warning); }
+        .ld-status { margin: 10px 0 0; font-size: 13px; }
       `}</style>
       <BackButton />
       <div style={{ display: 'flex', gap: '6px', overflowX: 'auto' }}>
@@ -203,7 +317,7 @@ export default function ListingDetail() {
       )}
 
       <p style={{ fontSize: '18px', fontWeight: 600 }}>KES {listing.price}</p>
-            <p style={{ color: 'var(--color-muted)' }}>{listing.description}</p>
+      <p style={{ color: 'var(--color-muted)' }}>{listing.description}</p>
 
       {listing.category === 'phone' && (
         <p style={{ fontSize: '13px' }}>
@@ -212,94 +326,136 @@ export default function ListingDetail() {
       )}
 
       {/* Seller */}
-      <div
-        style={{
-                    borderTop: '1px solid var(--color-border)',
-          marginTop: '16px',
-          paddingTop: '12px',
-          display: 'flex',
-          gap: '12px',
-          alignItems: 'flex-start',
-        }}
-      >
-        <Avatar src={listing.seller.profilePicture} name={listing.seller.fullName} size={44} />
-        <div style={{ minWidth: 0 }}>
-          <p style={{ fontWeight: 600, margin: 0 }}>{listing.seller.fullName}</p>
-          <div style={{ display: 'flex', gap: '6px', marginTop: '4px' }}>
-            <TrustBadge score={listing.seller.trustScore} />
-            <VerificationBadge verificationPath={listing.seller.verificationPath} />
+      <div className="ld-card ld-seller-card">
+        <div className="ld-seller">
+          <Avatar src={listing.seller.profilePicture} name={listing.seller.fullName} size={48} soft />
+          <div style={{ minWidth: 0 }}>
+            <p className="ld-name">{listing.seller.fullName}</p>
+            <div className="ld-badges">
+              <TrustBadge score={listing.seller.trustScore} icon />
+              <VerificationBadge verificationPath={listing.seller.verificationPath} icon />
+            </div>
           </div>
-
-          {!isOwnListing &&
-            (user ? (
-              <div style={{ marginTop: '8px', fontSize: '13px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                {listing.seller.location && (
-                  <span style={{ color: 'var(--color-muted)' }}>📍 {listing.seller.location}</span>
-                )}
-                {listing.seller.phone ? (
-                  <a href={telHref(listing.seller.phone)} style={{ color: 'var(--color-teal)', fontWeight: 600 }}>
-                    📞 {formatPhone(listing.seller.phone)}
-                  </a>
-                ) : (
-                  <span style={{ color: 'var(--color-muted)' }}>Seller hasn't added a phone number</span>
-                )}
-              </div>
-            ) : (
-              <p style={{ margin: '8px 0 0', fontSize: '13px', color: 'var(--color-muted)' }}>
-                <Link to="/login" style={{ color: 'var(--color-teal)', fontWeight: 600 }}>Log in</Link> to see the
-                seller's phone number
-              </p>
-            ))}
         </div>
+
+        {!isOwnListing &&
+          (user ? (
+            <div className="ld-contact">
+              {listing.seller.location && <span>📍 {listing.seller.location}</span>}
+              {listing.seller.phone ? (
+                <a href={telHref(listing.seller.phone)}>📞 {formatPhone(listing.seller.phone)}</a>
+              ) : (
+                <span>Seller hasn't added a phone number</span>
+              )}
+            </div>
+          ) : (
+            <div className="ld-contact">
+              <span className="ld-login-line">
+                <Icon name="lock" />
+                <span>
+                  <Link to="/login">Log in</Link> to see the seller's phone number
+                </span>
+              </span>
+            </div>
+          ))}
       </div>
 
       {!isOwnListing && listing.status === 'active' && (
         <>
-          <button onClick={handleMessageSeller} style={{ marginTop: '16px' }}>
+          <button type="button" className="ld-msg-btn" onClick={handleMessageSeller}>
+            <Icon name="chat" />
             Message seller
           </button>
 
-          <div style={{ marginTop: '16px' }}>
+          <div className="ld-card ld-meetup">
+            <div className="ld-head">
+              <span className="ld-tile">
+                <Icon name="pin" size={20} />
+              </span>
+              <div>
+                <p className="ld-pay-title">Meet at a safe zone</p>
+                <p className="ld-pay-sub">Choose a public spot on campus</p>
+              </div>
+            </div>
+
             <SafeZonePicker
               value={listing.meetupSafeZone}
               onSelect={handleSetMeetup}
               locked={!user}
               onLockedTap={() => setLoginNotice('meetup')}
+              hideLabel
             />
             {loginNotice === 'meetup' && !user && loginNoticeEl}
+
+            {listing.meetupSafeZone && !listing.meetupConfirmed && (
+              <>
+                <button type="button" className="ld-confirm-btn" onClick={handleConfirmMeetup}>
+                  <Icon name="check" />
+                  Confirm meetup happened
+                </button>
+                <p className="ld-hint">
+                  Only the buyer confirms, after the handover. This releases the payment to the seller.
+                </p>
+              </>
+            )}
           </div>
 
-          {listing.meetupSafeZone && !listing.meetupConfirmed && (
-            <button onClick={handleConfirmMeetup} style={{ marginTop: '10px' }}>
-              Confirm meetup happened
-            </button>
-          )}
+          <form onSubmit={handlePay} className="ld-card ld-pay">
+            <div className="ld-pay-head">
+              <div className="ld-head-left">
+                <span className="ld-tile">
+                  <Icon name="phone" size={20} />
+                </span>
+                <div>
+                  <p className="ld-pay-title">Pay with M-Pesa</p>
+                  <p className="ld-pay-sub">Held safely until you confirm</p>
+                </div>
+              </div>
+              <span className="ld-sandbox">Sandbox</span>
+            </div>
 
-          <form onSubmit={handlePay} style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <p style={{ fontSize: '13px', fontWeight: 600, margin: 0 }}>Pay with M-Pesa (sandbox)</p>
-            <input
-              placeholder="Phone e.g. 2547XXXXXXXX"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-            />
-                        {payError && <p style={{ color: 'var(--color-warning)', fontSize: '13px' }}>{JSON.stringify(payError)}</p>}
-            <button type="submit" disabled={paying} style={{ minWidth: '200px', padding: '11px 28px' }}>
+            <label className="ld-label" htmlFor="ld-pay-phone">
+              Phone to pay from
+            </label>
+            <div className="ld-input-wrap">
+              <Icon name="phone" />
+              <input
+                id="ld-pay-phone"
+                placeholder="Phone e.g. 2547XXXXXXXX"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+              />
+            </div>
+
+            {payError && (
+              <p className="ld-error">{typeof payError === 'string' ? payError : JSON.stringify(payError)}</p>
+            )}
+
+            <button type="submit" className="ld-pay-btn" disabled={paying}>
+              <Icon name="lock" />
               {paying ? 'Sending STK push...' : 'Pay now'}
             </button>
+
             {loginNotice === 'pay' && !user && loginNoticeEl}
+
             {paymentStatus && (
-              <p style={{ fontSize: '13px' }}>
+              <p className="ld-status">
                 Payment status: <strong>{paymentStatus}</strong>
                 {paymentStatus === 'pending' && ' — check your phone'}
                 {paymentStatus === 'held' && ' — funds held, confirm meetup to release to seller'}
               </p>
             )}
+
+            <p className="ld-safe">
+              <Icon name="shield" size={15} />
+              <span>Your money is held by SafeSwap and only released when you confirm the handover.</span>
+            </p>
           </form>
         </>
       )}
 
       {listing.status === 'sold' && (
-                <p style={{ marginTop: '16px', fontWeight: 600, color: 'var(--color-success)' }}>This item has been sold.</p>
+        <p style={{ marginTop: '16px', fontWeight: 600, color: 'var(--color-success)' }}>This item has been sold.</p>
       )}
 
       {/* Full-screen photo preview */}

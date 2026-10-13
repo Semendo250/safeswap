@@ -6,7 +6,9 @@ const FALLBACK_ZONES = ['Library entrance', 'Main gate', 'Student center', 'Host
 
 // `locked` + `onLockedTap` are optional. When locked (e.g. the visitor is logged out),
 // tapping the dropdown doesn't open it and calls onLockedTap instead.
-export default function SafeZonePicker({ value, onSelect, locked = false, onLockedTap }) {
+// `hideLabel` is optional. When true the page supplies its own heading, so the label is
+// dropped and the dropdown fills the full width.
+export default function SafeZonePicker({ value, onSelect, locked = false, onLockedTap, hideLabel = false }) {
   const [zones, setZones] = useState(FALLBACK_ZONES);
 
   useEffect(() => {
@@ -29,9 +31,11 @@ export default function SafeZonePicker({ value, onSelect, locked = false, onLock
 
   return (
     <div>
-      <label style={{ fontSize: '13px', fontWeight: 600, marginBottom: '6px', display: 'block' }}>
-        Meet at a safe zone
-      </label>
+      {!hideLabel && (
+        <label style={{ fontSize: '13px', fontWeight: 600, marginBottom: '6px', display: 'block' }}>
+          Meet at a safe zone
+        </label>
+      )}
       <select
         value={value || ''}
         onChange={(e) => onSelect(e.target.value)}
@@ -41,7 +45,8 @@ export default function SafeZonePicker({ value, onSelect, locked = false, onLock
             onLockedTap?.();
           }
         }}
-        style={{ maxWidth: '260px' }}
+        aria-label="Meet at a safe zone"
+        style={hideLabel ? undefined : { maxWidth: '260px' }}
       >
         <option value="" disabled>
           Select a meetup point

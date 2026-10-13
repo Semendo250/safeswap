@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 
-export default function Avatar({ src, name, size = 40, style }) {
+export default function Avatar({ src, name, size = 40, style, soft = false }) {
   const [broken, setBroken] = useState(false);
 
   useEffect(() => {
@@ -10,13 +10,17 @@ export default function Avatar({ src, name, size = 40, style }) {
   const showImage = src && !broken;
   const initial = typeof name === 'string' ? name.trim()[0]?.toUpperCase() : '';
 
+  // `soft` is a tinted circle with coloured initials instead of solid teal with white text
+  const background = soft ? 'color-mix(in srgb, var(--color-teal) 22%, var(--color-card))' : 'var(--color-primary)';
+  const textColor = soft ? 'var(--color-teal)' : '#fff';
+
   return (
     <div
       style={{
         width: size,
         height: size,
         borderRadius: '50%',
-        background: 'var(--color-primary)',
+        background,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -34,14 +38,14 @@ export default function Avatar({ src, name, size = 40, style }) {
           style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
         />
       ) : initial ? (
-        <span style={{ color: '#fff', fontWeight: 700, fontSize: Math.round(size * 0.4) }}>{initial}</span>
+        <span style={{ color: textColor, fontWeight: 700, fontSize: Math.round(size * 0.4) }}>{initial}</span>
       ) : (
         // No photo and no name yet: a plain person silhouette instead of a question mark
         <svg
           width={Math.round(size * 0.6)}
           height={Math.round(size * 0.6)}
           viewBox="0 0 24 24"
-          fill="#fff"
+          fill={textColor}
           aria-hidden="true"
           style={{ display: 'block' }}
         >
