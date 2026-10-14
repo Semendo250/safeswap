@@ -83,7 +83,7 @@ function UserCard({ u, me, isOpen, detail, onToggle, onMessage, onBan, onUnban, 
   return (
     <div className="usr-card">
       <div className="usr-top">
-        <Avatar src={u.profilePicture} name={u.fullName} size={48} />
+        <Avatar src={u.profilePicture} name={u.fullName} size={48} zoomable />
 
         <div className="usr-main">
           <strong style={{ fontSize: 15, wordBreak: 'break-word' }}>{u.fullName}</strong>

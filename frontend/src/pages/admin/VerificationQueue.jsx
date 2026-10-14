@@ -178,7 +178,7 @@ export default function VerificationQueue() {
         users.map((u) => (
           <div key={u._id} className="vq-card">
             <div className="vq-top">
-              <Avatar name={u.fullName} size={48} />
+              <Avatar src={u.profilePicture} name={u.fullName} size={48} zoomable />
 
               <div className="vq-main">
                 <strong style={{ fontSize: 15, wordBreak: 'break-word' }}>{u.fullName}</strong>

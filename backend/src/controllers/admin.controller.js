@@ -496,7 +496,7 @@ async function getVerificationQueue(req, res) {
       fallbackApproved: false,
       fallbackRejected: { $ne: true },
     })
-      .select('fullName email studentRegNo phone location fallbackIdPhoto emailVerified createdAt')
+      .select('fullName email studentRegNo phone location fallbackIdPhoto profilePicture emailVerified createdAt')
       .sort({ createdAt: 1 });
     res.json(users);
   } catch (err) {

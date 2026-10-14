@@ -328,7 +328,7 @@ export default function ListingDetail() {
       {/* Seller */}
       <div className="ld-card ld-seller-card">
         <div className="ld-seller">
-          <Avatar src={listing.seller.profilePicture} name={listing.seller.fullName} size={48} soft />
+          <Avatar src={listing.seller.profilePicture} name={listing.seller.fullName} size={48} soft zoomable />
           <div style={{ minWidth: 0 }}>
             <p className="ld-name">{listing.seller.fullName}</p>
             <div className="ld-badges">
