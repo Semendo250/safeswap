@@ -188,6 +188,7 @@ export default function Dashboard() {
         { icon: '🪪', label: 'ID verifications waiting', count: attention.pendingVerifications, to: '/admin/verification' },
         { icon: '💳', label: 'Payments held over 3 days', count: attention.heldOverThreeDays, to: '/admin/payments' },
         { icon: '⏳', label: 'Payments pending over 30 min', count: attention.stuckPending, to: '/admin/payments' },
+        { icon: '💬', label: 'Complaints waiting for a reply', count: attention.openDisputes, to: '/admin/disputes' },
       ]
     : [];
   const urgent = attentionItems.filter((i) => i.count > 0);
@@ -198,6 +199,7 @@ export default function Dashboard() {
         { icon: '📋', label: 'Active listings', value: overview.activeListings, to: '/admin/listings' },
         { icon: '🔍', label: 'Pending reviews', value: overview.pendingReviews, to: '/admin/flagged', alert: true },
         { icon: '🚩', label: 'Open reports', value: overview.openReports, to: '/admin/flagged', alert: true },
+        { icon: '💬', label: 'Open complaints', value: attention ? attention.openDisputes || 0 : 0, to: '/admin/disputes', alert: true },
         { icon: '👤', label: 'Signups today', value: overview.signupsToday, to: '/admin/users' },
       ]
     : [];

@@ -9,7 +9,7 @@ export default function ComplaintForm() {
   const [details, setDetails] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [ref, setRef] = useState('');
+  const [sent, setSent] = useState(null); // { ref, id }
 
   async function submit(e) {
     e.preventDefault();
@@ -18,12 +18,12 @@ export default function ComplaintForm() {
     setError('');
     try {
       const res = await submitDispute(subject.trim(), details.trim());
-      setRef(res.data.ref);
+      setSent({ ref: res.data.ref, id: res.data.id });
       setSubject('');
       setDetails('');
     } catch (err) {
       if (!err.response) setError('Network error. Check your connection and try again.');
-      else setError(err.response.data?.error || 'Could not send your complaint. Try again.');
+      else setError(err.response.data?.error || 'Could not send your message. Try again.');
     } finally {
       setBusy(false);
     }
@@ -39,32 +39,35 @@ export default function ComplaintForm() {
 
   return (
     <>
-      <h2 id="complaint">Send us a complaint</h2>
+      <h2 id="complaint">Send us a message</h2>
 
       {!user ? (
         <div style={box}>
           <p style={{ margin: 0, fontSize: 14 }}>
-            <Link to="/login">Log in</Link> to send a complaint from the app. You can also reach us on WhatsApp or by
+            <Link to="/login">Log in</Link> to message support from the app. You can also reach us on WhatsApp or by
             email above.
           </p>
         </div>
-      ) : ref ? (
+      ) : sent ? (
         <div style={{ ...box, borderColor: 'var(--color-success)', background: 'var(--color-success-bg)' }}>
           <p style={{ margin: '0 0 6px', fontWeight: 700, color: 'var(--color-success)' }}>
-            Complaint received. Your reference is {ref}.
+            Message received. Your reference is {sent.ref}.
           </p>
           <p style={{ margin: '0 0 10px', fontSize: 14 }}>
-            An admin will look into it, and you will get a notification when it is resolved. Keep the reference if you
-            contact us about it.
+            An admin will reply, and you will get a notification when they do. You can read the reply and answer it in{' '}
+            <Link to={`/my-complaints/${sent.id}`}>your conversation</Link>.
           </p>
-          <button type="button" onClick={() => setRef('')}>
+          <button type="button" onClick={() => setSent(null)}>
             Send another
           </button>
         </div>
       ) : (
         <form onSubmit={submit} style={box}>
-          <p style={{ margin: '0 0 10px', fontSize: 14, color: 'var(--color-muted)' }}>
+          <p style={{ margin: '0 0 6px', fontSize: 14, color: 'var(--color-muted)' }}>
             Tell us what went wrong. Include the listing name and what you expected.
+          </p>
+          <p style={{ margin: '0 0 10px', fontSize: 13 }}>
+            <Link to="/my-complaints">See your earlier messages and replies</Link>
           </p>
           <input
             placeholder="Subject, e.g. Item not as described"
@@ -83,7 +86,7 @@ export default function ComplaintForm() {
           />
           {error && <p style={{ color: 'var(--color-warning)', fontSize: 13, margin: '0 0 8px' }}>{error}</p>}
           <button type="submit" disabled={busy || subject.trim().length < 3 || details.trim().length < 3}>
-            {busy ? 'Sending...' : 'Send complaint'}
+            {busy ? 'Sending...' : 'Send message'}
           </button>
         </form>
       )}

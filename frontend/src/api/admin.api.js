@@ -161,6 +161,13 @@ export function addDisputeNote(id, text) {
 export function deleteDispute(id, reason) {
   return api.delete(`/admin/disputes/${id}`, { data: { reason } });
 }
+export function replyToDispute(id, text) {
+  return api.post(`/admin/disputes/${id}/reply`, { text });
+}
+
+export function messageUser(id, payload) {
+  return api.post(`/admin/users/${id}/message`, payload);
+}
 
 // ----- activity log -----
 export function getAuditLog(params) {

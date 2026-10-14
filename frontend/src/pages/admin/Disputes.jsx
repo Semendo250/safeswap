@@ -4,6 +4,7 @@ import {
   createDispute,
   updateDispute,
   addDisputeNote,
+  replyToDispute,
   deleteDispute,
   getAdminList,
 } from '../../api/admin.api';
@@ -32,6 +33,7 @@ const SOURCE_TABS = [
   ['whatsapp', 'WhatsApp'],
   ['email', 'Email'],
   ['in_app', 'In-app'],
+  ['admin', 'Admin message'],
   ['other', 'Other'],
 ];
 const ASSIGN_TABS = [
@@ -43,7 +45,13 @@ const ASSIGN_TABS = [
 const STATUS_LABEL = { open: 'Open', in_progress: 'In progress', resolved: 'Resolved', closed: 'Closed' };
 const STATUS_TONE = { open: 'gold', in_progress: 'teal', resolved: 'success', closed: 'muted' };
 const PRIORITY_LABEL = { low: 'Low', normal: 'Normal', high: 'High' };
-const SOURCE_LABEL = { whatsapp: 'WhatsApp', email: 'Email', in_app: 'In-app', other: 'Other' };
+const SOURCE_LABEL = {
+  whatsapp: 'WhatsApp',
+  email: 'Email',
+  in_app: 'In-app',
+  other: 'Other',
+  admin: 'Admin message',
+};
 
 const miniLabel = { fontSize: 11, color: 'var(--color-muted)', display: 'block', marginBottom: 2 };
 
@@ -173,12 +181,19 @@ function CreateModal({ admins, onClose, onCreated }) {
 
 // ---------- one complaint ----------
 
-function DisputeCard({ d, admins, onStatus, onAssign, onPriority, onNote, onDelete }) {
+function DisputeCard({ d, admins, onStatus, onAssign, onPriority, onNote, onReply, onDelete }) {
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [showNotes, setShowNotes] = useState(false);
+  const [showThread, setShowThread] = useState(false);
+  const [reply, setReply] = useState('');
+  const [replying, setReplying] = useState(false);
+  const [replyError, setReplyError] = useState('');
   const notes = d.notes || [];
+  const messages = d.messages || [];
 
+  const isDone = d.status === 'resolved' || d.status === 'closed';
+  const needsReply = !isDone && d.user && d.lastMessageFrom === 'student';
   const hasMeta = d.contactName || d.contactInfo || d.user || d.resolution || d.resolvedAt;
 
   async function submitNote() {
@@ -190,6 +205,17 @@ function DisputeCard({ d, admins, onStatus, onAssign, onPriority, onNote, onDele
     setBusy(false);
   }
 
+  async function submitReply() {
+    const text = reply.trim();
+    if (!text || replying) return;
+    setReplying(true);
+    setReplyError('');
+    const err = await onReply(d, text);
+    if (err) setReplyError(err);
+    else setReply('');
+    setReplying(false);
+  }
+
   return (
     <div className="dsp-card">
       <div className="dsp-head">
@@ -197,6 +223,7 @@ function DisputeCard({ d, admins, onStatus, onAssign, onPriority, onNote, onDele
           <strong className="dsp-ref">{d.ref}</strong>
           <Chip tone={STATUS_TONE[d.status]}>{STATUS_LABEL[d.status]}</Chip>
           <Chip tone="teal">{SOURCE_LABEL[d.source] || d.source}</Chip>
+          {needsReply && <Chip tone="warning">Needs reply</Chip>}
           {d.priority === 'high' && <Chip tone="warning">High priority</Chip>}
           {d.priority === 'low' && <Chip tone="muted">Low priority</Chip>}
         </div>
@@ -266,16 +293,73 @@ function DisputeCard({ d, admins, onStatus, onAssign, onPriority, onNote, onDele
         </div>
       </div>
 
-            <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+      <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <button type="button" onClick={() => setShowThread((v) => !v)} style={btn(needsReply ? 'primary' : 'outline')}>
+          {showThread ? 'Hide messages' : `Messages (${messages.length})`}
+        </button>
         <button type="button" onClick={() => setShowNotes((v) => !v)} style={btn('outline')}>
           {showNotes ? 'Hide notes' : `Notes (${notes.length})`}
         </button>
-        {(d.status === 'resolved' || d.status === 'closed') && (
+        {isDone && (
           <button type="button" onClick={() => onDelete(d)} style={btn('danger')}>
             Delete
           </button>
         )}
       </div>
+
+      {showThread && (
+        <div className="dsp-notes">
+          <p className="dsp-thread-hint">
+            Messages here are visible to the student. Use Notes for anything private.
+          </p>
+
+          {!d.user && (
+            <p className="dsp-thread-hint">
+              This complaint isn't linked to a SafeSwap account, so there is nobody to message in the app. Reply on
+              WhatsApp or email and record it as a note.
+            </p>
+          )}
+
+          {d.user && messages.length === 0 && (
+            <p className="dsp-thread-hint">No replies yet. Write the first one below.</p>
+          )}
+
+          {messages.map((m) => (
+            <div key={m._id} className={m.from === 'student' ? 'dsp-msg dsp-msg-student' : 'dsp-msg'}>
+              <div className="dsp-msg-head">
+                {m.from === 'student' ? (d.user ? d.user.fullName : 'Student') : m.senderName || 'Admin'} on{' '}
+                {fmtDate(m.createdAt)}
+              </div>
+              <div className="dsp-msg-text">{m.text}</div>
+            </div>
+          ))}
+
+          {d.user && !isDone && (
+            <>
+              <textarea
+                rows={3}
+                placeholder="Write a reply to the student"
+                value={reply}
+                maxLength={1000}
+                onChange={(e) => setReply(e.target.value)}
+                style={{ margin: '8px 0' }}
+              />
+              {replyError && (
+                <p style={{ color: 'var(--color-warning)', fontSize: 13, margin: '0 0 8px' }}>{replyError}</p>
+              )}
+              <button type="button" onClick={submitReply} disabled={replying || !reply.trim()} style={btn('primary')}>
+                {replying ? 'Sending...' : 'Send reply'}
+              </button>
+            </>
+          )}
+
+          {d.user && isDone && (
+            <p className="dsp-thread-hint">
+              This complaint is closed. Set it back to Open or In progress if you need to reply.
+            </p>
+          )}
+        </div>
+      )}
 
       {showNotes && (
         <div className="dsp-notes">
@@ -395,10 +479,11 @@ export default function Disputes() {
   function changePriority(d, priority) {
     patch(d, { priority });
   }
-    function askDelete(d) {
+
+  function askDelete(d) {
     setDialog({
       title: `Delete ${d.ref}?`,
-      message: 'This removes the complaint and its notes for good. The reference, subject and your reason stay in the activity log.',
+      message: 'This removes the complaint, its messages and its notes for good. The reference, subject and your reason stay in the activity log.',
       confirmLabel: 'Delete complaint',
       danger: true,
       askReason: 'required',
@@ -423,6 +508,23 @@ export default function Disputes() {
     }
   }
 
+  // Returns an error message to show under the reply box, or an empty string on success
+  async function sendReply(d, text) {
+    setError('');
+    try {
+      await replyToDispute(d._id, text);
+      setNotice(
+        d.status === 'open'
+          ? `Reply sent to the student on ${d.ref}. It moved to In progress.`
+          : `Reply sent to the student on ${d.ref}.`
+      );
+      reload();
+      return '';
+    } catch (err) {
+      return errText(err, 'Could not send the reply.');
+    }
+  }
+
   const counts = data.counts || {};
   const totalAll = Object.values(counts).reduce((a, b) => a + b, 0);
   const filtersActive = !!debounced.trim() || source !== 'all' || assigned !== 'all';
@@ -441,7 +543,10 @@ export default function Disputes() {
   }
 
   return (
-    <PageShell title="Complaints" subtitle="Log and follow up complaints from WhatsApp, email and the app.">
+    <PageShell
+      title="Complaints"
+      subtitle="Log and follow up complaints from WhatsApp, email and the app, and reply to students."
+    >
       <style>{`
         .dsp-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
         .dsp-toolbar input[type="search"] { flex: 1; min-width: 180px; height: 40px; }
@@ -496,6 +601,12 @@ export default function Disputes() {
         }
         .dsp-note { padding: 8px 0; border-top: 1px solid var(--color-border); }
         .dsp-note.dsp-note-first { border-top: none; padding-top: 0; }
+
+        .dsp-thread-hint { margin: 0 0 8px; font-size: 12px; color: var(--color-muted); line-height: 1.5; }
+        .dsp-msg { padding: 6px 0 6px 10px; margin-bottom: 8px; border-left: 3px solid var(--color-teal); }
+        .dsp-msg.dsp-msg-student { border-left-color: var(--color-gold); }
+        .dsp-msg-head { font-size: 12px; color: var(--color-muted); }
+        .dsp-msg-text { font-size: 13px; white-space: pre-wrap; word-break: break-word; }
 
         .dsp-copywrap { display: inline-flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
         .dsp-copytext { word-break: break-all; }
@@ -635,7 +746,8 @@ export default function Disputes() {
           onAssign={changeAssign}
           onPriority={changePriority}
           onNote={addNote}
-                    onDelete={askDelete}
+          onReply={sendReply}
+          onDelete={askDelete}
         />
       ))}
 

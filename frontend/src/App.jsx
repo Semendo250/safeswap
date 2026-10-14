@@ -29,6 +29,8 @@ import Profile from './pages/Profile';
 import Terms from './pages/Terms';
 import Privacy from './pages/Privacy';
 import Support from './pages/Support';
+import MyComplaints from './pages/MyComplaints';
+import ComplaintThread from './pages/ComplaintThread';
 
 // Opens every new page at the top, so footer links don't land halfway down
 function ScrollToTop() {
@@ -77,6 +79,8 @@ function App() {
           <Route path="/terms" element={<Terms />} />
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/support" element={<Support />} />
+                    <Route path="/my-complaints" element={<MyComplaints />} />
+          <Route path="/my-complaints/:id" element={<ComplaintThread />} />
         </Routes>
       </div>
       {!hideFooter && <Footer />}

@@ -3,6 +3,7 @@ import { AuthContext } from '../../context/AuthContext';
 import Avatar from '../../components/Avatar';
 import { getUsers, getUserById, setUserBan, verifyUserEmail, deleteUser } from '../../api/admin.api';
 import ExportButton from '../../components/admin/ExportButton';
+import MessageUserModal from '../../components/admin/MessageUserModal';
 import {
   PageShell,
   Chip,
@@ -63,7 +64,7 @@ function MetaItem({ label, children }) {
   );
 }
 
-function UserCard({ u, me, isOpen, detail, onToggle, onBan, onUnban, onVerify, onDelete, onViewPhoto }) {
+function UserCard({ u, me, isOpen, detail, onToggle, onMessage, onBan, onUnban, onVerify, onDelete, onViewPhoto }) {
   const canAct = u.role !== 'admin' && u._id !== me?.id;
 
   // Ignore empty values and the text "undefined" / "null" that bad form submissions can leave behind
@@ -98,6 +99,11 @@ function UserCard({ u, me, isOpen, detail, onToggle, onBan, onUnban, onVerify, o
           <button type="button" onClick={onToggle} style={btn('outline')}>
             {isOpen ? 'Hide details' : 'Details'}
           </button>
+          {canAct && !u.isBanned && (
+            <button type="button" onClick={onMessage} style={btn('outline')}>
+              Message
+            </button>
+          )}
           {canAct && !u.emailVerified && (
             <button type="button" onClick={onVerify} style={btn('outline')}>
               Mark verified
@@ -211,6 +217,7 @@ export default function Users() {
   const [details, setDetails] = useState({});
   const [dialog, setDialog] = useState(null);
   const [viewer, setViewer] = useState(null);
+  const [messaging, setMessaging] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -438,6 +445,7 @@ export default function Users() {
           onUnban={() => askUnban(u)}
           onVerify={() => askVerify(u)}
           onDelete={() => askDelete(u)}
+          onMessage={() => setMessaging(u)}
           onViewPhoto={(images) => setViewer({ images, index: 0 })}
         />
       ))}
@@ -445,6 +453,16 @@ export default function Users() {
       <Pager page={page} pages={data.pages} onPage={setPage} />
 
       {dialog && <ConfirmDialog {...dialog} onCancel={() => setDialog(null)} />}
+      {messaging && (
+        <MessageUserModal
+          user={messaging}
+          onClose={() => setMessaging(null)}
+          onSent={(r) => {
+            setMessaging(null);
+            setNotice(`Message sent to ${messaging.fullName}. The conversation ${r.ref} is under Complaints.`);
+          }}
+        />
+      )}
       {viewer && <PhotoLightbox images={viewer.images} startIndex={viewer.index} onClose={() => setViewer(null)} />}
     </PageShell>
   );

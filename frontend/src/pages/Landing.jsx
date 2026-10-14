@@ -28,7 +28,7 @@ const FEATURES = [
   },
   {
     title: 'Proof photo from phone sellers',
-    text: 'Sellers upload a photo of the phone next to their student ID before it can be listed.',
+    text: 'Sellers upload a photo of the phone next to the phone imei screen before it can be listed.',
   },
   {
     title: 'Verified accounts',

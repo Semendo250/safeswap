@@ -31,6 +31,8 @@ const ACTION_LABEL = {
   'dispute.update': 'Complaint updated',
   'dispute.note': 'Complaint note added',
   'dispute.delete': 'Complaint deleted',
+    'dispute.reply': 'Complaint reply sent',
+  'user.message': 'Message sent to user',
   'safezone.add': 'Meetup spot added',
   'safezone.update': 'Meetup spot changed',
   'safezone.delete': 'Meetup spot deleted',
