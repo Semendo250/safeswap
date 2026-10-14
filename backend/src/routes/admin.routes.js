@@ -62,6 +62,8 @@ router.post('/disputes', comms.createDispute);
 router.patch('/disputes/:id', comms.updateDispute);
 router.delete('/disputes/:id', comms.deleteDispute);
 router.post('/disputes/:id/notes', comms.addDisputeNote);
+router.post('/disputes/:id/reply', comms.replyToDispute);
+router.post('/users/:id/message', comms.messageUser);
 
 router.get('/audit-log', audit.getAuditLog);
 

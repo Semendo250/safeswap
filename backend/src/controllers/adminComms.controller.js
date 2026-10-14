@@ -5,7 +5,8 @@ const User = require('../models/User');
 const AuditLog = require('../models/AuditLog');
 const { notify, sendPush } = require('../utils/notify');
 
-const SOURCES = ['whatsapp', 'email', 'in_app', 'other'];
+const SOURCES = ['whatsapp', 'email', 'in_app', 'other', 'admin'];
+const LOG_SOURCES = ['whatsapp', 'email', 'in_app', 'other'];
 const STATUSES = ['open', 'in_progress', 'resolved', 'closed'];
 const PRIORITIES = ['low', 'normal', 'high'];
 const DONE = ['resolved', 'closed'];
@@ -237,7 +238,7 @@ async function createDispute(req, res) {
     if (subject.length < 3 || subject.length > 120) {
       return res.status(400).json({ error: 'Subject must be 3 to 120 characters' });
     }
-    if (!SOURCES.includes(b.source)) return res.status(400).json({ error: 'Pick where the complaint came from' });
+        if (!LOG_SOURCES.includes(b.source)) return res.status(400).json({ error: 'Pick where the complaint came from' });
 
     let user = null;
     if (userEmail) {
@@ -364,17 +365,25 @@ async function updateDispute(req, res) {
         link: '/admin/disputes',
       });
     }
-    if (resolvedNow && d.user) {
+        if (resolvedNow && d.user) {
       await notify({
         userId: d.user,
         actorId: req.user._id,
         type: 'dispute_update',
         title: 'Your complaint was resolved',
         body: `${d.ref}: ${d.resolution}`.slice(0, 200),
-        link: '/support',
+        link: `/my-complaints/${d._id}`,
+      });
+    } else if (changes.status && changes.status[1] === 'in_progress' && d.user) {
+      await notify({
+        userId: d.user,
+        actorId: req.user._id,
+        type: 'dispute_update',
+        title: 'Your complaint is being looked into',
+        body: `${d.ref}: ${d.subject}`.slice(0, 200),
+        link: `/my-complaints/${d._id}`,
       });
     }
-
     res.json({ dispute: await loadDispute(d._id) });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -429,6 +438,131 @@ async function deleteDispute(req, res) {
     res.status(500).json({ error: err.message });
   }
 }
+// POST /api/admin/disputes/:id/reply  { text }
+// A reply the student can read. It shows in their My complaints page and their bell.
+async function replyToDispute(req, res) {
+  try {
+    if (!isId(req.params.id)) return res.status(400).json({ error: 'Invalid id' });
+
+    const text = String(req.body?.text || '').trim();
+    if (!text || text.length > 1000) {
+      return res.status(400).json({ error: 'Message must be 1 to 1000 characters' });
+    }
+
+    const d = await Dispute.findById(req.params.id);
+    if (!d) return res.status(404).json({ error: 'Complaint not found' });
+    if (!d.user) {
+      return res.status(400).json({
+        error:
+          "This complaint isn't linked to a SafeSwap account, so there is nobody to message in the app. Reply on WhatsApp or email and record it as a note.",
+      });
+    }
+    if (DONE.includes(d.status)) {
+      return res.status(409).json({
+        error: 'This complaint is closed. Set it back to Open or In progress first, then reply.',
+      });
+    }
+    if (d.messages.length >= 200) {
+      return res.status(400).json({ error: 'This conversation is too long. Start a new one from the Users page.' });
+    }
+
+    d.messages.push({ from: 'admin', sender: req.user._id, senderName: req.user.fullName, text });
+    d.lastMessageAt = new Date();
+    d.lastMessageFrom = 'admin';
+    if (d.status === 'open') d.status = 'in_progress';
+    if (!d.assignedTo) d.assignedTo = req.user._id;
+    await d.save();
+
+    await logAction(req, 'dispute.reply', 'dispute', {
+      targetId: d._id,
+      summary: `Replied to complaint ${d.ref}`,
+    });
+
+    await notify({
+      userId: d.user,
+      actorId: req.user._id,
+      type: 'dispute_update',
+      title: 'Reply from SafeSwap support',
+      body: text.slice(0, 140),
+      link: `/my-complaints/${d._id}`,
+    });
+
+    res.json({ dispute: await loadDispute(d._id) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+// POST /api/admin/users/:id/message  { subject, text }
+// Starts a conversation with a student. It appears in Complaints like any other.
+async function messageUser(req, res) {
+  try {
+    const { id } = req.params;
+    if (!isId(id)) return res.status(400).json({ error: 'Invalid user id' });
+
+    const subject = String(req.body?.subject || '').trim();
+    const text = String(req.body?.text || '').trim();
+    if (subject.length < 3 || subject.length > 120) {
+      return res.status(400).json({ error: 'Subject must be 3 to 120 characters' });
+    }
+    if (!text || text.length > 1000) {
+      return res.status(400).json({ error: 'Message must be 1 to 1000 characters' });
+    }
+
+    const user = await User.findById(id).select('fullName email role isBanned');
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    if (user.role === 'admin') return res.status(400).json({ error: "Admins can't be messaged this way" });
+    if (user.isBanned) {
+      return res.status(400).json({ error: "This user is banned and can't read messages. Unban them first." });
+    }
+
+    // Stops a double click from sending the same message twice
+    const recent = await Dispute.findOne({
+      user: user._id,
+      source: 'admin',
+      subject,
+      createdAt: { $gte: new Date(Date.now() - 2 * 60 * 1000) },
+    })
+      .select('_id')
+      .lean();
+    if (recent) {
+      return res.status(429).json({ error: 'You just sent a message with this subject. Wait a couple of minutes.' });
+    }
+
+    const d = await Dispute.createWithRef({
+      source: 'admin',
+      subject,
+      contactName: user.fullName,
+      contactInfo: user.email,
+      user: user._id,
+      status: 'in_progress',
+      assignedTo: req.user._id,
+      createdBy: req.user._id,
+      messages: [{ from: 'admin', sender: req.user._id, senderName: req.user.fullName, text }],
+      lastMessageAt: new Date(),
+      lastMessageFrom: 'admin',
+    });
+
+    await logAction(req, 'user.message', 'user', {
+      targetId: user._id,
+      summary: `Messaged ${user.fullName} (${user.email}): ${subject} [${d.ref}]`,
+      meta: { ref: d.ref },
+    });
+
+    await notify({
+      userId: user._id,
+      actorId: req.user._id,
+      type: 'dispute_update',
+      title: 'Message from SafeSwap support',
+      body: text.slice(0, 140),
+      link: `/my-complaints/${d._id}`,
+    });
+
+    res.status(201).json({ ref: d.ref, id: d._id });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+}
 
 module.exports = {
   getAnnouncements,
@@ -440,4 +574,8 @@ module.exports = {
   updateDispute,
   addDisputeNote,
   deleteDispute,
+  replyToDispute,
+  messageUser,
 };
+
+  

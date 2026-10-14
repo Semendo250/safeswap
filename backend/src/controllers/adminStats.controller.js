@@ -2,6 +2,7 @@ const Listing = require('../models/Listing');
 const User = require('../models/User');
 const Report = require('../models/Report');
 const Payment = require('../models/Payment');
+const Dispute = require('../models/Dispute');
 
 // Kenya is UTC+3 all year (no daylight saving), so "today" for the admin means Nairobi time
 const TZ = '+03:00';
@@ -47,6 +48,7 @@ async function getNeedsAttention(req, res) {
       heldTotal,
       heldOverThreeDays,
       stuckPending,
+      openDisputes,
     ] = await Promise.all([
       Listing.countDocuments({ status: 'under_review' }),
       Report.countDocuments({ status: 'pending' }),
@@ -58,6 +60,9 @@ async function getNeedsAttention(req, res) {
       Payment.countDocuments({ status: 'held' }),
       Payment.countDocuments({ status: 'held', updatedAt: { $lt: threeDaysAgo } }),
       Payment.countDocuments({ status: 'pending', createdAt: { $lt: thirtyMinAgo } }),
+      Dispute.countDocuments({
+        $or: [{ status: 'open' }, { status: 'in_progress', lastMessageFrom: 'student' }],
+      }),
     ]);
 
     res.json({
@@ -67,6 +72,7 @@ async function getNeedsAttention(req, res) {
       heldTotal,
       heldOverThreeDays,
       stuckPending,
+      openDisputes,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
