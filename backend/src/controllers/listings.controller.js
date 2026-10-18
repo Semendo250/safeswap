@@ -3,6 +3,9 @@ const { checkImeiStatus } = require('../utils/imei');
 const paymentStore = require('../utils/paymentStore');
 const { notify, notifyAdmins } = require('../utils/notify');
 const { getActiveZoneNames } = require('../utils/safeZones');
+const Message = require('../models/Message');
+const Offer = require('../models/Offer');
+const { parsePrice, getAgreementInfo, sweepOffers } = require('../utils/offers');
 
 const SELLER_PUBLIC_FIELDS = 'fullName trustScore verificationPath completedSales profilePicture';
 
@@ -22,15 +25,27 @@ async function loadListingForViewer(id, viewer) {
   const sellerFields = SELLER_PUBLIC_FIELDS + (viewer ? ' phone location' : '');
   const listing = await Listing.findById(id).populate('seller', sellerFields);
   if (!listing) return null;
-  return presentListing(listing, viewer);
+  const obj = presentListing(listing, viewer);
+  if (viewer) {
+    try {
+      Object.assign(obj, await getAgreementInfo(listing, viewer._id));
+    } catch (err) {
+      console.error('getAgreementInfo failed:', err.message);
+    }
+  }
+  return obj;
 }
 
 // POST /api/listings
 async function createListing(req, res) {
   try {
-    const { title, description, price, category, imei } = req.body;
+    const { title, description, category, imei } = req.body;
+    const price = parsePrice(req.body.price);
 
-    if (!title || !price || !category) {
+    if (price === null) {
+      return res.status(400).json({ error: 'Price must be a whole number of KES between 1 and 250,000' });
+    }
+    if (!title || !category) {
       return res.status(400).json({ error: 'title, price, and category are required' });
     }
     if (!['phone', 'general'].includes(category)) {
@@ -166,7 +181,13 @@ async function updateListing(req, res) {
     const { title, description, price } = req.body;
     if (title) listing.title = title;
     if (description) listing.description = description;
-    if (price) listing.price = price;
+    if (price !== undefined && price !== '') {
+      const newPrice = parsePrice(price);
+      if (newPrice === null) {
+        return res.status(400).json({ error: 'Price must be a whole number of KES between 1 and 250,000' });
+      }
+      listing.price = newPrice;
+    }
 
     await listing.save();
     res.json(listing);
@@ -184,6 +205,10 @@ async function deleteListing(req, res) {
       return res.status(403).json({ error: 'Not your listing' });
     }
 
+    await Offer.updateMany(
+      { listing: listing._id, status: { $in: ['pending', 'accepted'] } },
+      { status: 'closed' }
+    );
     await listing.deleteOne();
     res.json({ message: 'Listing deleted' });
   } catch (err) {
@@ -196,8 +221,7 @@ const SAFE_ZONES = ['Library entrance', 'Main gate', 'Student center', 'Hostel c
 // PATCH /api/listings/:id/meetup
 async function setMeetup(req, res) {
   try {
-    
-        const { safeZone } = req.body;
+    const { safeZone } = req.body;
     const allowedZones = await getActiveZoneNames();
     if (!allowedZones.includes(safeZone)) {
       return res.status(400).json({ error: 'Invalid safe zone selection' });
@@ -212,11 +236,25 @@ async function setMeetup(req, res) {
 
     const callerId = req.user._id.toString();
     const isSeller = listing.seller.toString() === callerId;
-    const held = await paymentStore.getHeldByListingId(listing._id.toString());
-    if (held && !isSeller && String(held.buyerId) !== callerId) {
+    const active = await paymentStore.getActiveByListingId(listing._id.toString());
+
+    if (active && !isSeller && String(active.buyerId) !== callerId) {
       return res.status(403).json({
         error: 'A payment is already in progress for this item. Only the buyer and seller can change the meetup.',
       });
+    }
+
+    if (!isSeller && !active) {
+      const talked = await Message.exists({
+        listing: listing._id,
+        $or: [
+          { sender: req.user._id, receiver: listing.seller },
+          { sender: listing.seller, receiver: req.user._id },
+        ],
+      });
+      if (!talked) {
+        return res.status(403).json({ error: 'Message the seller about this item before choosing a meetup point' });
+      }
     }
 
     listing.meetupSafeZone = safeZone;
@@ -243,32 +281,35 @@ async function confirmMeetup(req, res) {
         .json({ error: "Sellers can't confirm their own meetup. The buyer confirms it." });
     }
 
-    let releasedCheckoutId = null;
-    let paymentWasReleased = false;
     const held = await paymentStore.getHeldByListingId(listing._id.toString());
-    if (held) {
-      if (String(held.buyerId) !== callerId) {
-        return res.status(403).json({ error: 'Only the buyer who paid can confirm this meetup.' });
-      }
-      const released = await paymentStore.releaseByListingId(listing._id.toString());
-      if (released) {
-        listing.status = 'sold';
-        releasedCheckoutId = released.checkoutRequestId;
-        paymentWasReleased = true;
-      }
+    if (!held) {
+      return res.status(400).json({ error: 'There is no held payment yet. Pay first, then confirm after the handover.' });
+    }
+    if (String(held.buyerId) !== callerId) {
+      return res.status(403).json({ error: 'Only the buyer who paid can confirm this meetup.' });
     }
 
+    const released = await paymentStore.releaseByListingId(listing._id.toString());
+    if (!released) {
+      return res.status(409).json({ error: 'This payment has already been released.' });
+    }
+    const releasedCheckoutId = released.checkoutRequestId;
+
+    listing.status = 'sold';
     listing.meetupConfirmed = true;
     try {
       await listing.save();
     } catch (saveErr) {
-      if (releasedCheckoutId) {
-        await paymentStore.updateStatusByCheckoutId(releasedCheckoutId, 'held');
-      }
+      await paymentStore.updateStatusByCheckoutId(releasedCheckoutId, 'held');
       throw saveErr;
     }
 
-    // The buyer (req.user) just confirmed; notify the other party, the seller
+    try {
+      await sweepOffers({ listing: listing._id });
+    } catch (e) {
+      console.error('sweepOffers failed:', e.message);
+    }
+
     await notify({
       userId: listing.seller,
       actorId: req.user._id,
@@ -277,25 +318,22 @@ async function confirmMeetup(req, res) {
       body: `The buyer confirmed the handover for "${listing.title}".`,
       link: `/listings/${listing._id}`,
     });
-
-    if (paymentWasReleased) {
-      await notify({
-        userId: listing.seller,
-        actorId: req.user._id,
-        type: 'payment_status',
-        title: 'Funds released to you',
-        body: `Payment for "${listing.title}" has been released.`,
-        link: `/listings/${listing._id}`,
-      });
-      await notify({
-        userId: listing.seller,
-        actorId: req.user._id,
-        type: 'listing_sold',
-        title: 'Your item has been sold',
-        body: `"${listing.title}" has been marked as sold.`,
-        link: `/listings/${listing._id}`,
-      });
-    }
+    await notify({
+      userId: listing.seller,
+      actorId: req.user._id,
+      type: 'payment_status',
+      title: 'Funds released to you',
+      body: `Payment for "${listing.title}" has been released.`,
+      link: `/listings/${listing._id}`,
+    });
+    await notify({
+      userId: listing.seller,
+      actorId: req.user._id,
+      type: 'listing_sold',
+      title: 'Your item has been sold',
+      body: `"${listing.title}" has been marked as sold.`,
+      link: `/listings/${listing._id}`,
+    });
 
     res.json(await loadListingForViewer(listing._id, req.user));
   } catch (err) {

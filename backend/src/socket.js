@@ -1,6 +1,9 @@
 const { Server } = require('socket.io');
 const jwt = require('jsonwebtoken');
 const User = require('./models/User');
+const Message = require('./models/Message');
+
+const isObjectId = (v) => typeof v === 'string' && /^[a-f\d]{24}$/i.test(v);
 
 const socketUser = new Map(); // socket.id -> userId (set from the verified login token)
 const userSockets = new Map(); // userId -> Set of socket.id
@@ -150,29 +153,44 @@ function initSocket(server) {
       setViewing(socket, !!(data && data.active));
     });
 
-    socket.on('send_message', (data) => {
-      if (!data || !socket.rooms.has(data.room)) return;
-      const parsed = parseRoom(data.room);
-      if (!parsed || !roomAllowsUser(data.room, userId)) return;
+        socket.on('send_message', async (data) => {
+      try {
+        if (!data || !socket.rooms.has(data.room) || !isObjectId(data._id)) return;
+        const parsed = parseRoom(data.room);
+        if (!parsed || !roomAllowsUser(data.room, userId)) return;
 
-      // Sender, receiver and listing come from the verified user and the room, not from the browser
-      const receiverId = otherParticipant(parsed, userId);
-      const payload = {
-        room: data.room,
-        listingId: parsed.listingId,
-        senderId: userId,
-        receiverId,
-        content: typeof data.content === 'string' ? data.content.slice(0, MAX_CONTENT) : '',
-        _id: data._id,
-        createdAt: data.createdAt,
-      };
-      io.to(data.room).emit('receive_message', payload);
-      const recipientOnline = (userSockets.get(receiverId)?.size || 0) > 0;
-      if (recipientOnline) {
-        io.to(data.room).emit('message_delivered', { messageId: data._id });
+        const receiverId = otherParticipant(parsed, userId);
+        const saved = await Message.findById(data._id)
+          .select('listing sender receiver content createdAt type')
+          .lean();
+        if (
+          !saved ||
+          String(saved.sender) !== userId ||
+          String(saved.receiver) !== receiverId ||
+          String(saved.listing) !== parsed.listingId
+        ) {
+          return;
+        }
+
+        const payload = {
+          room: data.room,
+          listingId: parsed.listingId,
+          senderId: userId,
+          receiverId,
+          content: String(saved.content).slice(0, MAX_CONTENT),
+          type: saved.type,
+          _id: String(saved._id),
+          createdAt: saved.createdAt,
+        };
+        io.to(data.room).emit('receive_message', payload);
+        const recipientOnline = (userSockets.get(receiverId)?.size || 0) > 0;
+        if (recipientOnline) {
+          io.to(data.room).emit('message_delivered', { messageId: payload._id });
+        }
+      } catch (err) {
+        console.error('send_message failed:', err.message);
       }
     });
-
     socket.on('delete_message', (data) => {
       if (!data || !socket.rooms.has(data.room) || !roomAllowsUser(data.room, userId)) return;
       io.to(data.room).emit('message_deleted', {

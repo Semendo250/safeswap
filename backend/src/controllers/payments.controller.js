@@ -2,11 +2,18 @@ const crypto = require('crypto');
 const { initiateStkPush } = require('../utils/mpesa');
 const Listing = require('../models/Listing');
 const paymentStore = require('../utils/paymentStore');
-const { notify } = require('../utils/notify');
+const { notify, notifyAdmins } = require('../utils/notify');
+const { getAgreedOffer, agreedAmount, parsePrice, onPaymentHeld } = require('../utils/offers');
+
+const STALE_PENDING_MS = 10 * 60 * 1000;
 
 function callbackTokenIsValid(provided) {
   const secret = process.env.MPESA_CALLBACK_SECRET;
   if (!secret) {
+    if (process.env.NODE_ENV === 'production') {
+      console.error('MPESA_CALLBACK_SECRET is not set: rejecting M-Pesa callback');
+      return false;
+    }
     console.warn('MPESA_CALLBACK_SECRET is not set: M-Pesa callbacks are NOT authenticated');
     return true;
   }
@@ -34,28 +41,38 @@ async function initiatePayment(req, res) {
       return res.status(400).json({ error: 'This listing is no longer available' });
     }
 
-    const held = await paymentStore.getHeldByListingId(listing._id.toString());
-    if (held) {
+    const listingKey = listing._id.toString();
+    await paymentStore.failStalePending(listingKey, STALE_PENDING_MS);
+    const active = await paymentStore.getActiveByListingId(listingKey);
+    if (active) {
       return res.status(409).json({ error: 'A payment for this item is already in progress' });
+    }
+
+    const buyerId = req.user._id.toString();
+    const agreed = await getAgreedOffer(listing._id, buyerId);
+    const amount = parsePrice(agreed ? agreedAmount(agreed, listing) : listing.price);
+    if (amount === null) {
+      return res.status(400).json({ error: 'This listing has an invalid price' });
     }
 
     const result = await initiateStkPush({
       phone,
-      amount: listing.price,
-      accountReference: listing._id.toString(),
+      amount,
+      accountReference: listingKey,
       transactionDesc: `SafeSwap: ${listing.title}`,
     });
 
     await paymentStore.createPending(result.CheckoutRequestID, {
-      listingId: listing._id.toString(),
-      buyerId: req.user._id.toString(),
-      amount: listing.price,
+      listingId: listingKey,
+      buyerId,
+      amount,
       phone,
     });
 
     res.json({
       message: 'STK push sent - check your phone',
       checkoutRequestId: result.CheckoutRequestID,
+      amount,
     });
   } catch (err) {
     const safaricomError = err.response?.data;
@@ -74,23 +91,53 @@ async function handleCallback(req, res) {
     if (!callback) return res.status(400).json({ error: 'Invalid callback payload' });
 
     const { CheckoutRequestID, ResultCode } = callback;
+    const ack = { ResultCode: 0, ResultDesc: 'Received' };
+
+    const existing = await paymentStore.getByCheckoutId(String(CheckoutRequestID));
+    if (!existing) return res.json(ack);
 
     let mpesaReceipt;
+    let paidAmount;
     const items = callback.CallbackMetadata?.Item;
     if (Array.isArray(items)) {
-      const found = items.find((i) => i && i.Name === 'MpesaReceiptNumber');
-      if (found && found.Value) mpesaReceipt = String(found.Value);
+      const receipt = items.find((i) => i && i.Name === 'MpesaReceiptNumber');
+      if (receipt && receipt.Value) mpesaReceipt = String(receipt.Value);
+      const amt = items.find((i) => i && i.Name === 'Amount');
+      if (amt && amt.Value !== undefined) paidAmount = Number(amt.Value);
     }
 
-    const newStatus = ResultCode === 0 ? 'held' : 'failed';
-    // settlePending only transitions a payment that is still 'pending', so a
-    // repeated or duplicate callback for the same payment returns null here
-    // and nothing is notified twice.
+    if (ResultCode === 0 && existing.status === 'failed') {
+      await notifyAdmins({
+        type: 'payment_status',
+        title: 'Late payment needs review',
+        body: `Checkout ${CheckoutRequestID} was paid after it was marked failed.`,
+        link: '/admin/payments',
+      });
+    }
+
+    let newStatus = ResultCode === 0 ? 'held' : 'failed';
+    if (
+      newStatus === 'held' &&
+      paidAmount !== undefined &&
+      existing.amount !== undefined &&
+      paidAmount !== Number(existing.amount)
+    ) {
+      newStatus = 'failed';
+      console.error(`Payment amount mismatch for ${CheckoutRequestID}: expected ${existing.amount}, got ${paidAmount}`);
+      await notifyAdmins({
+        type: 'payment_status',
+        title: 'Payment amount mismatch',
+        body: `Checkout ${CheckoutRequestID}: expected KES ${existing.amount}, received KES ${paidAmount}.`,
+        link: '/admin/payments',
+      });
+    }
+
     const result = await paymentStore.settlePending(CheckoutRequestID, newStatus, { mpesaReceipt });
 
     if (result) {
       const listing = await Listing.findById(result.listingId).select('title seller');
       if (newStatus === 'held' && listing) {
+        await onPaymentHeld(result.listingId, result.buyerId);
         await notify({
           userId: listing.seller,
           type: 'payment_status',
@@ -109,16 +156,13 @@ async function handleCallback(req, res) {
       }
     }
 
-    res.json({ ResultCode: 0, ResultDesc: 'Received' });
+    res.json(ack);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 }
 
 // GET /api/payments/status/:checkoutRequestId
-// Only the buyer who made the payment, the seller of that listing, and admins may read it.
-// Everyone else gets the same "No record found" as for an unknown ID, so the endpoint
-// doesn't reveal whether a payment exists.
 async function getPaymentStatus(req, res) {
   try {
     const record = await paymentStore.getByCheckoutId(String(req.params.checkoutRequestId));

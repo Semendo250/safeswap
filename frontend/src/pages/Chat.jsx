@@ -1,11 +1,14 @@
 import { useState, useEffect, useContext, useRef } from 'react';
-import { useParams, useLocation, Link } from 'react-router-dom';
+import { useParams, useLocation, useSearchParams, Link } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import socket from '../socket';
 import { getConversation, sendMessage, deleteMessage, markAsRead } from '../api/chat.api';
 import { getListingById } from '../api/listings.api';
 import ChatBubble from '../components/ChatBubble';
 import ChatInput from '../components/ChatInput';
+import OfferCard from '../components/OfferCard';
+import OfferSheet from '../components/OfferSheet';
+import { createOffer, acceptOffer, declineOffer, counterOffer } from '../api/offers.api';
 
 const NAVBAR_HEIGHT = 68;
 
@@ -20,7 +23,14 @@ export default function Chat() {
   const { user, loading: authLoading } = useContext(AuthContext);
   const location = useLocation();
   const [messages, setMessages] = useState([]);
-  const [receiverId, setReceiverId] = useState(location.state?.receiverId || null);
+  const [searchParams] = useSearchParams();
+  const withParam = searchParams.get('with') || '';
+  const [receiverId, setReceiverId] = useState(
+    location.state?.receiverId || (/^[a-f\d]{24}$/i.test(withParam) ? withParam : null)
+  );
+  const [listingPrice, setListingPrice] = useState(0);
+  const [listingStatus, setListingStatus] = useState('');
+  const [sheet, setSheet] = useState(null);
   const [listingTitle, setListingTitle] = useState('');
   const [listingSellerId, setListingSellerId] = useState(null);
   const [otherTyping, setOtherTyping] = useState(false);
@@ -35,6 +45,8 @@ export default function Chat() {
     getListingById(listingId).then((res) => {
       setListingTitle(res.data.title);
       setListingSellerId(res.data.seller?._id || null);
+      setListingPrice(res.data.price || 0);
+      setListingStatus(res.data.status || '');
     });
   }, [listingId]);
 
@@ -134,7 +146,22 @@ export default function Chat() {
     socket.on('typing', handleTypingEvt);
     socket.on('stop_typing', handleStopTypingEvt);
     socket.on('user_online', handleUserOnline);
+    function handleOfferMessage({ room: r, message }) {
+      if (r !== room || !message) return;
+      setMessages((prev) => (prev.some((m) => m._id === message._id) ? prev : [...prev, message]));
+      if (message.sender?._id !== user.id) {
+        markAsRead(message._id).catch(() => {});
+        socket.emit('message_seen', { room, messageId: message._id });
+      }
+    }
+    function handleOfferUpdated({ room: r, offer }) {
+      if (r !== room || !offer) return;
+      setMessages((prev) => prev.map((m) => (m.offer && m.offer._id === offer._id ? { ...m, offer } : m)));
+    }
+
     socket.on('user_offline', handleUserOffline);
+    socket.on('offer_message', handleOfferMessage);
+    socket.on('offer_updated', handleOfferUpdated);
     return () => {
       socket.off('connect', joinRoom);
       document.removeEventListener('visibilitychange', handleVisibility);
@@ -148,6 +175,8 @@ export default function Chat() {
       socket.off('stop_typing', handleStopTypingEvt);
       socket.off('user_online', handleUserOnline);
       socket.off('user_offline', handleUserOffline);
+      socket.off('offer_message', handleOfferMessage);
+      socket.off('offer_updated', handleOfferUpdated);
     };
   }, [listingId, user, receiverId]);
 
@@ -183,6 +212,46 @@ export default function Chat() {
       window.visualViewport?.removeEventListener('scroll', update);
     };
   }, []);
+
+  function mergeOffer(offer) {
+    setMessages((prev) => prev.map((m) => (m.offer && m.offer._id === offer._id ? { ...m, offer } : m)));
+  }
+
+  function applyOfferResult(data) {
+    (data.replaced || []).forEach(mergeOffer);
+    if (data.message) {
+      setMessages((prev) => (prev.some((m) => m._id === data.message._id) ? prev : [...prev, data.message]));
+    } else if (data.offer) {
+      mergeOffer(data.offer);
+    }
+  }
+
+  function offerError(err) {
+    return !err.response ? 'Network error. Check your connection.' : err.response?.data?.error || 'Something went wrong';
+  }
+
+  async function submitOffer(amount) {
+    try {
+      const res =
+        sheet?.mode === 'counter'
+          ? await counterOffer(sheet.offer._id, amount)
+          : await createOffer(listingId, receiverId, amount);
+      applyOfferResult(res.data);
+      setSheet(null);
+      return null;
+    } catch (err) {
+      return offerError(err);
+    }
+  }
+
+  async function respondToOffer(fn, offerId) {
+    try {
+      const res = await fn(offerId);
+      applyOfferResult(res.data);
+    } catch (err) {
+      alert(offerError(err));
+    }
+  }
 
   function handleTyping() {
     const room = roomFor(listingId, user.id, receiverId);
@@ -388,15 +457,26 @@ export default function Chat() {
                   No messages yet — say hello. 👋
                 </p>
               )}
-              {messages.map((m) => (
-                <ChatBubble
-                  key={m._id}
-                  message={m}
-                  isOwn={m.sender._id === user.id}
-                  onDelete={handleDelete}
-                  otherUserName={listingTitle}
-                />
-              ))}
+                            {messages.map((m) =>
+                m.type === 'offer' && m.offer ? (
+                  <OfferCard
+                    key={m._id}
+                    message={m}
+                    userId={user.id}
+                    onAccept={(id) => respondToOffer(acceptOffer, id)}
+                    onDecline={(id) => respondToOffer(declineOffer, id)}
+                    onCounter={(offer) => setSheet({ mode: 'counter', offer })}
+                  />
+                ) : (
+                  <ChatBubble
+                    key={m._id}
+                    message={m}
+                    isOwn={m.sender._id === user.id}
+                    onDelete={handleDelete}
+                    otherUserName={listingTitle}
+                  />
+                )
+              )}
               {otherTyping && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <div
@@ -435,7 +515,50 @@ export default function Chat() {
             </div>
 
             <div style={{ flexShrink: 0 }}>
+              {listingStatus === 'active' && (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    padding: '8px 14px 0',
+                    background: 'var(--color-card)',
+                    borderTop: '0.5px solid var(--color-border)',
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setSheet({ mode: 'new' })}
+                    style={{
+                      minWidth: 0,
+                      padding: '6px 12px',
+                      fontSize: 13,
+                      fontWeight: 600,
+                      borderRadius: 999,
+                      background: 'transparent',
+                      border: '1px solid var(--color-teal)',
+                      color: 'var(--color-teal)',
+                      cursor: 'pointer',
+                      flexShrink: 0,
+                    }}
+                  >
+                    Make an offer
+                  </button>
+                  <span style={{ fontSize: 11, color: 'var(--color-muted)' }}>
+                    Agree the price here so payment matches
+                  </span>
+                </div>
+              )}
               <ChatInput onSend={handleSend} onTyping={handleTyping} />
+              {sheet && (
+                <OfferSheet
+                  title={sheet.mode === 'counter' ? 'Counter offer' : 'Make an offer'}
+                  askingPrice={listingPrice}
+                  initial={sheet.mode === 'counter' ? sheet.offer.amount : null}
+                  onSubmit={submitOffer}
+                  onClose={() => setSheet(null)}
+                />
+              )}
             </div>
           </>
         )}

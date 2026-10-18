@@ -2,6 +2,9 @@ const Message = require('../models/Message');
 const Listing = require('../models/Listing');
 const { notifyNewMessage } = require('../utils/notify');
 const { isUserActiveInRoom } = require('../socket');
+const mongoose = require('mongoose');
+const User = require('../models/User');
+const { sweepOffers } = require('../utils/offers');
 
 const MAX_MESSAGE_LENGTH = 2000;
 
@@ -20,6 +23,11 @@ async function getConversation(req, res) {
     const userId = req.user._id;
 
     const listing = await Listing.findById(listingId).select('seller');
+    try {
+      await sweepOffers({ listing: listingId });
+    } catch (e) {
+      console.error('sweepOffers failed:', e.message);
+    }
     if (!listing) return res.status(404).json({ error: 'Listing not found' });
 
     const messages = await Message.find({
@@ -30,6 +38,7 @@ async function getConversation(req, res) {
       ],
     })
       .sort({ createdAt: 1 })
+      .populate('offer')
       .populate('sender', 'fullName')
       .populate('receiver', 'fullName');
 
@@ -146,35 +155,44 @@ async function markAsRead(req, res) {
 // GET /api/chat
 async function getConversations(req, res) {
   try {
-    const userId = req.user._id;
+    const uid = new mongoose.Types.ObjectId(String(req.user._id));
 
-    const messages = await Message.find({
-      $or: [{ sender: userId }, { receiver: userId }],
-    })
-      .sort({ createdAt: -1 })
-      .populate('sender', 'fullName')
-      .populate('receiver', 'fullName')
-      .populate('listing', 'title photos');
+    const latest = await Message.aggregate([
+      { $match: { $or: [{ sender: uid }, { receiver: uid }] } },
+      { $sort: { createdAt: -1 } },
+      { $addFields: { other: { $cond: [{ $eq: ['$sender', uid] }, '$receiver', '$sender'] } } },
+      {
+        $group: {
+          _id: { listing: '$listing', other: '$other' },
+          content: { $first: '$content' },
+          createdAt: { $first: '$createdAt' },
+        },
+      },
+      { $sort: { createdAt: -1 } },
+    ]);
 
-    const seen = new Set();
+    const listingIds = [...new Set(latest.map((r) => String(r._id.listing)))];
+    const userIds = [...new Set(latest.map((r) => String(r._id.other)))];
+
+    const [listings, users] = await Promise.all([
+      Listing.find({ _id: { $in: listingIds } }).select('title photos').lean(),
+      User.find({ _id: { $in: userIds } }).select('fullName').lean(),
+    ]);
+    const listingMap = new Map(listings.map((l) => [String(l._id), l]));
+    const userMap = new Map(users.map((u) => [String(u._id), u]));
+
     const conversations = [];
-
-    for (const msg of messages) {
-      if (!msg.listing) continue;
-      const otherUser = msg.sender._id.toString() === userId.toString() ? msg.receiver : msg.sender;
-      if (!otherUser) continue;
-
-      const key = `${msg.listing._id}:${otherUser._id}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-
+    for (const r of latest) {
+      const l = listingMap.get(String(r._id.listing));
+      const u = userMap.get(String(r._id.other));
+      if (!l || !u) continue;
       conversations.push({
-        listingId: msg.listing._id.toString(),
-        listingTitle: msg.listing.title,
-        listingPhoto: msg.listing.photos?.[0],
-        otherUser: { id: otherUser._id, fullName: otherUser.fullName },
-        lastMessage: msg.content,
-        lastMessageAt: msg.createdAt,
+        listingId: String(l._id),
+        listingTitle: l.title,
+        listingPhoto: l.photos?.[0],
+        otherUser: { id: String(u._id), fullName: u.fullName },
+        lastMessage: r.content,
+        lastMessageAt: r.createdAt,
       });
     }
 
@@ -183,7 +201,6 @@ async function getConversations(req, res) {
     res.status(500).json({ error: err.message });
   }
 }
-
 // DELETE /api/chat/message/:messageId
 // Only the two people in the conversation can delete; "for everyone" is sender-only
 async function deleteMessage(req, res) {
@@ -195,6 +212,10 @@ async function deleteMessage(req, res) {
     const message = await Message.findById(messageId);
     if (!message || !isParticipant(message, req.user._id)) {
       return res.status(404).json({ error: 'Message not found' });
+    }
+
+    if (message.type === 'offer') {
+      return res.status(400).json({ error: "Offer cards can't be deleted" });
     }
 
     if (forEveryone) {

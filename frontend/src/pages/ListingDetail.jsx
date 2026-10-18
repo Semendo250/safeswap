@@ -135,6 +135,8 @@ export default function ListingDetail() {
   if (loading || !listing) return <p>Loading...</p>;
 
   const isOwnListing = user && listing.seller._id === user.id;
+  const agreed = !isOwnListing ? listing.agreedOffer : null;
+  const agreements = isOwnListing ? listing.agreements || [] : [];
 
   // Shown to logged-out visitors who try to pick a meetup point or pay
   const loginNoticeEl = (
@@ -160,13 +162,17 @@ export default function ListingDetail() {
     navigate(`/chat/${listing._id}`, { state: { receiverId: listing.seller._id } });
   }
 
-  async function handleSetMeetup(zone) {
+    async function handleSetMeetup(zone) {
     if (!user) {
       setLoginNotice('meetup');
       return;
     }
-    const res = await setMeetup(listing._id, zone);
-    setListing(res.data);
+    try {
+      const res = await setMeetup(listing._id, zone);
+      setListing(res.data);
+    } catch (err) {
+      alert(err.response?.data?.error || 'Could not set the meetup point');
+    }
   }
 
   async function handleConfirmMeetup() {
@@ -174,10 +180,13 @@ export default function ListingDetail() {
       setLoginNotice('meetup');
       return;
     }
-    const res = await confirmMeetup(listing._id);
-    setListing(res.data);
+    try {
+      const res = await confirmMeetup(listing._id);
+      setListing(res.data);
+    } catch (err) {
+      alert(err.response?.data?.error || 'Could not confirm the meetup');
+    }
   }
-
   async function handlePay(e) {
     e.preventDefault();
     setPayError('');
@@ -316,7 +325,34 @@ export default function ListingDetail() {
         </p>
       )}
 
-      <p style={{ fontSize: '18px', fontWeight: 600 }}>KES {listing.price}</p>
+      {agreed ? (
+        <div style={{ margin: '12px 0' }}>
+          <p style={{ margin: 0, fontSize: '13px', color: 'var(--color-success)', fontWeight: 600 }}>
+            Agreed price for you
+          </p>
+          <p style={{ margin: '2px 0 0', fontSize: '18px', fontWeight: 600 }}>
+            <span style={{ textDecoration: 'line-through', color: 'var(--color-muted)', marginRight: '8px' }}>
+              KES {Number(listing.price).toLocaleString()}
+            </span>
+            KES {Number(agreed.amount).toLocaleString()}
+          </p>
+          <p style={{ margin: '2px 0 0', fontSize: '12px', color: 'var(--color-muted)' }}>
+            Pay before {new Date(agreed.expiresAt).toLocaleString()}
+          </p>
+        </div>
+      ) : (
+        <p style={{ fontSize: '18px', fontWeight: 600 }}>KES {Number(listing.price).toLocaleString()}</p>
+      )}
+
+      {agreements.length > 0 && (
+        <div style={{ margin: '0 0 12px' }}>
+          {agreements.map((a) => (
+            <p key={a.offerId} style={{ margin: '2px 0', fontSize: '13px', color: 'var(--color-success)', fontWeight: 600 }}>
+              Agreed with {a.buyer.fullName}: KES {Number(a.amount).toLocaleString()}
+            </p>
+          ))}
+        </div>
+      )}
       <p style={{ color: 'var(--color-muted)' }}>{listing.description}</p>
 
       {listing.category === 'phone' && (
@@ -429,6 +465,10 @@ export default function ListingDetail() {
 
             {payError && (
               <p className="ld-error">{typeof payError === 'string' ? payError : JSON.stringify(payError)}</p>
+            )}
+
+            {agreed && (
+              <p className="ld-hint">You will be charged the agreed price: KES {Number(agreed.amount).toLocaleString()}</p>
             )}
 
             <button type="submit" className="ld-pay-btn" disabled={paying}>

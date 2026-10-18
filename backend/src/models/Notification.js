@@ -24,6 +24,7 @@ const notificationSchema = new mongoose.Schema(
         'announcement',
         'dispute_update',
         'new_dispute',
+        'offer_update',
       ],
       required: true,
     },

@@ -141,7 +141,7 @@ async function notifyNewMessage({ recipientId, senderId, senderName, listingId, 
   if (!recipientId || String(recipientId) === String(senderId)) return;
   if (isUserActiveInRoom && isUserActiveInRoom(recipientId, room)) return;
 
-  const link = `/chat/${listingId}`;
+  const link = `/chat/${listingId}?with=${senderId}`;
   let title;
   let body;
 

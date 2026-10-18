@@ -60,7 +60,7 @@ export default function Inbox() {
             <div>
               {conversations.map((c) => (
                 <Link
-                  key={c.listingId}
+                  key={`${c.listingId}-${c.otherUser.id}`}
                   to={`/chat/${c.listingId}`}
                   state={{ receiverId: c.otherUser.id }}
                   className="inbox-row"

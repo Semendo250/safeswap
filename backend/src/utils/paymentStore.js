@@ -1,5 +1,3 @@
-// Payment records, stored in MongoDB (see models/Payment.js).
-// Every function is async, so callers must `await` them.
 const Payment = require('../models/Payment');
 
 function toRecord(doc) {
@@ -8,6 +6,8 @@ function toRecord(doc) {
     checkoutRequestId: doc.checkoutRequestId,
     listingId: doc.listing.toString(),
     buyerId: doc.buyer.toString(),
+    amount: doc.amount,
+    mpesaReceipt: doc.mpesaReceipt,
     status: doc.status,
     createdAt: doc.createdAt,
   };
@@ -25,8 +25,6 @@ async function createPending(checkoutRequestId, { listingId, buyerId, amount, ph
   return toRecord(doc);
 }
 
-// Moves a payment out of 'pending' exactly once. Returns null if it was not pending,
-// so a repeated or replayed M-Pesa callback can't change a payment that already settled.
 async function settlePending(checkoutRequestId, status, extra = {}) {
   const update = { status };
   if (extra.mpesaReceipt) update.mpesaReceipt = extra.mpesaReceipt;
@@ -51,13 +49,21 @@ async function getLatestByListingId(listingId) {
   return toRecord(await Payment.findOne({ listing: listingId }).sort({ createdAt: -1 }).lean());
 }
 
-// The payment currently holding money for this listing, if any
 async function getHeldByListingId(listingId) {
   return toRecord(await Payment.findOne({ listing: listingId, status: 'held' }).lean());
 }
 
-// Releases the held payment for a listing. It is one atomic step (held -> released),
-// so two quick taps on "Confirm meetup" can't release it twice.
+async function getActiveByListingId(listingId) {
+  return toRecord(await Payment.findOne({ listing: listingId, status: { $in: ['pending', 'held'] } }).lean());
+}
+
+async function failStalePending(listingId, olderThanMs) {
+  await Payment.updateMany(
+    { listing: listingId, status: 'pending', createdAt: { $lt: new Date(Date.now() - olderThanMs) } },
+    { status: 'failed' }
+  );
+}
+
 async function releaseByListingId(listingId) {
   const doc = await Payment.findOneAndUpdate(
     { listing: listingId, status: 'held' },
@@ -74,5 +80,7 @@ module.exports = {
   getByCheckoutId,
   getLatestByListingId,
   getHeldByListingId,
+  getActiveByListingId,
+  failStalePending,
   releaseByListingId,
 };

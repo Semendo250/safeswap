@@ -34,6 +34,7 @@ const TYPE_ICON = {
   announcement: '📢',
   dispute_update: '📝',
   new_dispute: '📩',
+  offer_update: '🏷️',
 };
 
 export default function NotificationBell() {
