@@ -10,7 +10,7 @@ async function getAccessToken() {
 
   const res = await axios.get(
     `${BASE_URL}/oauth/v1/generate?grant_type=client_credentials`,
-    { headers: { Authorization: `Basic ${auth}` } }
+    { headers: { Authorization: `Basic ${auth}` }, timeout: 15000 }
   );
 
   return res.data.access_token;
@@ -57,7 +57,7 @@ async function initiateStkPush({ phone, amount, accountReference, transactionDes
   const res = await axios.post(
     `${BASE_URL}/mpesa/stkpush/v1/processrequest`,
     payload,
-    { headers: { Authorization: `Bearer ${accessToken}` } }
+    { headers: { Authorization: `Bearer ${accessToken}` }, timeout: 30000 }
   );
 
   return res.data; // includes CheckoutRequestID, used to match the later callback

@@ -1,4 +1,5 @@
 const Dispute = require('../models/Dispute');
+const Listing = require('../models/Listing');
 const { notify, notifyAdmins } = require('../utils/notify');
 
 const DONE = ['resolved', 'closed'];
@@ -58,10 +59,18 @@ async function submitDispute(req, res) {
       return res.status(429).json({ error: 'You have sent several messages already. Please wait an hour.' });
     }
 
+    let listingRef;
+    const rawListing = String(req.body?.listingId || '').trim();
+    if (isId(rawListing)) {
+      const l = await Listing.findById(rawListing).select('_id').lean();
+      if (l) listingRef = l._id;
+    }
+
     const dispute = await Dispute.createWithRef({
       source: 'in_app',
       subject,
       details,
+      listing: listingRef,
       contactName: req.user.fullName,
       contactInfo: req.user.email,
       user: req.user._id,

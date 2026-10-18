@@ -11,6 +11,7 @@ const CATEGORIES = [
   'dispute',
   'safezone',
   'export',
+  'settings',
 ];
 
 const isId = (v) => typeof v === 'string' && /^[a-f\d]{24}$/i.test(v);

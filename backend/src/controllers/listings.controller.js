@@ -14,6 +14,8 @@ function presentListing(listing, viewer) {
   const ref = obj.seller;
   const sellerId = ref && ref._id ? ref._id.toString() : ref ? String(ref) : null;
   const isPrivileged = viewer && (viewer.role === 'admin' || viewer._id.toString() === sellerId);
+  delete obj.paymentLockUntil;
+  delete obj.paymentLockBy;
   if (!isPrivileged) {
     delete obj.imei;
     delete obj.proofPhoto;

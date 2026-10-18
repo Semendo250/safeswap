@@ -3,6 +3,7 @@ const User = require('../models/User');
 const Report = require('../models/Report');
 const Payment = require('../models/Payment');
 const Dispute = require('../models/Dispute');
+const Offer = require('../models/Offer');
 
 // Kenya is UTC+3 all year (no daylight saving), so "today" for the admin means Nairobi time
 const TZ = '+03:00';
@@ -49,6 +50,7 @@ async function getNeedsAttention(req, res) {
       heldOverThreeDays,
       stuckPending,
       openDisputes,
+      reviewPayments,
     ] = await Promise.all([
       Listing.countDocuments({ status: 'under_review' }),
       Report.countDocuments({ status: 'pending' }),
@@ -63,9 +65,11 @@ async function getNeedsAttention(req, res) {
       Dispute.countDocuments({
         $or: [{ status: 'open' }, { status: 'in_progress', lastMessageFrom: 'student' }],
       }),
+      Payment.countDocuments({ needsReview: true }),
     ]);
 
     res.json({
+      reviewPayments,
       pendingListings,
       openReports,
       pendingVerifications,
@@ -170,4 +174,65 @@ async function getTrends(req, res) {
   }
 }
 
-module.exports = { getNeedsAttention, getMoneyOverview, getTrends };
+// GET /api/admin/offers-stats
+async function getOffersStats(req, res) {
+  try {
+    const since = new Date(Date.now() - 30 * DAY_MS);
+    const agreedExpr = { $ne: [{ $ifNull: ['$acceptedAt', null] }, null] };
+    const neverAccepted = { $eq: [{ $ifNull: ['$acceptedAt', null] }, null] };
+    const count = (cond) => ({ $sum: { $cond: [cond, 1, 0] } });
+
+    const rows = await Offer.aggregate([
+      { $match: { createdAt: { $gte: since } } },
+      {
+        $group: {
+          _id: null,
+          made: { $sum: 1 },
+          agreed: count(agreedExpr),
+          declined: count({ $eq: ['$status', 'declined'] }),
+          paid: count({ $eq: ['$status', 'paid'] }),
+          pending: count({ $eq: ['$status', 'pending'] }),
+          neverAccepted: count({ $and: [{ $eq: ['$status', 'expired'] }, neverAccepted] }),
+          unpaid: count({ $and: [{ $eq: ['$status', 'expired'] }, agreedExpr] }),
+          discountSum: {
+            $sum: {
+              $cond: [
+                { $and: [agreedExpr, { $gt: ['$askingPrice', 0] }] },
+                { $divide: [{ $subtract: ['$askingPrice', '$amount'] }, '$askingPrice'] },
+                0,
+              ],
+            },
+          },
+        },
+      },
+    ]);
+
+    const r = rows[0] || {
+      made: 0,
+      agreed: 0,
+      declined: 0,
+      paid: 0,
+      pending: 0,
+      neverAccepted: 0,
+      unpaid: 0,
+      discountSum: 0,
+    };
+    const decided = r.agreed + r.declined + r.neverAccepted;
+
+    res.json({
+      made: r.made,
+      agreed: r.agreed,
+      declined: r.declined,
+      paid: r.paid,
+      pending: r.pending,
+      unpaid: r.unpaid,
+      acceptRate: decided ? Math.round((r.agreed / decided) * 100) : null,
+      avgDiscount: r.agreed ? Math.round((r.discountSum / r.agreed) * 1000) / 10 : null,
+      conversion: r.agreed ? Math.round((r.paid / r.agreed) * 100) : null,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+module.exports = { getNeedsAttention, getMoneyOverview, getTrends, getOffersStats };

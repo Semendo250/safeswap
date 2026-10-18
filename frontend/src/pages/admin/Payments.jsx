@@ -1,5 +1,12 @@
 import { useEffect, useState } from 'react';
-import { getPayments, updatePaymentStatus, getStalePayments, expireStalePayments } from '../../api/admin.api';
+import {
+  getPayments,
+  updatePaymentStatus,
+  getStalePayments,
+  expireStalePayments,
+  clearPaymentReview,
+} from '../../api/admin.api';
+import OfferHistory from '../../components/admin/OfferHistory';
 import ExportButton from '../../components/admin/ExportButton';
 import {
   PageShell,
@@ -131,8 +138,9 @@ function StatusDialog({ payment, onCancel, onDone }) {
   );
 }
 
-function PaymentCard({ p, onEdit }) {
+function PaymentCard({ p, onEdit, onHistory, onClearReview }) {
   const changed = p.updatedAt && p.updatedAt !== p.createdAt;
+  const bigDiscount = p.discount > 0 && p.askingPrice > 0 && p.discount / p.askingPrice >= 0.4;
 
   return (
     <div className="pay-card">
@@ -144,10 +152,43 @@ function PaymentCard({ p, onEdit }) {
           <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--color-primary)', marginTop: 3 }}>
             {money(p.amount)}
           </div>
+          {p.askingPrice != null && p.discount !== 0 && p.discount != null && (
+            <div style={{ fontSize: 12, color: 'var(--color-muted)', marginTop: 2 }}>
+              Asking {money(p.askingPrice)} ·{' '}
+              {p.discount > 0
+                ? `${money(p.discount)} off (${Math.round((p.discount / p.askingPrice) * 100)}%)`
+                : `${money(-p.discount)} above asking`}{' '}
+              {bigDiscount && <Chip tone="warning">Large discount</Chip>}
+            </div>
+          )}
+          {p.needsReview && (
+            <div
+              style={{
+                marginTop: 8,
+                padding: '8px 10px',
+                borderRadius: 8,
+                background: 'var(--color-warning-bg)',
+                color: 'var(--color-warning)',
+                fontSize: 12,
+              }}
+            >
+              <strong>Needs review.</strong> {p.reviewNote}
+              <div style={{ marginTop: 6 }}>
+                <button type="button" onClick={onClearReview} style={btn('outline')}>
+                  Mark reviewed
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="pay-side">
           <Chip tone={PAYMENT_TONE[p.status] || 'muted'}>{p.status}</Chip>
+          {p.listing && (
+            <button type="button" onClick={onHistory} style={btn('outline')}>
+              Offer history
+            </button>
+          )}
           <button type="button" onClick={onEdit} style={btn('outline')}>
             Change status
           </button>
@@ -185,6 +226,8 @@ export default function Payments() {
   const [search, setSearch] = useState('');
   const debounced = useDebounced(search);
   const [status, setStatus] = useState('all');
+  const [view, setView] = useState('all');
+  const [historyId, setHistoryId] = useState(null);
   const [page, setPage] = useState(1);
   const [reloadKey, setReloadKey] = useState(0);
   const [data, setData] = useState({ payments: [], counts: {}, total: 0, pages: 1 });
@@ -200,7 +243,7 @@ export default function Payments() {
     let cancelled = false;
     setLoading(true);
     setError('');
-    getPayments({ search: debounced, status, page })
+    getPayments({ search: debounced, status, view, page })
       .then((res) => {
         if (!cancelled) setData(res.data);
       })
@@ -213,7 +256,7 @@ export default function Payments() {
     return () => {
       cancelled = true;
     };
-  }, [debounced, status, page, reloadKey]);
+  }, [debounced, status, view, page, reloadKey]);
     async function askCleanUp() {
     setError('');
     setNotice('');
@@ -242,7 +285,23 @@ export default function Payments() {
     }
   }
 
+  function askClearReview(p) {
+    setDialog({
+      title: 'Mark as reviewed?',
+      message: p.reviewNote || 'This removes the needs-review flag.',
+      confirmLabel: 'Mark reviewed',
+      askReason: 'required',
+      onConfirm: async (reason) => {
+        await clearPaymentReview(p._id, reason);
+        setDialog(null);
+        setNotice('Marked as reviewed.');
+        setReloadKey((k) => k + 1);
+      },
+    });
+  }
+
   const counts = data.counts || {};
+  const extra = data.extra || {};
   const allCount = Object.values(counts).reduce((a, b) => a + b, 0);
   const tabs = [['all', `All (${allCount})`], ...STATUSES.map((s) => [s, `${cap(s)} (${counts[s] || 0})`])];
 
@@ -323,6 +382,22 @@ export default function Payments() {
         />
       </div>
 
+      <div className="pay-filter">
+        <span className="pay-filter-label">Show</span>
+        <Tabs
+          options={[
+            ['all', 'Everything'],
+            ['review', `Needs review (${extra.review || 0})`],
+            ['stuck', `Stuck (${extra.stuck || 0})`],
+          ]}
+          value={view}
+          onChange={(v) => {
+            setView(v);
+            setPage(1);
+          }}
+        />
+      </div>
+
       <div className="pay-export">
         <span className="pay-export-label">Export</span>
         <div>
@@ -353,7 +428,13 @@ export default function Payments() {
       {!loading && !error && data.payments.length === 0 && <p style={{ color: 'var(--color-muted)' }}>No payments match.</p>}
 
       {data.payments.map((p) => (
-        <PaymentCard key={p._id} p={p} onEdit={() => setEditing(p)} />
+        <PaymentCard
+          key={p._id}
+          p={p}
+          onEdit={() => setEditing(p)}
+          onHistory={() => p.listing && setHistoryId(p.listing._id)}
+          onClearReview={() => askClearReview(p)}
+        />
       ))}
 
       <Pager page={page} pages={data.pages} onPage={setPage} />
@@ -370,6 +451,7 @@ export default function Payments() {
         />
       )}
             {dialog && <ConfirmDialog {...dialog} onCancel={() => setDialog(null)} />}
+      {historyId && <OfferHistory listingId={historyId} onClose={() => setHistoryId(null)} />}
     </PageShell>
   );
 }

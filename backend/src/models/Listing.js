@@ -30,6 +30,9 @@ const listingSchema = new mongoose.Schema(
     // Handover
     meetupSafeZone: { type: String },
     meetupConfirmed: { type: Boolean, default: false },
+
+    paymentLockUntil: { type: Date },
+    paymentLockBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   },
   { timestamps: true }
 );

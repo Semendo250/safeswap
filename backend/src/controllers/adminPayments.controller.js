@@ -63,4 +63,35 @@ async function expireStale(req, res) {
   }
 }
 
-module.exports = { getStaleCount, expireStale };
+// PATCH /api/admin/payments/:id/review/clear  { reason }
+async function clearReview(req, res) {
+  try {
+    const id = String(req.params.id);
+    if (!/^[a-f\d]{24}$/i.test(id)) return res.status(400).json({ error: 'Invalid payment id' });
+    const reason = String(req.body?.reason || '').trim().slice(0, 300);
+    if (reason.length < 3) return res.status(400).json({ error: 'Please give a reason' });
+
+    const p = await Payment.findOneAndUpdate({ _id: id, needsReview: true }, { needsReview: false }, { new: true });
+    if (!p) return res.status(404).json({ error: 'This payment is not flagged for review' });
+
+    try {
+      await AuditLog.create({
+        admin: req.user._id,
+        adminName: req.user.fullName,
+        action: 'payment.review',
+        targetType: 'payment',
+        targetId: String(p._id),
+        summary: `Marked payment ${p.checkoutRequestId} as reviewed`,
+        reason,
+      });
+    } catch (err) {
+      console.error('Audit log failed:', err.message);
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+module.exports = { getStaleCount, expireStale, clearReview };

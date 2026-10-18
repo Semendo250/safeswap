@@ -1,5 +1,6 @@
 const Announcement = require('../models/Announcement');
 const Dispute = require('../models/Dispute');
+const Listing = require('../models/Listing');
 const Notification = require('../models/Notification');
 const User = require('../models/User');
 const AuditLog = require('../models/AuditLog');
@@ -173,6 +174,7 @@ async function deleteAnnouncement(req, res) {
 const DISPUTE_POPULATE = [
   { path: 'assignedTo', select: 'fullName' },
   { path: 'user', select: 'fullName email' },
+  { path: 'listing', select: 'title price status' },
 ];
 
 async function loadDispute(id) {
@@ -246,6 +248,17 @@ async function createDispute(req, res) {
       if (!user) return res.status(404).json({ error: 'No user has that email. Clear the field or fix it.' });
     }
 
+    let listingId = null;
+    const listingText = String(b.listingRef || '').trim();
+    if (listingText) {
+      const m = listingText.match(/[a-f\d]{24}/i);
+      const found = m ? await Listing.findById(m[0]).select('_id').lean() : null;
+      if (!found) {
+        return res.status(404).json({ error: 'No listing matches that link or ID. Clear the field or fix it.' });
+      }
+      listingId = found._id;
+    }
+
     let assignedTo = null;
     if (b.assignedTo) {
       if (!isId(b.assignedTo)) return res.status(400).json({ error: 'Invalid assignee' });
@@ -262,6 +275,7 @@ async function createDispute(req, res) {
       contactInfo: contactInfo || undefined,
       user: user ? user._id : undefined,
       priority,
+      listing: listingId || undefined,
       assignedTo: assignedTo || undefined,
       createdBy: req.user._id,
     });

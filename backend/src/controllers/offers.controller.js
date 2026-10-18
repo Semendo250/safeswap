@@ -3,7 +3,8 @@ const Message = require('../models/Message');
 const Listing = require('../models/Listing');
 const paymentStore = require('../utils/paymentStore');
 const { notify } = require('../utils/notify');
-const { OFFER_TTL_MS, OPEN, parsePrice, kes, roomFor, sweepOffers } = require('../utils/offers');
+const { OPEN, parsePrice, kes, roomFor, sweepOffers } = require('../utils/offers');
+const { getOfferTtlMs } = require('../utils/settings');
 
 const isId = (v) => typeof v === 'string' && /^[a-f\d]{24}$/i.test(v);
 
@@ -57,7 +58,7 @@ async function placeOffer({ req, listing, buyerId, proposerId, amount, kind }) {
     amount,
     askingPrice: listing.price,
     status: 'pending',
-    expiresAt: new Date(Date.now() + OFFER_TTL_MS),
+    expiresAt: new Date(Date.now() + (await getOfferTtlMs())),
   });
 
   const message = await Message.create({
@@ -170,7 +171,7 @@ async function acceptOffer(req, res) {
     const now = new Date();
     const updated = await Offer.findOneAndUpdate(
       { _id: offer._id, status: 'pending' },
-      { status: 'accepted', acceptedAt: now, expiresAt: new Date(now.getTime() + OFFER_TTL_MS) },
+      { status: 'accepted', acceptedAt: now, expiresAt: new Date(now.getTime() + (await getOfferTtlMs())) },
       { new: true }
     );
     if (!updated) return res.status(409).json({ error: 'This offer is no longer open' });

@@ -4,6 +4,7 @@ const BlacklistIMEI = require('../models/BlacklistIMEI');
 const Report = require('../models/Report');
 const Message = require('../models/Message');
 const Payment = require('../models/Payment');
+const Offer = require('../models/Offer');
 const AuditLog = require('../models/AuditLog');
 const PasswordResetToken = require('../models/PasswordResetToken');
 const { calculateTrustScore } = require('../utils/trustScore');
@@ -60,19 +61,37 @@ const PAYMENT_POPULATE = [
     populate: { path: 'seller', select: 'fullName email phone' },
   },
   { path: 'buyer', select: 'fullName email phone' },
+  { path: 'offer', select: 'amount askingPrice status proposedBy' },
 ];
 
+function stuckFilter() {
+  return {
+    $or: [
+      { status: 'pending', createdAt: { $lt: new Date(Date.now() - 10 * 60 * 1000) } },
+      { status: 'held', updatedAt: { $lt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000) } },
+    ],
+  };
+}
 function shapePayment(p) {
   const listing = p.listing && typeof p.listing.title === 'string' ? p.listing : null;
   const buyer = p.buyer && p.buyer.fullName ? p.buyer : null;
   const seller = listing && listing.seller && listing.seller.fullName ? listing.seller : null;
+  const offer = p.offer && p.offer.amount != null ? p.offer : null;
   const person = (u) =>
     u ? { _id: u._id, fullName: u.fullName, email: u.email, phone: u.phone || '' } : null;
+  const amount = p.amount != null ? p.amount : listing ? listing.price : null;
+  const asking =
+    p.askingPrice != null ? p.askingPrice : offer ? offer.askingPrice : listing ? listing.price : null;
   return {
     _id: p._id,
     checkoutRequestId: p.checkoutRequestId,
     status: p.status,
-    amount: p.amount != null ? p.amount : listing ? listing.price : null,
+    amount,
+    askingPrice: asking,
+    discount: asking != null && amount != null ? asking - amount : null,
+    offer: offer ? { _id: offer._id, status: offer.status } : null,
+    needsReview: !!p.needsReview,
+    reviewNote: p.reviewNote || '',
     phone: p.phone || '',
     mpesaReceipt: p.mpesaReceipt || '',
     createdAt: p.createdAt,
@@ -308,6 +327,9 @@ async function deleteUser(req, res) {
       }),
       Report.deleteMany({
         $or: [{ reportedBy: user._id }, { listing: { $in: listingIds } }],
+      }),
+      Offer.deleteMany({
+        $or: [{ buyer: user._id }, { seller: user._id }, { listing: { $in: listingIds } }],
       }),
       Listing.deleteMany({ seller: user._id }),
       PasswordResetToken.deleteMany({ email: user.email }),
@@ -607,11 +629,13 @@ async function removeBlacklistImei(req, res) {
 
 async function getPayments(req, res) {
   try {
-    const { status = 'all', search = '' } = req.query;
+    const { status = 'all', search = '', view = 'all' } = req.query;
     const { page, limit, skip } = pageParams(req.query);
 
-    const query = {};
-    if (PAYMENT_STATUSES.includes(status)) query.status = status;
+    const and = [];
+    if (PAYMENT_STATUSES.includes(status)) and.push({ status });
+    if (view === 'review') and.push({ needsReview: true });
+    else if (view === 'stuck') and.push(stuckFilter());
 
     const term = String(search).trim().slice(0, 60);
     if (term) {
@@ -626,10 +650,11 @@ async function getPayments(req, res) {
       ]);
       if (users.length) or.push({ buyer: { $in: users.map((u) => u._id) } });
       if (listings.length) or.push({ listing: { $in: listings.map((l) => l._id) } });
-      query.$or = or;
+      and.push({ $or: or });
     }
+    const query = and.length ? { $and: and } : {};
 
-    const [payments, total, grouped] = await Promise.all([
+    const [payments, total, grouped, reviewCount, stuckCount] = await Promise.all([
       Payment.find(query)
         .sort({ createdAt: -1 })
         .skip(skip)
@@ -638,6 +663,8 @@ async function getPayments(req, res) {
         .lean(),
       Payment.countDocuments(query),
       Payment.aggregate([{ $group: { _id: '$status', count: { $sum: 1 } } }]),
+      Payment.countDocuments({ needsReview: true }),
+      Payment.countDocuments(stuckFilter()),
     ]);
 
     const counts = {};
@@ -648,6 +675,7 @@ async function getPayments(req, res) {
     res.json({
       payments: payments.map(shapePayment),
       counts,
+      extra: { review: reviewCount, stuck: stuckCount },
       total,
       page,
       pages: Math.max(Math.ceil(total / limit), 1),
@@ -694,6 +722,7 @@ async function updatePaymentStatus(req, res) {
     }
 
     payment.status = status;
+    payment.needsReview = false;
     await payment.save();
 
     const listing = await Listing.findById(payment.listing);

@@ -32,6 +32,7 @@ const disputeSchema = new mongoose.Schema(
     contactName: { type: String, trim: true, maxlength: 80 },
     contactInfo: { type: String, trim: true, maxlength: 120 }, // phone or email
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, // linked account, if known
+    listing: { type: mongoose.Schema.Types.ObjectId, ref: 'Listing' }, // item the complaint is about, if known
     status: { type: String, enum: ['open', 'in_progress', 'resolved', 'closed'], default: 'open' },
     priority: { type: String, enum: ['low', 'normal', 'high'], default: 'normal' },
     assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },

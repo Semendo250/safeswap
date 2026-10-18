@@ -10,6 +10,7 @@ const exp = require('../controllers/adminExport.controller');
 const zones = require('../controllers/safeZones.controller');
 const audit = require('../controllers/adminAudit.controller');
 const payAdmin = require('../controllers/adminPayments.controller');
+const offersAdmin = require('../controllers/adminOffers.controller');
 
 router.use(authMiddleware, adminMiddleware); // every admin route requires admin role
 
@@ -43,9 +44,17 @@ router.get('/payments', ctrl.getPayments);
 router.patch('/payments/:id/status', ctrl.updatePaymentStatus);
 router.get('/payments/stale-count', payAdmin.getStaleCount);
 router.post('/payments/expire-stale', payAdmin.expireStale);
+router.patch('/payments/:id/review/clear', payAdmin.clearReview);
+router.get('/offers/listing/:listingId', offersAdmin.getListingOffers);
+router.get('/offers/flags', offersAdmin.getOfferFlags);
+router.get('/offers', offersAdmin.getOffersLog);
+router.get('/offers-stats', stats.getOffersStats);
+router.get('/settings', offersAdmin.getSettings);
+router.patch('/settings/offer-expiry', offersAdmin.setOfferExpiry);
 
 router.get('/export/payments.csv', exp.exportPayments);
 router.get('/export/users.csv', exp.exportUsers);
+router.get('/export/offers.csv', exp.exportOffers);
 
 router.get('/safe-zones', zones.adminList);
 router.post('/safe-zones', zones.adminCreate);

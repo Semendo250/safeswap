@@ -6,6 +6,7 @@ import {
   getNeedsAttention,
   getMoneyOverview,
   getTrends,
+  getOffersStats,
 } from '../../api/admin.api';
 import { PageShell, Tabs, btn, money } from '../../components/admin/AdminUi';
 
@@ -104,6 +105,7 @@ export default function Dashboard() {
   const [overview, setOverview] = useState(null);
   const [attention, setAttention] = useState(null);
   const [moneyData, setMoneyData] = useState(null);
+  const [offersStats, setOffersStats] = useState(null);
   const [errors, setErrors] = useState({});
   const [loaded, setLoaded] = useState(false);
   const [updatedAt, setUpdatedAt] = useState(null);
@@ -119,16 +121,18 @@ export default function Dashboard() {
     // Wait until we know who is logged in before asking for admin data
     if (authLoading || !user) return;
     let cancelled = false;
-    Promise.allSettled([getOverview(), getNeedsAttention(), getMoneyOverview()]).then(
-      ([o, a, m]) => {
+    Promise.allSettled([getOverview(), getNeedsAttention(), getMoneyOverview(), getOffersStats()]).then(
+      ([o, a, m, f]) => {
         if (cancelled) return;
         setOverview(o.status === 'fulfilled' ? o.value.data : null);
         setAttention(a.status === 'fulfilled' ? a.value.data : null);
         setMoneyData(m.status === 'fulfilled' ? m.value.data : null);
+        setOffersStats(f.status === 'fulfilled' ? f.value.data : null);
         setErrors({
           overview: o.status === 'rejected' ? loadError(o.reason) : '',
           attention: a.status === 'rejected' ? loadError(a.reason) : '',
           money: m.status === 'rejected' ? loadError(m.reason) : '',
+          offers: f.status === 'rejected' ? loadError(f.reason) : '',
         });
         setUpdatedAt(new Date());
         setLoaded(true);
@@ -189,6 +193,7 @@ export default function Dashboard() {
         { icon: '💳', label: 'Payments held over 3 days', count: attention.heldOverThreeDays, to: '/admin/payments' },
         { icon: '⏳', label: 'Payments pending over 30 min', count: attention.stuckPending, to: '/admin/payments' },
         { icon: '💬', label: 'Complaints waiting for a reply', count: attention.openDisputes, to: '/admin/disputes' },
+        { icon: '🔎', label: 'Payments needing review', count: attention.reviewPayments, to: '/admin/payments' },
       ]
     : [];
   const urgent = attentionItems.filter((i) => i.count > 0);
@@ -398,6 +403,32 @@ export default function Dashboard() {
           ))}
         </div>
       )}
+
+      <SectionTitle hint="Last 30 days">Offers</SectionTitle>
+      {errors.offers ? (
+        <SectionError>{errors.offers}</SectionError>
+      ) : offersStats ? (
+        <div className="dash-grid dash-grid-stats">
+          {[
+            ['🏷️', 'Offers made', offersStats.made],
+            ['🤝', 'Prices agreed', offersStats.agreed],
+            ['📈', 'Acceptance rate', offersStats.acceptRate == null ? '-' : `${offersStats.acceptRate}%`],
+            ['✂️', 'Average discount', offersStats.avgDiscount == null ? '-' : `${offersStats.avgDiscount}%`],
+            ['💳', 'Agreed and paid', offersStats.paid],
+            ['⌛', 'Agreed, expired unpaid', offersStats.unpaid],
+          ].map(([icon, text, value]) => (
+            <div key={text} className="dash-card">
+              <p className="dash-stat-label">
+                <span>{icon}</span>
+                <span>{text}</span>
+              </p>
+              <p className="dash-stat-value" style={{ color: 'var(--color-primary)' }}>
+                {value}
+              </p>
+            </div>
+          ))}
+        </div>
+      ) : null}
 
       {/* Trends */}
       <SectionTitle>Trends</SectionTitle>

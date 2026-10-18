@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getAuditLog, getAdminList } from '../../api/admin.api';
+import OffersLog from '../../components/admin/OffersLog';
+import { Tabs } from '../../components/admin/AdminUi';
 import {
   PageShell,
   Chip,
@@ -38,6 +40,9 @@ const ACTION_LABEL = {
   'safezone.delete': 'Meetup spot deleted',
   'export.payments': 'Payments exported',
   'export.users': 'Users exported',
+  'export.offers': 'Offers exported',
+  'payment.review': 'Payment marked reviewed',
+  'settings.offer_expiry': 'Offer expiry changed',
 };
 
 const CATEGORIES = [
@@ -51,6 +56,7 @@ const CATEGORIES = [
   ['dispute', 'Complaints'],
   ['safezone', 'Meetup spots'],
   ['export', 'CSV exports'],
+  ['settings', 'Settings'],
 ];
 
 // A readable label for an action code. Unknown codes are tidied up instead of shown raw.
@@ -102,7 +108,7 @@ function MetaItem({ label, children }) {
   );
 }
 
-export default function Activity() {
+function AdminActions() {
   const [search, setSearch] = useState('');
   const debounced = useDebounced(search);
   const [category, setCategory] = useState('all');
@@ -315,5 +321,24 @@ export default function Activity() {
 
       <Pager page={page} pages={data.pages} onPage={setPage} />
     </PageShell>
+  );
+}
+export default function Activity() {
+  const [tab, setTab] = useState('actions');
+
+  return (
+    <>
+      <div className="admin-page-shell" style={{ margin: 0, padding: '20px 16px 0', boxSizing: 'border-box' }}>
+        <Tabs
+          options={[
+            ['actions', 'Admin actions'],
+            ['offers', 'Offers'],
+          ]}
+          value={tab}
+          onChange={setTab}
+        />
+      </div>
+      {tab === 'actions' ? <AdminActions /> : <OffersLog />}
+    </>
   );
 }

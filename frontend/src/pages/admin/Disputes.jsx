@@ -21,6 +21,8 @@ import {
   useDebounced,
 } from '../../components/admin/AdminUi';
 
+import OfferHistory from '../../components/admin/OfferHistory';
+
 const STATUS_TABS = [
   ['all', 'All'],
   ['open', 'Open'],
@@ -99,6 +101,7 @@ function CreateModal({ admins, onClose, onCreated }) {
     contactName: '',
     contactInfo: '',
     userEmail: '',
+    listingRef: '',
     priority: 'normal',
     assignedTo: '',
   });
@@ -138,6 +141,7 @@ function CreateModal({ admins, onClose, onCreated }) {
         <input placeholder="Their name (optional)" value={form.contactName} maxLength={80} onChange={set('contactName')} style={{ marginBottom: 8 }} />
         <input placeholder="Phone or email they used (optional)" value={form.contactInfo} maxLength={120} onChange={set('contactInfo')} style={{ marginBottom: 8 }} />
         <input placeholder="SafeSwap account email, to link them (optional)" value={form.userEmail} onChange={set('userEmail')} style={{ marginBottom: 8 }} />
+        <input placeholder="Listing link or ID, to show its offer history (optional)" value={form.listingRef} onChange={set('listingRef')} style={{ marginBottom: 8 }} />
 
         <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
           <div style={{ flex: 1 }}>
@@ -186,6 +190,7 @@ function DisputeCard({ d, admins, onStatus, onAssign, onPriority, onNote, onRepl
   const [busy, setBusy] = useState(false);
   const [showNotes, setShowNotes] = useState(false);
   const [showThread, setShowThread] = useState(false);
+  const [showOffers, setShowOffers] = useState(false);
   const [reply, setReply] = useState('');
   const [replying, setReplying] = useState(false);
   const [replyError, setReplyError] = useState('');
@@ -194,7 +199,7 @@ function DisputeCard({ d, admins, onStatus, onAssign, onPriority, onNote, onRepl
 
   const isDone = d.status === 'resolved' || d.status === 'closed';
   const needsReply = !isDone && d.user && d.lastMessageFrom === 'student';
-  const hasMeta = d.contactName || d.contactInfo || d.user || d.resolution || d.resolvedAt;
+  const hasMeta = d.contactName || d.contactInfo || d.user || d.listing || d.resolution || d.resolvedAt;
 
   async function submitNote() {
     const text = note.trim();
@@ -218,6 +223,7 @@ function DisputeCard({ d, admins, onStatus, onAssign, onPriority, onNote, onRepl
 
   return (
     <div className="dsp-card">
+      {showOffers && d.listing && <OfferHistory listingId={d.listing._id} onClose={() => setShowOffers(false)} />}
       <div className="dsp-head">
         <div className="dsp-chips">
           <strong className="dsp-ref">{d.ref}</strong>
@@ -244,6 +250,18 @@ function DisputeCard({ d, admins, onStatus, onAssign, onPriority, onNote, onRepl
           {d.user && (
             <MetaItem label="Account">
               {d.user.fullName} ({d.user.email})
+            </MetaItem>
+          )}
+          {d.listing && (
+            <MetaItem label="Listing">
+              {d.listing.title} (KES {Number(d.listing.price).toLocaleString()})
+              <button
+                type="button"
+                onClick={() => setShowOffers(true)}
+                style={{ ...btn('outline'), marginLeft: 8, padding: '1px 8px', fontSize: 11 }}
+              >
+                Offer history
+              </button>
             </MetaItem>
           )}
           {d.resolvedAt && <MetaItem label="Closed">{fmtDate(d.resolvedAt)}</MetaItem>}

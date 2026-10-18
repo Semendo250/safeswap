@@ -104,6 +104,14 @@ export function expireStalePayments(hours = 24) {
   return api.post('/admin/payments/expire-stale', { hours });
 }
 
+export function clearPaymentReview(id, reason) {
+  return api.patch(`/admin/payments/${id}/review/clear`, { reason });
+}
+
+export function getListingOffers(listingId) {
+  return api.get(`/admin/offers/listing/${listingId}`);
+}
+
 // ----- CSV export (kind is 'payments' or 'users') -----
 export function downloadExport(kind, params) {
   return api.get(`/admin/export/${kind}.csv`, { params, responseType: 'blob' });
@@ -167,6 +175,27 @@ export function replyToDispute(id, text) {
 
 export function messageUser(id, payload) {
   return api.post(`/admin/users/${id}/message`, payload);
+}
+
+// ----- offers -----
+export function getOffersStats() {
+  return api.get('/admin/offers-stats');
+}
+
+export function getOffersLog(params) {
+  return api.get('/admin/offers', { params });
+}
+
+export function getOfferFlags() {
+  return api.get('/admin/offers/flags');
+}
+
+export function getSettings() {
+  return api.get('/admin/settings');
+}
+
+export function setOfferExpiry(hours) {
+  return api.patch('/admin/settings/offer-expiry', { hours });
 }
 
 // ----- activity log -----

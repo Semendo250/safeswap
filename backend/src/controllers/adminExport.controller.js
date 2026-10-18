@@ -1,6 +1,7 @@
 const User = require('../models/User');
 const Listing = require('../models/Listing');
 const Payment = require('../models/Payment');
+const Offer = require('../models/Offer');
 const AuditLog = require('../models/AuditLog');
 const { normalizeKenyanPhone } = require('../utils/phone');
 
@@ -242,4 +243,87 @@ async function exportUsers(req, res) {
   }
 }
 
-module.exports = { exportPayments, exportUsers };
+const OFFER_STATUSES = ['pending', 'accepted', 'declined', 'replaced', 'expired', 'closed', 'paid'];
+
+// GET /api/admin/export/offers.csv?status=&from=YYYY-MM-DD&to=YYYY-MM-DD
+async function exportOffers(req, res) {
+  try {
+    const { status = 'all', from = '', to = '' } = req.query;
+    const query = {};
+    if (OFFER_STATUSES.includes(status)) query.status = status;
+
+    const start = dayStart(from);
+    const end = dayEnd(to);
+    if (from && !start) return res.status(400).json({ error: 'Invalid start date' });
+    if (to && !end) return res.status(400).json({ error: 'Invalid end date' });
+    if (start || end) {
+      query.createdAt = {};
+      if (start) query.createdAt.$gte = start;
+      if (end) query.createdAt.$lte = end;
+    }
+
+    const total = await Offer.countDocuments(query);
+    if (total > MAX_ROWS) {
+      return res.status(400).json({
+        error: `That is ${total} offers, more than the ${MAX_ROWS} limit. Narrow the dates or pick a status.`,
+      });
+    }
+
+    const offers = await Offer.find(query)
+      .sort({ createdAt: -1 })
+      .populate([
+        { path: 'listing', select: 'title' },
+        { path: 'buyer', select: 'fullName email' },
+        { path: 'seller', select: 'fullName email' },
+        { path: 'proposedBy', select: 'fullName' },
+      ])
+      .lean();
+
+    const headers = [
+      'Date (EAT)',
+      'Listing',
+      'Buyer',
+      'Buyer email',
+      'Seller',
+      'Seller email',
+      'Proposed by',
+      'Offer (KES)',
+      'Asking (KES)',
+      'Discount %',
+      'Status',
+      'Agreed (EAT)',
+    ];
+
+    const rows = offers.map((o) => {
+      const discount =
+        o.askingPrice > 0 ? Math.round(((o.askingPrice - o.amount) / o.askingPrice) * 1000) / 10 : '';
+      return [
+        eat(o.createdAt),
+        o.listing ? o.listing.title : 'Deleted listing',
+        o.buyer ? o.buyer.fullName : 'Deleted user',
+        o.buyer ? o.buyer.email : '',
+        o.seller ? o.seller.fullName : 'Deleted user',
+        o.seller ? o.seller.email : '',
+        o.proposedBy ? o.proposedBy.fullName : 'Deleted user',
+        o.amount,
+        o.askingPrice,
+        discount,
+        o.status,
+        eat(o.acceptedAt),
+      ];
+    });
+
+    await logAction(req, 'export.offers', `Exported ${rows.length} offers to CSV`, {
+      rows: rows.length,
+      status,
+      from: from || null,
+      to: to || null,
+    });
+
+    sendCsv(res, 'safeswap-offers.csv', headers, rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+module.exports = { exportPayments, exportUsers, exportOffers };

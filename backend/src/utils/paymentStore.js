@@ -13,12 +13,14 @@ function toRecord(doc) {
   };
 }
 
-async function createPending(checkoutRequestId, { listingId, buyerId, amount, phone }) {
+async function createPending(checkoutRequestId, { listingId, buyerId, amount, phone, askingPrice, offerId }) {
   const doc = await Payment.create({
     checkoutRequestId,
     listing: listingId,
     buyer: buyerId,
     amount: amount !== undefined && amount !== null ? Number(amount) : undefined,
+    askingPrice: askingPrice !== undefined && askingPrice !== null ? Number(askingPrice) : undefined,
+    offer: offerId || undefined,
     phone: phone ? String(phone).trim() : undefined,
     status: 'pending',
   });
@@ -28,11 +30,22 @@ async function createPending(checkoutRequestId, { listingId, buyerId, amount, ph
 async function settlePending(checkoutRequestId, status, extra = {}) {
   const update = { status };
   if (extra.mpesaReceipt) update.mpesaReceipt = extra.mpesaReceipt;
+  if (extra.reviewNote) {
+    update.needsReview = true;
+    update.reviewNote = extra.reviewNote;
+  }
   const doc = await Payment.findOneAndUpdate(
     { checkoutRequestId, status: 'pending' },
     update,
     { new: true }
   );
+  return toRecord(doc);
+}
+
+async function flagReview(checkoutRequestId, note, extra = {}) {
+  const update = { needsReview: true, reviewNote: String(note || '').slice(0, 300) };
+  if (extra.mpesaReceipt) update.mpesaReceipt = extra.mpesaReceipt;
+  const doc = await Payment.findOneAndUpdate({ checkoutRequestId }, update, { new: true });
   return toRecord(doc);
 }
 
@@ -76,6 +89,7 @@ async function releaseByListingId(listingId) {
 module.exports = {
   createPending,
   settlePending,
+  flagReview,
   updateStatusByCheckoutId,
   getByCheckoutId,
   getLatestByListingId,

@@ -1,26 +1,41 @@
 import { useContext, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { submitDispute } from '../api/disputes.api';
 
 export default function ComplaintForm() {
   const { user } = useContext(AuthContext);
+  const [searchParams] = useSearchParams();
   const [subject, setSubject] = useState('');
   const [details, setDetails] = useState('');
+  const [listingRef, setListingRef] = useState(searchParams.get('listing') || '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [sent, setSent] = useState(null); // { ref, id }
+  const [sent, setSent] = useState(null);
 
   async function submit(e) {
     e.preventDefault();
     if (busy) return;
+
+    let listingId = '';
+    const ref = listingRef.trim();
+    if (ref) {
+      const m = ref.match(/[a-f\d]{24}/i);
+      if (!m) {
+        setError("That listing link or ID isn't valid. Clear the field or paste the link from the listing page.");
+        return;
+      }
+      listingId = m[0];
+    }
+
     setBusy(true);
     setError('');
     try {
-      const res = await submitDispute(subject.trim(), details.trim());
+      const res = await submitDispute(subject.trim(), details.trim(), listingId);
       setSent({ ref: res.data.ref, id: res.data.id });
       setSubject('');
       setDetails('');
+      setListingRef('');
     } catch (err) {
       if (!err.response) setError('Network error. Check your connection and try again.');
       else setError(err.response.data?.error || 'Could not send your message. Try again.');
@@ -74,6 +89,12 @@ export default function ComplaintForm() {
             value={subject}
             maxLength={120}
             onChange={(e) => setSubject(e.target.value)}
+            style={{ marginBottom: 8 }}
+          />
+          <input
+            placeholder="Listing link or ID (optional, helps us check the price you agreed)"
+            value={listingRef}
+            onChange={(e) => setListingRef(e.target.value)}
             style={{ marginBottom: 8 }}
           />
           <textarea

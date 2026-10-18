@@ -6,6 +6,7 @@ const { notify, notifyAdmins } = require('../utils/notify');
 const { getAgreedOffer, agreedAmount, parsePrice, onPaymentHeld } = require('../utils/offers');
 
 const STALE_PENDING_MS = 10 * 60 * 1000;
+const PAYMENT_LOCK_MS = 60 * 1000;
 
 function callbackTokenIsValid(provided) {
   const secret = process.env.MPESA_CALLBACK_SECRET;
@@ -22,13 +23,16 @@ function callbackTokenIsValid(provided) {
   const b = Buffer.from(secret);
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
-
 // POST /api/payments/stk-push
 async function initiatePayment(req, res) {
+  let lockedListingId = null;
   try {
     const { listingId, phone } = req.body;
     if (!listingId || !phone) {
       return res.status(400).json({ error: 'listingId and phone are required' });
+    }
+    if (!/^[a-f\d]{24}$/i.test(String(listingId))) {
+      return res.status(400).json({ error: 'Invalid listing' });
     }
 
     const listing = await Listing.findById(listingId);
@@ -40,6 +44,28 @@ async function initiatePayment(req, res) {
     if (listing.status !== 'active') {
       return res.status(400).json({ error: 'This listing is no longer available' });
     }
+
+    const now = new Date();
+    const locked = await Listing.findOneAndUpdate(
+      {
+        _id: listing._id,
+        status: 'active',
+        $or: [
+          { paymentLockUntil: { $exists: false } },
+          { paymentLockUntil: null },
+          { paymentLockUntil: { $lt: now } },
+        ],
+      },
+      {
+        paymentLockUntil: new Date(now.getTime() + PAYMENT_LOCK_MS),
+        paymentLockBy: req.user._id,
+      },
+      { new: true }
+    );
+    if (!locked) {
+      return res.status(409).json({ error: 'A payment for this item is already in progress' });
+    }
+    lockedListingId = listing._id;
 
     const listingKey = listing._id.toString();
     await paymentStore.failStalePending(listingKey, STALE_PENDING_MS);
@@ -67,6 +93,8 @@ async function initiatePayment(req, res) {
       buyerId,
       amount,
       phone,
+      askingPrice: listing.price,
+      offerId: agreed ? agreed._id.toString() : undefined,
     });
 
     res.json({
@@ -77,6 +105,17 @@ async function initiatePayment(req, res) {
   } catch (err) {
     const safaricomError = err.response?.data;
     res.status(500).json({ error: safaricomError || err.message });
+  } finally {
+    if (lockedListingId) {
+      try {
+        await Listing.updateOne(
+          { _id: lockedListingId, paymentLockBy: req.user._id },
+          { $unset: { paymentLockUntil: 1, paymentLockBy: 1 } }
+        );
+      } catch (e) {
+        console.error('Could not release payment lock:', e.message);
+      }
+    }
   }
 }
 
@@ -107,6 +146,7 @@ async function handleCallback(req, res) {
     }
 
     if (ResultCode === 0 && existing.status === 'failed') {
+      await paymentStore.flagReview(CheckoutRequestID, 'Paid after it was marked failed', { mpesaReceipt });
       await notifyAdmins({
         type: 'payment_status',
         title: 'Late payment needs review',
@@ -116,6 +156,7 @@ async function handleCallback(req, res) {
     }
 
     let newStatus = ResultCode === 0 ? 'held' : 'failed';
+    let reviewNote;
     if (
       newStatus === 'held' &&
       paidAmount !== undefined &&
@@ -123,6 +164,7 @@ async function handleCallback(req, res) {
       paidAmount !== Number(existing.amount)
     ) {
       newStatus = 'failed';
+      reviewNote = `Amount mismatch: expected KES ${existing.amount}, received KES ${paidAmount}`;
       console.error(`Payment amount mismatch for ${CheckoutRequestID}: expected ${existing.amount}, got ${paidAmount}`);
       await notifyAdmins({
         type: 'payment_status',
@@ -132,7 +174,7 @@ async function handleCallback(req, res) {
       });
     }
 
-    const result = await paymentStore.settlePending(CheckoutRequestID, newStatus, { mpesaReceipt });
+    const result = await paymentStore.settlePending(CheckoutRequestID, newStatus, { mpesaReceipt, reviewNote });
 
     if (result) {
       const listing = await Listing.findById(result.listingId).select('title seller');

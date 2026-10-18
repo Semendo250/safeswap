@@ -1,6 +1,8 @@
 const Listing = require('../models/Listing');
 const Report = require('../models/Report');
 const User = require('../models/User');
+const Offer = require('../models/Offer');
+const mongoose = require('mongoose');
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const RAPID_MEDIUM = 3; // listings posted within 24 hours
@@ -24,7 +26,7 @@ async function getRiskForListings(listings) {
   const imeis = [...new Set(listings.filter((l) => l.imei).map((l) => l.imei))];
   const earliest = Math.min(...listings.map((l) => new Date(l.createdAt).getTime())) - DAY_MS;
 
-  const [sameImei, sellerListings, reportRows, sellers] = await Promise.all([
+  const [sameImei, sellerListings, reportRows, sellers, deepRows] = await Promise.all([
     imeis.length ? Listing.find({ imei: { $in: imeis } }).select('imei seller').lean() : [],
     Listing.find({ seller: { $in: sellerIds }, createdAt: { $gte: new Date(earliest) } })
       .select('seller createdAt')
@@ -34,6 +36,17 @@ async function getRiskForListings(listings) {
       { $group: { _id: '$listing', count: { $sum: 1 } } },
     ]),
     User.find({ _id: { $in: sellerIds } }).select('reportCount').lean(),
+    Offer.aggregate([
+      {
+        $match: {
+          seller: { $in: sellerIds.map((s) => new mongoose.Types.ObjectId(s)) },
+          createdAt: { $gte: new Date(Date.now() - 60 * DAY_MS) },
+          acceptedAt: { $exists: true },
+        },
+      },
+      { $match: { $expr: { $lte: ['$amount', { $multiply: ['$askingPrice', 0.6] }] } } },
+      { $group: { _id: '$seller', count: { $sum: 1 } } },
+    ]),
   ]);
 
   const imeiMap = new Map();
@@ -51,6 +64,7 @@ async function getRiskForListings(listings) {
 
   const reportMap = new Map(reportRows.map((r) => [String(r._id), r.count]));
   const sellerReports = new Map(sellers.map((u) => [String(u._id), u.reportCount || 0]));
+  const deepMap = new Map(deepRows.map((r) => [String(r._id), r.count]));
 
   listings.forEach((l) => {
     const signals = [];
@@ -99,6 +113,15 @@ async function getRiskForListings(listings) {
         code: 'seller_reports',
         severity: 'medium',
         label: `Seller has ${sellerTotal} reports against them`,
+      });
+    }
+
+    const deep = sid ? deepMap.get(sid) || 0 : 0;
+    if (deep >= 2) {
+      signals.push({
+        code: 'deep_discounts',
+        severity: deep >= 4 ? 'high' : 'medium',
+        label: `Seller agreed ${deep} offers 40% or more below asking in 60 days`,
       });
     }
 
