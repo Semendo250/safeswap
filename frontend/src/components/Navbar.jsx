@@ -52,6 +52,12 @@ const ICON_PATHS = {
       <path d="M2 10h20" />
     </>
   ),
+  offers: (
+    <>
+      <path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
+      <path d="M7 7h.01" />
+    </>
+  ),
   block: (
     <>
       <circle cx="12" cy="12" r="10" />
@@ -118,6 +124,7 @@ const ADMIN_LINKS = [
   { to: '/admin/listings', label: 'All listings', icon: 'listings' },
   { to: '/admin/flagged', label: 'Flagged queue', icon: 'flag' },
   { to: '/admin/payments', label: 'Payments', icon: 'payments' },
+  { to: '/admin/offers', label: 'Offers', icon: 'offers' },
   { to: '/admin/blacklist', label: 'IMEI blacklist', icon: 'block' },
   { to: '/admin/disputes', label: 'Complaints', icon: 'complaints' },
   { to: '/admin/broadcast', label: 'Broadcast', icon: 'broadcast' },
@@ -435,7 +442,6 @@ export default function Navbar() {
                     <Link to="/create-listing" className={linkClass('/create-listing')}>Create listing</Link>
                     {isAdmin && <Link to="/admin" className={linkClass('/admin', true)}>Admin</Link>}
                     <Link to="/profile" className={linkClass('/profile')}>Profile</Link>
-                    <Link to="/my-complaints" className={linkClass('/my-complaints', true)}>My complaints</Link>
                     <Link to="/my-complaints" className={linkClass('/my-complaints', true)}>My complaints</Link>
                     <button
                       onClick={askLogout}

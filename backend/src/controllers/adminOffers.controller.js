@@ -74,6 +74,7 @@ async function getListingOffers(req, res) {
 }
 
 // GET /api/admin/offers?status=&search=&page=
+// status can be any offer status, or: agreed (was ever accepted) / unpaid (agreed, then expired without payment)
 async function getOffersLog(req, res) {
   try {
     const { status = 'all', search = '' } = req.query;
@@ -81,8 +82,24 @@ async function getOffersLog(req, res) {
     const limit = 20;
     const skip = (page - 1) * limit;
 
+    const agreedFilter = { acceptedAt: { $exists: true, $ne: null } };
+
+    // Counts for the filter pills (not affected by the search box)
+    const [grouped, agreedCount, unpaidCount] = await Promise.all([
+      Offer.aggregate([{ $group: { _id: '$status', count: { $sum: 1 } } }]),
+      Offer.countDocuments(agreedFilter),
+      Offer.countDocuments({ status: 'expired', ...agreedFilter }),
+    ]);
+    const counts = { all: 0, agreed: agreedCount, unpaid: unpaidCount };
+    grouped.forEach((g) => {
+      counts[g._id] = g.count;
+      counts.all += g.count;
+    });
+
     const and = [];
-    if (OFFER_STATUSES.includes(status)) and.push({ status });
+    if (status === 'agreed') and.push(agreedFilter);
+    else if (status === 'unpaid') and.push({ status: 'expired', ...agreedFilter });
+    else if (OFFER_STATUSES.includes(status)) and.push({ status });
 
     const term = String(search).trim().slice(0, 60);
     if (term) {
@@ -97,7 +114,7 @@ async function getOffersLog(req, res) {
         or.push({ buyer: { $in: ids } }, { seller: { $in: ids } });
       }
       if (listings.length) or.push({ listing: { $in: listings.map((l) => l._id) } });
-      if (!or.length) return res.json({ offers: [], total: 0, page, pages: 1 });
+      if (!or.length) return res.json({ offers: [], counts, total: 0, page, pages: 1 });
       and.push({ $or: or });
     }
     const query = and.length ? { $and: and } : {};
@@ -115,19 +132,32 @@ async function getOffersLog(req, res) {
       Offer.countDocuments(query),
     ]);
 
+    // The payment (if any) that was made against each offer
+    const offerIds = offers.map((o) => o._id);
+    const payments = offerIds.length
+      ? await Payment.find({ offer: { $in: offerIds } }).select('offer status').lean()
+      : [];
+    const payMap = new Map(payments.map((p) => [String(p.offer), p]));
+
     res.json({
-      offers: offers.map((o) => ({
-        _id: o._id,
-        listing: o.listing ? { _id: o.listing._id, title: o.listing.title } : null,
-        buyerName: o.buyer ? o.buyer.fullName : 'Deleted user',
-        sellerName: o.seller ? o.seller.fullName : 'Deleted user',
-        proposedByName: o.proposedBy ? o.proposedBy.fullName : 'Deleted user',
-        amount: o.amount,
-        askingPrice: o.askingPrice,
-        status: o.status,
-        createdAt: o.createdAt,
-        acceptedAt: o.acceptedAt || null,
-      })),
+      offers: offers.map((o) => {
+        const pay = payMap.get(String(o._id));
+        return {
+          _id: o._id,
+          listing: o.listing ? { _id: o.listing._id, title: o.listing.title } : null,
+          buyerName: o.buyer ? o.buyer.fullName : 'Deleted user',
+          sellerName: o.seller ? o.seller.fullName : 'Deleted user',
+          proposedByName: o.proposedBy ? o.proposedBy.fullName : 'Deleted user',
+          amount: o.amount,
+          askingPrice: o.askingPrice,
+          status: o.status,
+          createdAt: o.createdAt,
+          acceptedAt: o.acceptedAt || null,
+          expiresAt: o.expiresAt || null,
+          payment: pay ? { status: pay.status } : null,
+        };
+      }),
+      counts,
       total,
       page,
       pages: Math.max(Math.ceil(total / limit), 1),
@@ -136,7 +166,6 @@ async function getOffersLog(req, res) {
     res.status(500).json({ error: err.message });
   }
 }
-
 // GET /api/admin/offers/flags
 async function getOfferFlags(req, res) {
   try {

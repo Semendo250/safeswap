@@ -274,6 +274,9 @@ export default function Dashboard() {
         .dash-grid-stats { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
         .dash-grid-money { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
         .dash-grid-charts { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+        .dash-grid-offers { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        @media (max-width: 900px) { .dash-grid-offers { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+        @media (max-width: 480px) { .dash-grid-offers { grid-template-columns: 1fr; } }
 
         .dash-stat-label {
           display: flex; align-items: center; gap: 6px; margin: 0;
@@ -404,28 +407,30 @@ export default function Dashboard() {
         </div>
       )}
 
-      <SectionTitle hint="Last 30 days">Offers</SectionTitle>
+            <SectionTitle hint="Last 30 days">Offers</SectionTitle>
       {errors.offers ? (
         <SectionError>{errors.offers}</SectionError>
       ) : offersStats ? (
-        <div className="dash-grid dash-grid-stats">
+        <div className="dash-grid dash-grid-offers">
           {[
-            ['🏷️', 'Offers made', offersStats.made],
-            ['🤝', 'Prices agreed', offersStats.agreed],
-            ['📈', 'Acceptance rate', offersStats.acceptRate == null ? '-' : `${offersStats.acceptRate}%`],
-            ['✂️', 'Average discount', offersStats.avgDiscount == null ? '-' : `${offersStats.avgDiscount}%`],
-            ['💳', 'Agreed and paid', offersStats.paid],
-            ['⌛', 'Agreed, expired unpaid', offersStats.unpaid],
-          ].map(([icon, text, value]) => (
-            <div key={text} className="dash-card">
-              <p className="dash-stat-label">
-                <span>{icon}</span>
-                <span>{text}</span>
-              </p>
-              <p className="dash-stat-value" style={{ color: 'var(--color-primary)' }}>
-                {value}
-              </p>
-            </div>
+            ['🏷️', 'Offers made', offersStats.made, '/admin/offers'],
+            ['🤝', 'Prices agreed', offersStats.agreed, '/admin/offers?status=agreed'],
+            ['📈', 'Acceptance rate', offersStats.acceptRate == null ? '-' : `${offersStats.acceptRate}%`, '/admin/offers?status=agreed'],
+            ['✂️', 'Average discount', offersStats.avgDiscount == null ? '-' : `${offersStats.avgDiscount}%`, '/admin/offers?status=agreed'],
+            ['💳', 'Agreed and paid', offersStats.paid, '/admin/offers?status=paid'],
+            ['⌛', 'Expired unpaid', offersStats.unpaid, '/admin/offers?status=unpaid'],
+          ].map(([icon, text, value, to]) => (
+            <Link key={text} to={to} className="dash-link">
+              <div className="dash-card">
+                <p className="dash-stat-label">
+                  <span>{icon}</span>
+                  <span>{text}</span>
+                </p>
+                <p className="dash-stat-value" style={{ color: 'var(--color-primary)' }}>
+                  {value}
+                </p>
+              </div>
+            </Link>
           ))}
         </div>
       ) : null}

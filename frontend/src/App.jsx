@@ -20,6 +20,7 @@ import Listings from './pages/admin/Listings';
 import Payments from './pages/admin/Payments';
 import Activity from './pages/admin/Activity';
 import Disputes from './pages/admin/Disputes';
+import Offers from './pages/admin/Offers';
 import Broadcast from './pages/admin/Broadcast';
 import SafeZones from './pages/admin/SafeZones';
 import Inbox from './pages/Inbox';
@@ -64,6 +65,7 @@ function App() {
           <Route path="/admin/payments" element={<Payments />} />
           <Route path="/admin/blacklist" element={<BlacklistManager />} />
           <Route path="/admin/disputes" element={<Disputes />} />
+          <Route path="/admin/offers" element={<Offers />} />
           <Route path="/admin/broadcast" element={<Broadcast />} />
           <Route path="/admin/safe-zones" element={<SafeZones />} />
           <Route path="/admin/activity" element={<Activity />} />
