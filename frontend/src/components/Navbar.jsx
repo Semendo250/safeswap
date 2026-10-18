@@ -442,7 +442,9 @@ export default function Navbar() {
                     <Link to="/create-listing" className={linkClass('/create-listing')}>Create listing</Link>
                     {isAdmin && <Link to="/admin" className={linkClass('/admin', true)}>Admin</Link>}
                     <Link to="/profile" className={linkClass('/profile')}>Profile</Link>
-                    <Link to="/my-complaints" className={linkClass('/my-complaints', true)}>My complaints</Link>
+                    {!isAdmin && (
+                      <Link to="/my-complaints" className={linkClass('/my-complaints', true)}>My complaints</Link>
+                    )}
                     <button
                       onClick={askLogout}
                       className="sw-menu-link"

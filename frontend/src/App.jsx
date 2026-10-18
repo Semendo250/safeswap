@@ -1,5 +1,6 @@
-import { useEffect } from 'react';
-import { Routes, Route, useLocation } from 'react-router-dom';
+import { useContext, useEffect } from 'react';
+import { Routes, Route, useLocation, Navigate } from 'react-router-dom';
+import { AuthContext } from './context/AuthContext';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import Landing from './pages/Landing';
@@ -42,10 +43,21 @@ function ScrollToTop() {
   return null;
 }
 
+function StudentOnly({ children }) {
+  const { user, loading } = useContext(AuthContext);
+  if (loading) return null;
+  if (user?.role === 'admin') return <Navigate to="/admin" replace />;
+  return children;
+}
+
 function App() {
   const { pathname } = useLocation();
-  // No footer on the full-screen chat/inbox or the admin pages
-  const hideFooter = pathname.startsWith('/admin') || pathname.startsWith('/chat') || pathname === '/messages';
+  const { user } = useContext(AuthContext);
+  const hideFooter =
+    user?.role === 'admin' ||
+    pathname.startsWith('/admin') ||
+    pathname.startsWith('/chat') ||
+    pathname === '/messages';
 
   return (
     <div className="app-shell">
@@ -78,11 +90,11 @@ function App() {
           <Route path="/listings/:id" element={<ListingDetail />} />
           <Route path="/chat/:listingId" element={<Chat />} />
           <Route path="/sellers/:id" element={<SellerProfile />} />
-          <Route path="/terms" element={<Terms />} />
-          <Route path="/privacy" element={<Privacy />} />
-          <Route path="/support" element={<Support />} />
-                    <Route path="/my-complaints" element={<MyComplaints />} />
-          <Route path="/my-complaints/:id" element={<ComplaintThread />} />
+                    <Route path="/terms" element={<StudentOnly><Terms /></StudentOnly>} />
+          <Route path="/privacy" element={<StudentOnly><Privacy /></StudentOnly>} />
+          <Route path="/support" element={<StudentOnly><Support /></StudentOnly>} />
+          <Route path="/my-complaints" element={<StudentOnly><MyComplaints /></StudentOnly>} />
+          <Route path="/my-complaints/:id" element={<StudentOnly><ComplaintThread /></StudentOnly>} />
         </Routes>
       </div>
       {!hideFooter && <Footer />}
