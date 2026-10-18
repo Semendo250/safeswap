@@ -8,26 +8,26 @@ const listingSchema = new mongoose.Schema(
     price: { type: Number, required: true },
     category: { type: String, enum: ['phone', 'general'], required: true },
 
-    photos: [{ type: String }], // Cloudinary URLs, at least 1 required for both categories
+    photos: [{ type: String }],
 
-    // Phone-only fields (validated conditionally in the controller, not required at schema level
-    // for 'general' category)
     imei: { type: String, trim: true },
     imeiStatus: {
       type: String,
       enum: ['unchecked', 'clean', 'flagged', 'blacklisted'],
       default: 'unchecked',
     },
-    proofPhoto: { type: String }, // phone next to student ID, phone category only
+    proofPhoto: { type: String },
 
     status: {
       type: String,
-      enum: ['active', 'under_review', 'removed', 'sold'],
+      enum: ['active', 'under_review', 'removed', 'sold', 'unavailable', 'expired'],
       default: 'active',
     },
+    unavailableReason: { type: String, enum: ['sold_elsewhere', 'other'] },
+    renewedAt: { type: Date },
+    expiryWarned: { type: Boolean, default: false },
     reportCount: { type: Number, default: 0 },
 
-    // Handover
     meetupSafeZone: { type: String },
     meetupConfirmed: { type: Boolean, default: false },
 

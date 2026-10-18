@@ -9,6 +9,10 @@ import SafeZonePicker from '../components/SafeZonePicker';
 import BackButton from '../components/BackButton';
 import Avatar from '../components/Avatar';
 import { formatPhone, telHref } from '../utils/phone';
+import ListingManager from '../components/ListingManager';
+import ReviewBox from '../components/ReviewBox';
+import FavoriteButton from '../components/FavoriteButton';
+import { Stars } from '../components/Stars';
 
 const ICON_PATHS = {
   lock: (
@@ -137,6 +141,32 @@ export default function ListingDetail() {
   const isOwnListing = user && listing.seller._id === user.id;
   const agreed = !isOwnListing ? listing.agreedOffer : null;
   const agreements = isOwnListing ? listing.agreements || [] : [];
+  const isAdmin = user?.role === 'admin';
+  const shareUrl = `${window.location.origin}/listings/${listing._id}`;
+  const shareText = `${listing.title} - KES ${Number(listing.price).toLocaleString()} on SafeSwap`;
+  const shareBtn = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    minWidth: 0,
+    padding: '7px 12px',
+    fontSize: 13,
+    fontWeight: 600,
+    borderRadius: 999,
+    cursor: 'pointer',
+    background: 'transparent',
+    border: '1px solid var(--color-teal)',
+    color: 'var(--color-teal)',
+    textDecoration: 'none',
+  };
+
+  async function copyLink() {
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      alert('Link copied');
+    } catch (e) {
+      alert(shareUrl);
+    }
+  }
 
   // Shown to logged-out visitors who try to pick a meetup point or pay
   const loginNoticeEl = (
@@ -355,6 +385,54 @@ export default function ListingDetail() {
       )}
       <p style={{ color: 'var(--color-muted)' }}>{listing.description}</p>
 
+      {listing.status === 'unavailable' && !isOwnListing && (
+        <p style={{ fontWeight: 600, color: 'var(--color-warning)' }}>
+          {listing.unavailableReason === 'sold_elsewhere'
+            ? 'The seller sold this item elsewhere.'
+            : 'This item is no longer available.'}
+        </p>
+      )}
+      {listing.status === 'expired' && !isOwnListing && (
+        <p style={{ fontWeight: 600, color: 'var(--color-warning)' }}>This listing has expired.</p>
+      )}
+
+      {isOwnListing && (
+        <div className="ld-card">
+          <ListingManager
+            listing={listing}
+            onChange={(u) => setListing((prev) => ({ ...prev, ...u, seller: prev.seller }))}
+            onDeleted={() => navigate('/profile')}
+          />
+        </div>
+      )}
+
+      {listing.status === 'active' && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, margin: '12px 0' }}>
+          <a
+            href={`https://wa.me/?text=${encodeURIComponent(`${shareText} ${shareUrl}`)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={shareBtn}
+          >
+            Share on WhatsApp
+          </a>
+          <button type="button" onClick={copyLink} style={shareBtn}>
+            Copy link
+          </button>
+          {!isOwnListing && !isAdmin && (
+            <FavoriteButton listingId={listing._id} initial={!!listing.isFavorite} variant="pill" />
+          )}
+        </div>
+      )}
+
+      {!isOwnListing && !isAdmin && listing.status !== 'removed' && (
+        <p style={{ margin: '0 0 8px', fontSize: 13 }}>
+          <Link to={`/report/${listing._id}`} style={{ color: 'var(--color-muted)' }}>
+            Report this listing
+          </Link>
+        </p>
+      )}
+
       {listing.category === 'phone' && (
         <p style={{ fontSize: '13px' }}>
           IMEI status: <strong>{listing.imeiStatus}</strong>
@@ -366,7 +444,17 @@ export default function ListingDetail() {
         <div className="ld-seller">
           <Avatar src={listing.seller.profilePicture} name={listing.seller.fullName} size={48} soft zoomable />
           <div style={{ minWidth: 0 }}>
-            <p className="ld-name">{listing.seller.fullName}</p>
+            <p className="ld-name">
+              <Link to={`/sellers/${listing.seller._id}`} style={{ color: 'inherit' }}>
+                {listing.seller.fullName}
+              </Link>
+            </p>
+            {listing.seller.ratingCount > 0 && (
+              <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--color-muted)' }}>
+                <Stars value={listing.seller.ratingAverage} size={13} /> {listing.seller.ratingAverage} (
+                {listing.seller.ratingCount})
+              </p>
+            )}
             <div className="ld-badges">
               <TrustBadge score={listing.seller.trustScore} icon />
               <VerificationBadge verificationPath={listing.seller.verificationPath} icon />
@@ -495,7 +583,10 @@ export default function ListingDetail() {
       )}
 
       {listing.status === 'sold' && (
-        <p style={{ marginTop: '16px', fontWeight: 600, color: 'var(--color-success)' }}>This item has been sold.</p>
+        <>
+          <p style={{ marginTop: '16px', fontWeight: 600, color: 'var(--color-success)' }}>This item has been sold.</p>
+          {user && !isOwnListing && !isAdmin && <ReviewBox listingId={listing._id} />}
+        </>
       )}
 
       {/* Full-screen photo preview */}

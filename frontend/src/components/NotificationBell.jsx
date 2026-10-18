@@ -34,6 +34,11 @@ const TYPE_ICON = {
   announcement: '📢',
   dispute_update: '📝',
   new_dispute: '📩',
+  listing_expiring: '⏳',
+  listing_expired: '⌛',
+  price_drop: '📉',
+  new_review: '⭐',
+  review_request: '⭐',
   offer_update: '🏷️',
 };
 

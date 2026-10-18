@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const { initiateStkPush } = require('../utils/mpesa');
 const Listing = require('../models/Listing');
+const Payment = require('../models/Payment');
 const paymentStore = require('../utils/paymentStore');
 const { notify, notifyAdmins } = require('../utils/notify');
 const { getAgreedOffer, agreedAmount, parsePrice, onPaymentHeld } = require('../utils/offers');
@@ -226,4 +227,43 @@ async function getPaymentStatus(req, res) {
   }
 }
 
-module.exports = { initiatePayment, handleCallback, getPaymentStatus };
+// GET /api/payments/mine
+async function getMyPurchases(req, res) {
+  try {
+    const payments = await Payment.find({ buyer: req.user._id })
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .populate({
+        path: 'listing',
+        select: 'title photos status meetupSafeZone meetupConfirmed seller',
+        populate: { path: 'seller', select: 'fullName' },
+      })
+      .lean();
+
+    res.json({
+      purchases: payments.map((p) => ({
+        _id: p._id,
+        status: p.status,
+        amount: p.amount != null ? p.amount : null,
+        askingPrice: p.askingPrice != null ? p.askingPrice : null,
+        mpesaReceipt: p.mpesaReceipt || '',
+        createdAt: p.createdAt,
+        updatedAt: p.updatedAt,
+        listing: p.listing
+          ? {
+              _id: p.listing._id,
+              title: p.listing.title,
+              photo: p.listing.photos && p.listing.photos[0],
+              status: p.listing.status,
+              meetupSafeZone: p.listing.meetupSafeZone || '',
+              sellerName: p.listing.seller ? p.listing.seller.fullName : '',
+            }
+          : null,
+      })),
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+module.exports = { initiatePayment, handleCallback, getPaymentStatus, getMyPurchases };

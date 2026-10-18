@@ -9,6 +9,7 @@ import ChatInput from '../components/ChatInput';
 import OfferCard from '../components/OfferCard';
 import OfferSheet from '../components/OfferSheet';
 import { createOffer, acceptOffer, declineOffer, counterOffer } from '../api/offers.api';
+import { blockUser, unblockUser, getBlockStatus } from '../api/blocks.api';
 
 const NAVBAR_HEIGHT = 68;
 
@@ -31,6 +32,7 @@ export default function Chat() {
   const [listingPrice, setListingPrice] = useState(0);
   const [listingStatus, setListingStatus] = useState('');
   const [sheet, setSheet] = useState(null);
+  const [blockedByMe, setBlockedByMe] = useState(false);
   const [listingTitle, setListingTitle] = useState('');
   const [listingSellerId, setListingSellerId] = useState(null);
   const [otherTyping, setOtherTyping] = useState(false);
@@ -212,6 +214,37 @@ export default function Chat() {
       window.visualViewport?.removeEventListener('scroll', update);
     };
   }, []);
+
+  useEffect(() => {
+    if (!user || !receiverId) return;
+    let cancelled = false;
+    getBlockStatus(receiverId)
+      .then((res) => {
+        if (!cancelled) setBlockedByMe(!!res.data.blockedByMe);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [user, receiverId]);
+
+  async function toggleBlock() {
+    if (
+      !blockedByMe &&
+      !window.confirm(
+        'Block this person? Neither of you can message or send offers to the other until you unblock them.'
+      )
+    ) {
+      return;
+    }
+    try {
+      if (blockedByMe) await unblockUser(receiverId);
+      else await blockUser(receiverId);
+      setBlockedByMe(!blockedByMe);
+    } catch (err) {
+      alert(offerError(err));
+    }
+  }
 
   function mergeOffer(offer) {
     setMessages((prev) => prev.map((m) => (m.offer && m.offer._id === offer._id ? { ...m, offer } : m)));
@@ -515,7 +548,7 @@ export default function Chat() {
             </div>
 
             <div style={{ flexShrink: 0 }}>
-              {listingStatus === 'active' && (
+              {listingStatus === 'active' && !blockedByMe && (
                 <div
                   style={{
                     display: 'flex',
@@ -549,7 +582,51 @@ export default function Chat() {
                   </span>
                 </div>
               )}
-              <ChatInput onSend={handleSend} onTyping={handleTyping} />
+              <div
+                style={{
+                  display: 'flex',
+                  gap: 14,
+                  padding: '6px 14px',
+                  background: 'var(--color-card)',
+                  borderTop: '0.5px solid var(--color-border)',
+                  fontSize: 12,
+                }}
+              >
+                <Link to={`/report/${listingId}`} style={{ color: 'var(--color-muted)' }}>
+                  Report listing
+                </Link>
+                <button
+                  type="button"
+                  onClick={toggleBlock}
+                  style={{
+                    minWidth: 0,
+                    padding: 0,
+                    border: 'none',
+                    background: 'transparent',
+                    color: 'var(--color-warning)',
+                    fontSize: 12,
+                    cursor: 'pointer',
+                  }}
+                >
+                  {blockedByMe ? 'Unblock user' : 'Block user'}
+                </button>
+              </div>
+              {blockedByMe ? (
+                <p
+                  style={{
+                    margin: 0,
+                    padding: '12px 14px',
+                    fontSize: 13,
+                    textAlign: 'center',
+                    color: 'var(--color-muted)',
+                    background: 'var(--color-card)',
+                  }}
+                >
+                  You blocked this person. Unblock them to send messages or offers.
+                </p>
+              ) : (
+                <ChatInput onSend={handleSend} onTyping={handleTyping} />
+              )}
               {sheet && (
                 <OfferSheet
                   title={sheet.mode === 'counter' ? 'Counter offer' : 'Make an offer'}

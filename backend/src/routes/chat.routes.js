@@ -1,11 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const authMiddleware = require('../middleware/auth.middleware');
-const { getConversation, sendMessage, markAsRead, getConversations, deleteMessage } = require('../controllers/chat.controller');
+const { getConversation, sendMessage, markAsRead, getConversations, deleteMessage, getUnreadCount } = require('../controllers/chat.controller');
 
 router.use(authMiddleware); // every chat route requires a logged-in user
 
 router.get('/', getConversations);
+router.get('/unread-count', getUnreadCount);
 router.get('/:listingId/:otherUserId', getConversation);
 router.post('/:listingId', sendMessage);
 router.patch('/:messageId/read', markAsRead);

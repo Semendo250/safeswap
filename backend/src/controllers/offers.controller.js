@@ -5,6 +5,7 @@ const paymentStore = require('../utils/paymentStore');
 const { notify } = require('../utils/notify');
 const { OPEN, parsePrice, kes, roomFor, sweepOffers } = require('../utils/offers');
 const { getOfferTtlMs } = require('../utils/settings');
+const { isBlockedBetween } = require('../utils/blocks');
 
 const isId = (v) => typeof v === 'string' && /^[a-f\d]{24}$/i.test(v);
 
@@ -110,6 +111,9 @@ async function findRespondable(offerId, userId) {
   if (String(offer.proposedBy) === me) {
     return { error: [403, "You can't respond to your own offer"] };
   }
+  if (await isBlockedBetween(offer.buyer, offer.seller)) {
+    return { error: [403, "You can't respond to this offer"] };
+  }
   return { offer };
 }
 
@@ -146,6 +150,10 @@ async function createOffer(req, res) {
 
     const problem = await bargainProblem(listing, amount);
     if (problem) return res.status(problem[0]).json({ error: problem[1] });
+
+    if (await isBlockedBetween(buyerId, sellerId)) {
+      return res.status(403).json({ error: "You can't send an offer to this person" });
+    }
 
     const result = await placeOffer({ req, listing, buyerId, proposerId: me, amount, kind: 'new' });
     res.status(201).json(result);

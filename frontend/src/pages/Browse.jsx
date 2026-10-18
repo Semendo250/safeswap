@@ -3,18 +3,37 @@ import CategoryTabs from '../components/CategoryTabs';
 import ListingCard from '../components/ListingCard';
 import { getListings } from '../api/listings.api';
 
+function useDebounced(value, delay = 400) {
+  const [v, setV] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setV(value), delay);
+    return () => clearTimeout(t);
+  }, [value, delay]);
+  return v;
+}
+
 export default function Browse() {
   const [category, setCategory] = useState('phone');
+  const [search, setSearch] = useState('');
+  const [minPrice, setMinPrice] = useState('');
+  const [maxPrice, setMaxPrice] = useState('');
+  const [sort, setSort] = useState('newest');
   const [listings, setListings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
 
+  const dSearch = useDebounced(search);
+  const dMin = useDebounced(minPrice);
+  const dMax = useDebounced(maxPrice);
+
+  const filtersActive = !!(dSearch.trim() || dMin || dMax || sort !== 'newest');
+
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(false);
-    getListings(category)
+    getListings(category, { search: dSearch.trim(), minPrice: dMin, maxPrice: dMax, sort })
       .then((res) => {
         if (!cancelled) setListings(res.data);
       })
@@ -30,9 +49,8 @@ export default function Browse() {
     return () => {
       cancelled = true;
     };
-  }, [category, reloadKey]);
+  }, [category, dSearch, dMin, dMax, sort, reloadKey]);
 
-  // Reload automatically when the connection comes back
   useEffect(() => {
     function handleOnline() {
       setReloadKey((k) => k + 1);
@@ -40,6 +58,13 @@ export default function Browse() {
     window.addEventListener('online', handleOnline);
     return () => window.removeEventListener('online', handleOnline);
   }, []);
+
+  function clearFilters() {
+    setSearch('');
+    setMinPrice('');
+    setMaxPrice('');
+    setSort('newest');
+  }
 
   const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
 
@@ -58,6 +83,14 @@ export default function Browse() {
         .browse-grid > a {
           display: flex;
         }
+        .browse-filters { display: grid; gap: 10px; margin: 4px 0 14px; }
+        .browse-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+        .browse-field { flex: 1 1 110px; min-width: 0; }
+        .browse-label {
+          display: block; margin-bottom: 2px; font-size: 11px; font-weight: 600;
+          text-transform: uppercase; letter-spacing: 0.04em; color: var(--color-muted);
+        }
+        .browse-filters input, .browse-filters select { width: 100%; box-sizing: border-box; }
         @media (min-width: 700px) {
           .browse-page { max-width: 900px; padding: 28px 24px 70px; }
           .browse-grid {
@@ -82,6 +115,59 @@ export default function Browse() {
       <h1 style={{ fontSize: '26px', marginBottom: '18px' }}>Browse listings</h1>
       <CategoryTabs value={category} onChange={setCategory} />
 
+      <div className="browse-filters">
+        <input
+          type="search"
+          placeholder="Search listings, e.g. Samsung, charger, laptop"
+          value={search}
+          maxLength={60}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <div className="browse-row">
+          <div className="browse-field">
+            <label className="browse-label">Min price</label>
+            <input
+              type="number"
+              inputMode="numeric"
+              min="0"
+              placeholder="KES"
+              value={minPrice}
+              onChange={(e) => setMinPrice(e.target.value)}
+            />
+          </div>
+          <div className="browse-field">
+            <label className="browse-label">Max price</label>
+            <input
+              type="number"
+              inputMode="numeric"
+              min="0"
+              placeholder="KES"
+              value={maxPrice}
+              onChange={(e) => setMaxPrice(e.target.value)}
+            />
+          </div>
+          <div className="browse-field">
+            <label className="browse-label">Sort by</label>
+            <select value={sort} onChange={(e) => setSort(e.target.value)}>
+              <option value="newest">Newest</option>
+              <option value="cheapest">Cheapest first</option>
+              <option value="expensive">Most expensive first</option>
+            </select>
+          </div>
+        </div>
+        {filtersActive && (
+          <div>
+            <button
+              type="button"
+              onClick={clearFilters}
+              style={{ minWidth: 0, padding: '6px 12px', fontSize: 13 }}
+            >
+              Clear filters
+            </button>
+          </div>
+        )}
+      </div>
+
       {loading && <p style={{ color: 'var(--color-muted)' }}>Loading...</p>}
 
       {!loading && error && (
@@ -98,7 +184,9 @@ export default function Browse() {
       )}
 
       {!loading && !error && listings.length === 0 && (
-        <p style={{ color: 'var(--color-muted)' }}>No listings yet in this category.</p>
+        <p style={{ color: 'var(--color-muted)' }}>
+          {filtersActive ? 'No listings match your search. Try different words or clear the filters.' : 'No listings yet in this category.'}
+        </p>
       )}
 
       <div className="browse-grid">

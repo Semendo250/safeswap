@@ -26,6 +26,8 @@ const userSchema = new mongoose.Schema(
     trustScore: { type: Number, default: 50 },
     completedSales: { type: Number, default: 0 },
     reportCount: { type: Number, default: 0 },
+    ratingAverage: { type: Number, default: 0 },
+    ratingCount: { type: Number, default: 0 },
 
     role: { type: String, enum: ['student', 'admin'], default: 'student' },
     isBanned: { type: Boolean, default: false },

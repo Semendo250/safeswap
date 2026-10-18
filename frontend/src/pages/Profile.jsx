@@ -8,6 +8,7 @@ import TrustBadge from '../components/TrustBadge';
 import VerificationBadge from '../components/VerificationBadge';
 import Avatar from '../components/Avatar';
 import ImageLightbox from '../components/ImageLightbox';
+import ListingManager, { statusText } from '../components/ListingManager';
 import { normalizeKenyanPhone, formatPhone, phoneForInput } from '../utils/phone';
 
 const MAX_PICTURE_BYTES = 5 * 1024 * 1024;
@@ -261,13 +262,20 @@ useEffect(() => {
             </div>
           )}
 
-          {listings.map((l) => (
+                    {listings.map((l) => (
             <div key={l._id} className="divider-row">
-              <div style={{ flex: 1 }}>
-                <span style={{ fontWeight: 600 }}>{l.title}</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <Link to={`/listings/${l._id}`} style={{ fontWeight: 600, color: 'inherit' }}>
+                  {l.title}
+                </Link>
                 <p style={{ margin: '2px 0 0', fontSize: '13px', color: 'var(--color-muted)' }}>
-                  KES {l.price} &middot; {l.status}
+                  KES {Number(l.price).toLocaleString()} &middot; {statusText(l)}
                 </p>
+                <ListingManager
+                  listing={l}
+                  onChange={(u) => setListings((prev) => prev.map((x) => (x._id === l._id ? { ...x, ...u } : x)))}
+                  onDeleted={() => setListings((prev) => prev.filter((x) => x._id !== l._id))}
+                />
               </div>
             </div>
           ))}

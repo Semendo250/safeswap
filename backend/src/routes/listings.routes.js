@@ -6,15 +6,11 @@ const upload = require('../middleware/upload.middleware');
 const listingsCtrl = require('../controllers/listings.controller');
 const safeZonesCtrl = require('../controllers/safeZones.controller');
 
-// Public: anyone can browse listings without logging in
-router.get('/', listingsCtrl.getListings);
+router.get('/', optionalAuth, listingsCtrl.getListings);
 router.get('/mine', authMiddleware, listingsCtrl.getMyListings);
-// Must stay above '/:id', otherwise "safe-zones" would be read as a listing id
 router.get('/safe-zones', safeZonesCtrl.getPublicZones);
-// Public, but if a valid token is sent we know who is asking (used to show the seller's phone)
 router.get('/:id', optionalAuth, listingsCtrl.getListingById);
 
-// Protected: must be logged in to create/edit/delete
 router.post(
   '/',
   authMiddleware,
@@ -26,6 +22,8 @@ router.post(
 );
 router.patch('/:id', authMiddleware, listingsCtrl.updateListing);
 router.delete('/:id', authMiddleware, listingsCtrl.deleteListing);
+router.patch('/:id/availability', authMiddleware, listingsCtrl.setAvailability);
+router.post('/:id/renew', authMiddleware, listingsCtrl.renewListing);
 router.patch('/:id/meetup', authMiddleware, listingsCtrl.setMeetup);
 router.patch('/:id/meetup/confirm', authMiddleware, listingsCtrl.confirmMeetup);
 

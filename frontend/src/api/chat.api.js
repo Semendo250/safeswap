@@ -14,6 +14,10 @@ export function markAsRead(messageId) {
 export function getConversations() {
   return api.get('/chat');
 }
+export function getUnreadMessages() {
+  return api.get('/chat/unread-count');
+}
+
 export function deleteMessage(messageId, forEveryone) {
   return api.delete(`/chat/message/${messageId}`, { data: { forEveryone } });
 }

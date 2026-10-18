@@ -32,6 +32,9 @@ import Terms from './pages/Terms';
 import Privacy from './pages/Privacy';
 import Support from './pages/Support';
 import MyComplaints from './pages/MyComplaints';
+import MyPurchases from './pages/MyPurchases';
+import Saved from './pages/Saved';
+import ReportListing from './pages/ReportListing';
 import ComplaintThread from './pages/ComplaintThread';
 
 // Opens every new page at the top, so footer links don't land halfway down
@@ -93,6 +96,9 @@ function App() {
                     <Route path="/terms" element={<StudentOnly><Terms /></StudentOnly>} />
           <Route path="/privacy" element={<StudentOnly><Privacy /></StudentOnly>} />
           <Route path="/support" element={<StudentOnly><Support /></StudentOnly>} />
+          <Route path="/my-purchases" element={<StudentOnly><MyPurchases /></StudentOnly>} />
+          <Route path="/saved" element={<StudentOnly><Saved /></StudentOnly>} />
+          <Route path="/report/:id" element={<StudentOnly><ReportListing /></StudentOnly>} />
           <Route path="/my-complaints" element={<StudentOnly><MyComplaints /></StudentOnly>} />
           <Route path="/my-complaints/:id" element={<StudentOnly><ComplaintThread /></StudentOnly>} />
         </Routes>

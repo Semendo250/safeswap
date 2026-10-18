@@ -9,7 +9,11 @@ const isId = (v) => typeof v === 'string' && /^[a-f\d]{24}$/i.test(v);
 // POST /api/reports
 async function createReport(req, res) {
   try {
-    const { listingId, reason, details } = req.body;
+    const { listingId, reason } = req.body;
+    const details = String(req.body.details || '').trim().slice(0, 500);
+    if (!['suspected_stolen', 'price_suspicious', 'fake_listing', 'other'].includes(reason)) {
+      return res.status(400).json({ error: 'Pick a reason for the report' });
+    }
 
     if (!listingId || !reason) {
       return res.status(400).json({ error: 'listingId and reason are required' });

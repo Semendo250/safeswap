@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { ThemeContext } from '../context/ThemeContext';
 import { getNeedsAttention } from '../api/admin.api';
+import { getUnreadMessages } from '../api/chat.api';
 import NotificationBell from './NotificationBell';
 
 const ICON_PATHS = {
@@ -153,6 +154,7 @@ export default function Navbar() {
   const [adminMenuOpen, setAdminMenuOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [attention, setAttention] = useState(null);
+  const [unreadMsgs, setUnreadMsgs] = useState(0);
 
   const isAdmin = user?.role === 'admin';
   const onAdminPage = isAdmin && location.pathname.startsWith('/admin');
@@ -196,6 +198,51 @@ export default function Navbar() {
       cancelled = true;
     };
   }, [adminMenuOpen, isAdmin]);
+
+  useEffect(() => {
+    if (!user) {
+      setUnreadMsgs(0);
+      return;
+    }
+    let cancelled = false;
+    function load() {
+      getUnreadMessages()
+        .then((res) => {
+          if (!cancelled) setUnreadMsgs(res.data.unreadCount || 0);
+        })
+        .catch(() => {});
+    }
+    load();
+    const timer = setInterval(load, 20000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [user?.id, location.pathname]);
+
+  const msgBadge =
+    unreadMsgs > 0 ? (
+      <span
+        aria-label={`${unreadMsgs} unread`}
+        style={{
+          marginLeft: 6,
+          minWidth: 18,
+          height: 18,
+          padding: '0 5px',
+          borderRadius: 999,
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: 11,
+          fontWeight: 700,
+          background: 'var(--color-warning)',
+          color: '#fff',
+          verticalAlign: 'middle',
+        }}
+      >
+        {unreadMsgs > 9 ? '9+' : unreadMsgs}
+      </span>
+    ) : null;
 
   function toggleMenu() {
     setMenuOpen((v) => !v);
@@ -378,7 +425,9 @@ export default function Navbar() {
               <Link to="/browse" className="nav-pill">Browse</Link>
               {user ? (
                 <>
-                  <Link to="/messages" className="nav-pill">Messages</Link>
+                  <Link to="/messages" className="nav-pill">Messages{msgBadge}</Link>
+                  {!isAdmin && <Link to="/my-purchases" className="nav-pill">Purchases</Link>}
+                  {!isAdmin && <Link to="/saved" className="nav-pill">Saved</Link>}
                   <Link to="/create-listing" className="nav-pill">Create listing</Link>
                   {isAdmin && <Link to="/admin" className="nav-pill">Admin</Link>}
                   <Link to="/profile" className="nav-pill">Profile</Link>
@@ -438,7 +487,9 @@ export default function Navbar() {
                 <Link to="/browse" className={linkClass('/browse')}>Browse</Link>
                 {user ? (
                   <>
-                    <Link to="/messages" className={linkClass('/messages')}>Messages</Link>
+                    <Link to="/messages" className={linkClass('/messages')}>Messages{msgBadge}</Link>
+                    {!isAdmin && <Link to="/my-purchases" className={linkClass('/my-purchases')}>My purchases</Link>}
+                    {!isAdmin && <Link to="/saved" className={linkClass('/saved')}>Saved items</Link>}
                     <Link to="/create-listing" className={linkClass('/create-listing')}>Create listing</Link>
                     {isAdmin && <Link to="/admin" className={linkClass('/admin', true)}>Admin</Link>}
                     <Link to="/profile" className={linkClass('/profile')}>Profile</Link>

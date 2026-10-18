@@ -1,13 +1,21 @@
 const Listing = require('../models/Listing');
+const Payment = require('../models/Payment');
+const Favorite = require('../models/Favorite');
+const Message = require('../models/Message');
+const Offer = require('../models/Offer');
 const { checkImeiStatus } = require('../utils/imei');
 const paymentStore = require('../utils/paymentStore');
 const { notify, notifyAdmins } = require('../utils/notify');
 const { getActiveZoneNames } = require('../utils/safeZones');
-const Message = require('../models/Message');
-const Offer = require('../models/Offer');
 const { parsePrice, getAgreementInfo, sweepOffers } = require('../utils/offers');
+const { notifyPriceDrop } = require('../utils/favorites');
+const { maybeRunExpirySweep } = require('../utils/listingExpiry');
 
-const SELLER_PUBLIC_FIELDS = 'fullName trustScore verificationPath completedSales profilePicture';
+const SELLER_PUBLIC_FIELDS =
+  'fullName trustScore verificationPath completedSales profilePicture ratingAverage ratingCount';
+const PRICE_ERROR = 'Price must be a whole number of KES between 1 and 250,000';
+
+const isId = (v) => typeof v === 'string' && /^[a-f\d]{24}$/i.test(v);
 
 function presentListing(listing, viewer) {
   const obj = listing.toJSON();
@@ -34,6 +42,11 @@ async function loadListingForViewer(id, viewer) {
     } catch (err) {
       console.error('getAgreementInfo failed:', err.message);
     }
+    try {
+      obj.isFavorite = !!(await Favorite.exists({ user: viewer._id, listing: listing._id }));
+    } catch (err) {
+      obj.isFavorite = false;
+    }
   }
   return obj;
 }
@@ -45,7 +58,7 @@ async function createListing(req, res) {
     const price = parsePrice(req.body.price);
 
     if (price === null) {
-      return res.status(400).json({ error: 'Price must be a whole number of KES between 1 and 250,000' });
+      return res.status(400).json({ error: PRICE_ERROR });
     }
     if (!title || !category) {
       return res.status(400).json({ error: 'title, price, and category are required' });
@@ -89,8 +102,6 @@ async function createListing(req, res) {
       listingData.imei = imei;
       listingData.imeiStatus = imeiStatus;
       listingData.proofPhoto = proofFile.path;
-
-      // Every phone listing waits for an admin to approve it before it goes live
       listingData.status = 'under_review';
     }
 
@@ -99,7 +110,6 @@ async function createListing(req, res) {
     if (category === 'phone') {
       const flagged = listing.imeiStatus === 'blacklisted';
 
-      // Tell admins there is a phone waiting (the Flagged queue is where these listings sit)
       await notifyAdmins({
         type: 'new_listing_review',
         title: 'New listing to review',
@@ -110,8 +120,6 @@ async function createListing(req, res) {
         actorId: req.user._id,
       });
 
-      // Tell the seller what is happening. The "live" or "not approved" message
-      // follows when an admin decides (see the admin controller).
       await notify({
         userId: listing.seller,
         type: 'listing_flagged',
@@ -131,21 +139,64 @@ async function createListing(req, res) {
   }
 }
 
-// GET /api/listings
+// GET /api/listings?category=&search=&minPrice=&maxPrice=&sort=&seller=
 async function getListings(req, res) {
   try {
-    const { category } = req.query;
+    try {
+      await maybeRunExpirySweep();
+    } catch (e) {
+      console.error('Expiry sweep failed:', e.message);
+    }
+
+    const { category, search = '', sort = 'newest' } = req.query;
     const filter = { status: 'active' };
     if (category && ['phone', 'general'].includes(category)) {
       filter.category = category;
     }
+    if (isId(String(req.query.seller || ''))) filter.seller = req.query.seller;
+
+    const term = String(search).trim().slice(0, 60);
+    if (term) {
+      const rx = new RegExp(String(term).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      filter.$or = [{ title: rx }, { description: rx }];
+    }
+
+    const min = Number(req.query.minPrice);
+    const max = Number(req.query.maxPrice);
+    const price = {};
+    if (req.query.minPrice !== undefined && req.query.minPrice !== '' && Number.isFinite(min) && min >= 0) {
+      price.$gte = min;
+    }
+    if (req.query.maxPrice !== undefined && req.query.maxPrice !== '' && Number.isFinite(max) && max >= 0) {
+      price.$lte = max;
+    }
+    if (Object.keys(price).length) filter.price = price;
+
+    const sorts = {
+      newest: { createdAt: -1 },
+      cheapest: { price: 1, createdAt: -1 },
+      expensive: { price: -1, createdAt: -1 },
+    };
 
     const listings = await Listing.find(filter)
-      .select('-imei -proofPhoto')
-      .sort({ createdAt: -1 })
-      .populate('seller', 'fullName trustScore verificationPath');
+      .select('-imei -proofPhoto -paymentLockUntil -paymentLockBy')
+      .sort(sorts[sort] || sorts.newest)
+      .limit(200)
+      .populate('seller', 'fullName trustScore verificationPath')
+      .lean();
 
-    res.json(listings);
+    let favSet = new Set();
+    if (req.user && listings.length) {
+      const favs = await Favorite.find({
+        user: req.user._id,
+        listing: { $in: listings.map((l) => l._id) },
+      })
+        .select('listing')
+        .lean();
+      favSet = new Set(favs.map((f) => String(f.listing)));
+    }
+
+    res.json(listings.map((l) => ({ ...l, isFavorite: favSet.has(String(l._id)) })));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -157,7 +208,6 @@ async function getListingById(req, res) {
     const listing = await loadListingForViewer(req.params.id, req.user);
     if (!listing) return res.status(404).json({ error: 'Listing not found' });
 
-    // A listing waiting for approval is visible only to its seller and to admins
     if (listing.status === 'under_review') {
       const ref = listing.seller;
       const sellerId = ref && ref._id ? String(ref._id) : String(ref);
@@ -179,20 +229,48 @@ async function updateListing(req, res) {
     if (listing.seller.toString() !== req.user._id.toString()) {
       return res.status(403).json({ error: 'Not your listing' });
     }
+    if (!['active', 'under_review', 'unavailable', 'expired'].includes(listing.status)) {
+      return res.status(409).json({ error: 'This listing can no longer be edited' });
+    }
+    const activePayment = await paymentStore.getActiveByListingId(String(listing._id));
+    if (activePayment) {
+      return res
+        .status(409)
+        .json({ error: 'A payment is in progress for this item. You can edit it once that is finished.' });
+    }
 
+    const oldPrice = listing.price;
     const { title, description, price } = req.body;
-    if (title) listing.title = title;
-    if (description) listing.description = description;
+
+    if (title !== undefined) {
+      const t = String(title).trim();
+      if (t.length < 3 || t.length > 100) {
+        return res.status(400).json({ error: 'Title must be 3 to 100 characters' });
+      }
+      listing.title = t;
+    }
+    if (description !== undefined) {
+      const d = String(description).trim();
+      if (d.length > 1000) {
+        return res.status(400).json({ error: 'Description can be up to 1000 characters' });
+      }
+      listing.description = d;
+    }
     if (price !== undefined && price !== '') {
       const newPrice = parsePrice(price);
-      if (newPrice === null) {
-        return res.status(400).json({ error: 'Price must be a whole number of KES between 1 and 250,000' });
-      }
+      if (newPrice === null) return res.status(400).json({ error: PRICE_ERROR });
       listing.price = newPrice;
     }
 
     await listing.save();
-    res.json(listing);
+
+    if (listing.status === 'active' && listing.price < oldPrice) {
+      notifyPriceDrop(listing, oldPrice, listing.price).catch((err) =>
+        console.error('notifyPriceDrop failed:', err.message)
+      );
+    }
+
+    res.json(presentListing(listing, req.user));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -207,12 +285,101 @@ async function deleteListing(req, res) {
       return res.status(403).json({ error: 'Not your listing' });
     }
 
+    const hasPayments = await Payment.exists({ listing: listing._id });
+    if (hasPayments) {
+      return res.status(409).json({
+        error: "This item has payment history, so it can't be deleted. Mark it unavailable instead.",
+      });
+    }
+
     await Offer.updateMany(
       { listing: listing._id, status: { $in: ['pending', 'accepted'] } },
       { status: 'closed' }
     );
+    await Favorite.deleteMany({ listing: listing._id });
     await listing.deleteOne();
     res.json({ message: 'Listing deleted' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+// PATCH /api/listings/:id/availability   body: { action: 'sold_elsewhere' | 'unavailable' | 'available' }
+async function setAvailability(req, res) {
+  try {
+    const action = String(req.body?.action || '');
+    if (!['sold_elsewhere', 'unavailable', 'available'].includes(action)) {
+      return res.status(400).json({ error: 'Invalid action' });
+    }
+
+    const listing = await Listing.findById(req.params.id);
+    if (!listing) return res.status(404).json({ error: 'Listing not found' });
+    if (listing.seller.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ error: 'Not your listing' });
+    }
+
+    if (action === 'available') {
+      if (listing.status !== 'unavailable') {
+        return res.status(409).json({ error: 'Only unavailable listings can be made available again' });
+      }
+      if (listing.imeiStatus === 'blacklisted') {
+        return res.status(403).json({ error: 'This phone is flagged. Contact support for help.' });
+      }
+      listing.status = 'active';
+      listing.unavailableReason = undefined;
+      listing.renewedAt = new Date();
+      listing.expiryWarned = false;
+    } else {
+      if (listing.status !== 'active') {
+        return res.status(409).json({ error: 'Only live listings can be marked unavailable' });
+      }
+      const activePayment = await paymentStore.getActiveByListingId(String(listing._id));
+      if (activePayment) {
+        return res
+          .status(409)
+          .json({ error: 'A payment is in progress for this item. Wait until it is finished.' });
+      }
+      listing.status = 'unavailable';
+      listing.unavailableReason = action === 'sold_elsewhere' ? 'sold_elsewhere' : 'other';
+    }
+
+    await listing.save();
+
+    if (listing.status === 'unavailable') {
+      try {
+        await sweepOffers({ listing: listing._id });
+      } catch (e) {
+        console.error('sweepOffers failed:', e.message);
+      }
+    }
+
+    res.json(presentListing(listing, req.user));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+// POST /api/listings/:id/renew
+async function renewListing(req, res) {
+  try {
+    const listing = await Listing.findById(req.params.id);
+    if (!listing) return res.status(404).json({ error: 'Listing not found' });
+    if (listing.seller.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ error: 'Not your listing' });
+    }
+    if (!['active', 'expired'].includes(listing.status)) {
+      return res.status(409).json({ error: 'Only live or expired listings can be renewed' });
+    }
+    if (listing.imeiStatus === 'blacklisted') {
+      return res.status(403).json({ error: 'This phone is flagged. Contact support for help.' });
+    }
+
+    listing.status = 'active';
+    listing.renewedAt = new Date();
+    listing.expiryWarned = false;
+    await listing.save();
+
+    res.json(presentListing(listing, req.user));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -336,6 +503,13 @@ async function confirmMeetup(req, res) {
       body: `"${listing.title}" has been marked as sold.`,
       link: `/listings/${listing._id}`,
     });
+    await notify({
+      userId: req.user._id,
+      type: 'review_request',
+      title: 'How was the handover?',
+      body: `Rate the seller for "${listing.title}".`,
+      link: `/listings/${listing._id}`,
+    });
 
     res.json(await loadListingForViewer(listing._id, req.user));
   } catch (err) {
@@ -346,11 +520,25 @@ async function confirmMeetup(req, res) {
 // GET /api/listings/mine
 async function getMyListings(req, res) {
   try {
-    const listings = await Listing.find({ seller: req.user._id }).sort({ createdAt: -1 });
+    const listings = await Listing.find({ seller: req.user._id })
+      .select('-paymentLockUntil -paymentLockBy')
+      .sort({ createdAt: -1 });
     res.json(listings);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 }
 
-module.exports = { createListing, getMyListings, getListings, getListingById, updateListing, deleteListing, setMeetup, confirmMeetup, SAFE_ZONES };
+module.exports = {
+  createListing,
+  getMyListings,
+  getListings,
+  getListingById,
+  updateListing,
+  deleteListing,
+  setAvailability,
+  renewListing,
+  setMeetup,
+  confirmMeetup,
+  SAFE_ZONES,
+};

@@ -5,6 +5,7 @@ const { isUserActiveInRoom } = require('../socket');
 const mongoose = require('mongoose');
 const User = require('../models/User');
 const { sweepOffers } = require('../utils/offers');
+const { isBlockedBetween } = require('../utils/blocks');
 
 const MAX_MESSAGE_LENGTH = 2000;
 
@@ -97,6 +98,10 @@ async function sendMessage(req, res) {
           .status(403)
           .json({ error: 'You can only reply to buyers who have messaged you about this listing' });
       }
+    }
+
+    if (await isBlockedBetween(senderId, String(receiverId))) {
+      return res.status(403).json({ error: "You can't message this person" });
     }
 
     const message = await Message.create({
@@ -238,4 +243,19 @@ async function deleteMessage(req, res) {
   }
 }
 
-module.exports = { getConversation, deleteMessage, sendMessage, markAsRead, getConversations };
+// GET /api/chat/unread-count
+async function getUnreadCount(req, res) {
+  try {
+    const unreadCount = await Message.countDocuments({
+      receiver: req.user._id,
+      read: false,
+      deletedForEveryone: { $ne: true },
+      deletedFor: { $ne: req.user._id },
+    });
+    res.json({ unreadCount });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+module.exports = { getConversation, deleteMessage, sendMessage, markAsRead, getConversations, getUnreadCount };
