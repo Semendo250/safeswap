@@ -149,6 +149,18 @@ function UserCard({ u, me, isOpen, detail, onToggle, onMessage, onBan, onUnban, 
         <span>
           <strong>{u.reportCount}</strong> report{u.reportCount === 1 ? '' : 's'}
         </span>
+        <span>
+          {u.ratingCount > 0 ? (
+            <>
+              <strong>{u.ratingAverage}</strong> ★ ({u.ratingCount})
+            </>
+          ) : (
+            'No reviews'
+          )}
+        </span>
+        <span style={u.blockedCount >= 3 ? { color: 'var(--color-warning)' } : undefined}>
+          Blocked by <strong style={u.blockedCount >= 3 ? { color: 'var(--color-warning)' } : undefined}>{u.blockedCount || 0}</strong>
+        </span>
         <span>Joined {fmtDate(u.createdAt)}</span>
       </div>
 

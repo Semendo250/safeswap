@@ -198,6 +198,31 @@ export function setOfferExpiry(hours) {
   return api.patch('/admin/settings/offer-expiry', { hours });
 }
 
+// ----- community -----
+export function getCommunityStats() {
+  return api.get('/admin/community-stats');
+}
+
+export function getReports(params) {
+  return api.get('/admin/reports', { params });
+}
+
+export function resolveReport(id, decision, reason) {
+  return api.patch(`/admin/reports/${id}/resolve`, { decision, reason });
+}
+
+export function getReviews(params) {
+  return api.get('/admin/reviews', { params });
+}
+
+export function deleteReview(id, reason) {
+  return api.delete(`/admin/reviews/${id}`, { data: { reason } });
+}
+
+export function getBlocks(params) {
+  return api.get('/admin/blocks', { params });
+}
+
 // ----- activity log -----
 export function getAuditLog(params) {
   return api.get('/admin/audit-log', { params });

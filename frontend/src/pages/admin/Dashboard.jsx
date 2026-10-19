@@ -7,6 +7,7 @@ import {
   getMoneyOverview,
   getTrends,
   getOffersStats,
+  getCommunityStats,
 } from '../../api/admin.api';
 import { PageShell, Tabs, btn, money } from '../../components/admin/AdminUi';
 
@@ -106,6 +107,7 @@ export default function Dashboard() {
   const [attention, setAttention] = useState(null);
   const [moneyData, setMoneyData] = useState(null);
   const [offersStats, setOffersStats] = useState(null);
+  const [community, setCommunity] = useState(null);
   const [errors, setErrors] = useState({});
   const [loaded, setLoaded] = useState(false);
   const [updatedAt, setUpdatedAt] = useState(null);
@@ -121,18 +123,20 @@ export default function Dashboard() {
     // Wait until we know who is logged in before asking for admin data
     if (authLoading || !user) return;
     let cancelled = false;
-    Promise.allSettled([getOverview(), getNeedsAttention(), getMoneyOverview(), getOffersStats()]).then(
-      ([o, a, m, f]) => {
+    Promise.allSettled([getOverview(), getNeedsAttention(), getMoneyOverview(), getOffersStats(), getCommunityStats()]).then(
+      ([o, a, m, f, c]) => {
         if (cancelled) return;
         setOverview(o.status === 'fulfilled' ? o.value.data : null);
         setAttention(a.status === 'fulfilled' ? a.value.data : null);
         setMoneyData(m.status === 'fulfilled' ? m.value.data : null);
         setOffersStats(f.status === 'fulfilled' ? f.value.data : null);
+        setCommunity(c.status === 'fulfilled' ? c.value.data : null);
         setErrors({
           overview: o.status === 'rejected' ? loadError(o.reason) : '',
           attention: a.status === 'rejected' ? loadError(a.reason) : '',
           money: m.status === 'rejected' ? loadError(m.reason) : '',
           offers: f.status === 'rejected' ? loadError(f.reason) : '',
+          community: c.status === 'rejected' ? loadError(c.reason) : '',
         });
         setUpdatedAt(new Date());
         setLoaded(true);
@@ -188,12 +192,13 @@ export default function Dashboard() {
   const attentionItems = attention
     ? [
         { icon: '📝', label: 'Listings waiting for review', count: attention.pendingListings, to: '/admin/flagged' },
-        { icon: '🚩', label: 'Open reports', count: attention.openReports, to: '/admin/flagged' },
+        { icon: '🚩', label: 'Open reports', count: attention.openReports, to: '/admin/reports' },
         { icon: '🪪', label: 'ID verifications waiting', count: attention.pendingVerifications, to: '/admin/verification' },
         { icon: '💳', label: 'Payments held over 3 days', count: attention.heldOverThreeDays, to: '/admin/payments' },
         { icon: '⏳', label: 'Payments pending over 30 min', count: attention.stuckPending, to: '/admin/payments' },
         { icon: '💬', label: 'Complaints waiting for a reply', count: attention.openDisputes, to: '/admin/disputes' },
         { icon: '🔎', label: 'Payments needing review', count: attention.reviewPayments, to: '/admin/payments' },
+        { icon: '🏷️', label: 'Offer patterns to check', count: attention.offerFlags, to: '/admin/offers' },
       ]
     : [];
   const urgent = attentionItems.filter((i) => i.count > 0);
@@ -203,7 +208,7 @@ export default function Dashboard() {
     ? [
         { icon: '📋', label: 'Active listings', value: overview.activeListings, to: '/admin/listings' },
         { icon: '🔍', label: 'Pending reviews', value: overview.pendingReviews, to: '/admin/flagged', alert: true },
-        { icon: '🚩', label: 'Open reports', value: overview.openReports, to: '/admin/flagged', alert: true },
+        { icon: '🚩', label: 'Open reports', value: overview.openReports, to: '/admin/reports', alert: true },
         { icon: '💬', label: 'Open complaints', value: attention ? attention.openDisputes || 0 : 0, to: '/admin/disputes', alert: true },
         { icon: '👤', label: 'Signups today', value: overview.signupsToday, to: '/admin/users' },
       ]
@@ -433,6 +438,96 @@ export default function Dashboard() {
             </Link>
           ))}
         </div>
+      ) : null}
+
+      <SectionTitle hint="Reports, reviews, blocks and saved items">Community</SectionTitle>
+      {errors.community ? (
+        <SectionError>{errors.community}</SectionError>
+      ) : community ? (
+        <>
+          <div className="dash-grid dash-grid-stats">
+            {[
+              ['🚩', 'Open reports', community.openReports, '/admin/reports', true],
+              ['⭐', 'New reviews (7 days)', community.newReviews, '/admin/reviews', false],
+              ['⏳', 'Listings expiring soon', community.expiringSoon, '/admin/listings?status=expiring', false],
+              ['🚫', 'Users blocked 3+ times', community.multiBlocked, '/admin/blocks', true],
+            ].map(([icon, text, value, to, alert]) => (
+              <Link key={text} to={to} className="dash-link">
+                <div className="dash-card">
+                  <p className="dash-stat-label">
+                    <span>{icon}</span>
+                    <span>{text}</span>
+                  </p>
+                  <p
+                    className="dash-stat-value"
+                    style={{ color: alert && value > 0 ? 'var(--color-warning)' : 'var(--color-primary)' }}
+                  >
+                    {value}
+                  </p>
+                </div>
+              </Link>
+            ))}
+          </div>
+
+          {community.mostSaved.length > 0 && (
+            <div className="dash-card" style={{ marginTop: 12 }}>
+              <p className="dash-stat-label">
+                <span>♥</span>
+                <span>Most saved listings</span>
+              </p>
+              {community.mostSaved.map((l) => (
+                <Link
+                  key={l.listingId}
+                  to={`/listings/${l.listingId}`}
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    gap: 10,
+                    padding: '8px 0',
+                    borderTop: '1px solid var(--color-border)',
+                    marginTop: 8,
+                    fontSize: 13,
+                    color: 'var(--color-ink)',
+                  }}
+                >
+                  <span style={{ minWidth: 0, wordBreak: 'break-word' }}>
+                    {l.title} · {money(l.price)}
+                  </span>
+                  <strong>{l.count} saved</strong>
+                </Link>
+              ))}
+            </div>
+          )}
+
+          <SectionTitle hint="Active users are people who messaged, offered, listed or paid in the last 7 days">
+            App health
+          </SectionTitle>
+          <div className="dash-grid dash-grid-stats">
+            {[
+              ['🟢', 'Active users', community.activeUsers, '/admin/users'],
+              ['🎉', 'Items sold', community.itemsSold, '/admin/listings?status=sold'],
+              ['📵', 'Blocked IMEIs', community.blockedImeis, '/admin/blacklist'],
+              ['🔔', 'Push alerts on', `${community.pushUsers} of ${community.pushTotal}`, '/admin/users'],
+            ].map(([icon, text, value, to]) => (
+              <Link key={text} to={to} className="dash-link">
+                <div className="dash-card">
+                  <p className="dash-stat-label">
+                    <span>{icon}</span>
+                    <span>{text}</span>
+                  </p>
+                  <p className="dash-stat-value" style={{ color: 'var(--color-primary)' }}>
+                    {value}
+                  </p>
+                  {text === 'Items sold' && (
+                    <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--color-muted)' }}>
+                      {community.itemsSold30} in the last 30 days
+                    </p>
+                  )}
+                </div>
+              </Link>
+            ))}
+          </div>
+        </>
       ) : null}
 
       {/* Trends */}

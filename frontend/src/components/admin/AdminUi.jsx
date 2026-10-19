@@ -38,7 +38,14 @@ const TONES = {
   teal: { background: 'color-mix(in srgb, var(--color-teal) 14%, var(--color-card))', color: 'var(--color-teal)' },
 };
 
-export const LISTING_TONE = { active: 'success', under_review: 'gold', removed: 'warning', sold: 'teal' };
+export const LISTING_TONE = {
+  active: 'success',
+  under_review: 'gold',
+  removed: 'warning',
+  sold: 'teal',
+  unavailable: 'muted',
+  expired: 'muted',
+};
 export const PAYMENT_TONE = { pending: 'gold', held: 'teal', released: 'success', failed: 'warning', refunded: 'muted' };
 
 export function Chip({ tone = 'muted', children }) {

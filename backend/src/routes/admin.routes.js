@@ -11,6 +11,8 @@ const zones = require('../controllers/safeZones.controller');
 const audit = require('../controllers/adminAudit.controller');
 const payAdmin = require('../controllers/adminPayments.controller');
 const offersAdmin = require('../controllers/adminOffers.controller');
+const modAdmin = require('../controllers/adminModeration.controller');
+const communityAdmin = require('../controllers/adminCommunity.controller');
 
 router.use(authMiddleware, adminMiddleware); // every admin route requires admin role
 
@@ -51,6 +53,13 @@ router.get('/offers', offersAdmin.getOffersLog);
 router.get('/offers-stats', stats.getOffersStats);
 router.get('/settings', offersAdmin.getSettings);
 router.patch('/settings/offer-expiry', offersAdmin.setOfferExpiry);
+
+router.get('/community-stats', communityAdmin.getCommunityStats);
+router.get('/reports', modAdmin.getReports);
+router.patch('/reports/:id/resolve', modAdmin.resolveReport);
+router.get('/reviews', modAdmin.getReviews);
+router.delete('/reviews/:id', modAdmin.deleteReview);
+router.get('/blocks', modAdmin.getBlocks);
 
 router.get('/export/payments.csv', exp.exportPayments);
 router.get('/export/users.csv', exp.exportUsers);

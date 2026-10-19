@@ -24,6 +24,9 @@ import Disputes from './pages/admin/Disputes';
 import Offers from './pages/admin/Offers';
 import Broadcast from './pages/admin/Broadcast';
 import SafeZones from './pages/admin/SafeZones';
+import Reports from './pages/admin/Reports';
+import Reviews from './pages/admin/Reviews';
+import Blocks from './pages/admin/Blocks';
 import Inbox from './pages/Inbox';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
@@ -84,6 +87,9 @@ function App() {
           <Route path="/admin/broadcast" element={<Broadcast />} />
           <Route path="/admin/safe-zones" element={<SafeZones />} />
           <Route path="/admin/activity" element={<Activity />} />
+          <Route path="/admin/reports" element={<Reports />} />
+          <Route path="/admin/reviews" element={<Reviews />} />
+          <Route path="/admin/blocks" element={<Blocks />} />
           <Route path="/" element={<Landing />} />
           <Route path="/browse" element={<Browse />} />
           <Route path="/login" element={<Login />} />

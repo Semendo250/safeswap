@@ -5,6 +5,10 @@ const Report = require('../models/Report');
 const Message = require('../models/Message');
 const Payment = require('../models/Payment');
 const Offer = require('../models/Offer');
+const Block = require('../models/Block');
+const Review = require('../models/Review');
+const Favorite = require('../models/Favorite');
+const { refreshSellerRating } = require('../utils/ratings');
 const AuditLog = require('../models/AuditLog');
 const PasswordResetToken = require('../models/PasswordResetToken');
 const { calculateTrustScore } = require('../utils/trustScore');
@@ -12,12 +16,12 @@ const { normalizeKenyanPhone } = require('../utils/phone');
 const { notify } = require('../utils/notify');
 
 const PAYMENT_STATUSES = ['pending', 'held', 'released', 'failed', 'refunded'];
-const LISTING_STATUSES = ['active', 'under_review', 'removed', 'sold'];
+const LISTING_STATUSES = ['active', 'under_review', 'removed', 'sold', 'expired'];
 
 const USER_LIST_FIELDS =
   'fullName email studentRegNo phone location profilePicture role isBanned emailVerified ' +
   'phoneVerified verificationPath fallbackApproved fallbackRejected trustScore completedSales ' +
-  'reportCount createdAt';
+  'reportCount ratingAverage ratingCount createdAt';
 
 // ---------- helpers ----------
 
@@ -158,9 +162,20 @@ async function getUsers(req, res) {
         ])
       : [];
     const countMap = new Map(counts.map((c) => [c._id.toString(), c.count]));
+    const blockRows = ids.length
+      ? await Block.aggregate([
+          { $match: { blocked: { $in: ids } } },
+          { $group: { _id: '$blocked', count: { $sum: 1 } } },
+        ])
+      : [];
+    const blockMap = new Map(blockRows.map((b) => [b._id.toString(), b.count]));
 
     res.json({
-      users: users.map((u) => ({ ...u, listingCount: countMap.get(u._id.toString()) || 0 })),
+      users: users.map((u) => ({
+        ...u,
+        listingCount: countMap.get(u._id.toString()) || 0,
+        blockedCount: blockMap.get(u._id.toString()) || 0,
+      })),
       total,
       page,
       pages: Math.max(Math.ceil(total / limit), 1),
@@ -321,6 +336,8 @@ async function deleteUser(req, res) {
       });
     }
 
+    const reviewedSellers = await Review.distinct('seller', { reviewer: user._id });
+
     await Promise.all([
       Message.deleteMany({
         $or: [{ sender: user._id }, { receiver: user._id }, { listing: { $in: listingIds } }],
@@ -331,10 +348,14 @@ async function deleteUser(req, res) {
       Offer.deleteMany({
         $or: [{ buyer: user._id }, { seller: user._id }, { listing: { $in: listingIds } }],
       }),
+      Review.deleteMany({ $or: [{ seller: user._id }, { reviewer: user._id }] }),
+      Favorite.deleteMany({ $or: [{ user: user._id }, { listing: { $in: listingIds } }] }),
+      Block.deleteMany({ $or: [{ blocker: user._id }, { blocked: user._id }] }),
       Listing.deleteMany({ seller: user._id }),
       PasswordResetToken.deleteMany({ email: user.email }),
     ]);
     await user.deleteOne();
+    for (const sid of reviewedSellers) await refreshSellerRating(sid);
 
     await logAction(req, 'user.delete', {
       targetType: 'user',
@@ -368,9 +389,18 @@ async function getAllListings(req, res) {
     const { status = 'all', category = 'all', search = '' } = req.query;
     const { page, limit, skip } = pageParams(req.query);
 
-    const query = {};
-    if (LISTING_STATUSES.includes(status)) query.status = status;
-    if (['phone', 'general'].includes(category)) query.category = category;
+    const and = [];
+    if (status === 'sold_elsewhere') {
+      and.push({ status: 'unavailable', unavailableReason: 'sold_elsewhere' });
+    } else if (status === 'unavailable') {
+      and.push({ status: 'unavailable', unavailableReason: { $ne: 'sold_elsewhere' } });
+    } else if (status === 'expiring') {
+      const cut = new Date(Date.now() - 53 * 24 * 60 * 60 * 1000);
+      and.push({ status: 'active' }, { $or: [{ renewedAt: { $lt: cut } }, { renewedAt: null, createdAt: { $lt: cut } }] });
+    } else if (LISTING_STATUSES.includes(status)) {
+      and.push({ status });
+    }
+    if (['phone', 'general'].includes(category)) and.push({ category });
 
     const term = String(search).trim().slice(0, 60);
     if (term) {
@@ -379,9 +409,11 @@ async function getAllListings(req, res) {
         .select('_id')
         .limit(50)
         .lean();
-      query.$or = [{ title: rx }, { imei: rx }];
-      if (sellers.length) query.$or.push({ seller: { $in: sellers.map((s) => s._id) } });
+      const or = [{ title: rx }, { imei: rx }];
+      if (sellers.length) or.push({ seller: { $in: sellers.map((s) => s._id) } });
+      and.push({ $or: or });
     }
+    const query = and.length ? { $and: and } : {};
 
     const [listings, total] = await Promise.all([
       Listing.find(query)

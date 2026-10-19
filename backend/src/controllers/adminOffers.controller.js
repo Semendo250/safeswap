@@ -4,6 +4,7 @@ const Listing = require('../models/Listing');
 const User = require('../models/User');
 const AuditLog = require('../models/AuditLog');
 const { getOfferHours, setOfferHours } = require('../utils/settings');
+const { findOfferFlags } = require('../utils/offerFlags');
 
 const OFFER_STATUSES = ['pending', 'accepted', 'declined', 'replaced', 'expired', 'closed', 'paid'];
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -169,71 +170,12 @@ async function getOffersLog(req, res) {
 // GET /api/admin/offers/flags
 async function getOfferFlags(req, res) {
   try {
-    const d7 = new Date(Date.now() - 7 * DAY_MS);
-    const d30 = new Date(Date.now() - 30 * DAY_MS);
-    const d60 = new Date(Date.now() - 60 * DAY_MS);
-
-    const [heavy, declines, lowball, deep] = await Promise.all([
-      Offer.aggregate([
-        { $match: { createdAt: { $gte: d7 } } },
-        { $group: { _id: '$proposedBy', count: { $sum: 1 } } },
-        { $match: { count: { $gte: 10 } } },
-        { $sort: { count: -1 } },
-        { $limit: 20 },
-      ]),
-      Offer.aggregate([
-        { $match: { status: 'declined', createdAt: { $gte: d30 } } },
-        { $group: { _id: { buyer: '$buyer', seller: '$seller' }, count: { $sum: 1 } } },
-        { $match: { count: { $gte: 3 } } },
-        { $sort: { count: -1 } },
-        { $limit: 20 },
-      ]),
-      Offer.aggregate([
-        { $match: { createdAt: { $gte: d30 } } },
-        {
-          $match: {
-            $expr: {
-              $and: [
-                { $eq: ['$proposedBy', '$buyer'] },
-                { $lt: ['$amount', { $multiply: ['$askingPrice', 0.5] }] },
-              ],
-            },
-          },
-        },
-        { $group: { _id: '$buyer', count: { $sum: 1 } } },
-        { $match: { count: { $gte: 5 } } },
-        { $sort: { count: -1 } },
-        { $limit: 20 },
-      ]),
-      Offer.aggregate([
-        { $match: { createdAt: { $gte: d60 }, acceptedAt: { $exists: true } } },
-        { $match: { $expr: { $lte: ['$amount', { $multiply: ['$askingPrice', 0.6] }] } } },
-        { $group: { _id: '$seller', count: { $sum: 1 } } },
-        { $match: { count: { $gte: 2 } } },
-        { $sort: { count: -1 } },
-        { $limit: 20 },
-      ]),
-    ]);
-
-    const ids = [
-      ...heavy.map((r) => r._id),
-      ...declines.flatMap((r) => [r._id.buyer, r._id.seller]),
-      ...lowball.map((r) => r._id),
-      ...deep.map((r) => r._id),
-    ];
-    const names = await nameMap(ids);
-    const nm = (id) => names.get(String(id)) || 'Deleted user';
-
-    res.json({
-      heavy: heavy.map((r) => ({ name: nm(r._id), count: r.count })),
-      declines: declines.map((r) => ({ buyerName: nm(r._id.buyer), sellerName: nm(r._id.seller), count: r.count })),
-      lowball: lowball.map((r) => ({ name: nm(r._id), count: r.count })),
-      deepSellers: deep.map((r) => ({ name: nm(r._id), count: r.count })),
-    });
+    res.json(await findOfferFlags());
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 }
+
 
 // GET /api/admin/settings
 async function getSettings(req, res) {

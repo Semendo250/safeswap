@@ -7,6 +7,22 @@ import { getUnreadMessages } from '../api/chat.api';
 import NotificationBell from './NotificationBell';
 
 const ICON_PATHS = {
+  star: <path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />,
+  alert: (
+    <>
+      <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+      <path d="M12 9v4" />
+      <path d="M12 17h.01" />
+    </>
+  ),
+  userx: (
+    <>
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="m17 8 5 5" />
+      <path d="m22 8-5 5" />
+    </>
+  ),
   dashboard: (
     <>
       <rect x="3" y="3" width="7" height="7" rx="1" />
@@ -124,9 +140,12 @@ const ADMIN_LINKS = [
   { to: '/admin/verification', label: 'Verification queue', icon: 'idcard' },
   { to: '/admin/listings', label: 'All listings', icon: 'listings' },
   { to: '/admin/flagged', label: 'Flagged queue', icon: 'flag' },
+  { to: '/admin/reports', label: 'Reports', icon: 'alert' },
   { to: '/admin/payments', label: 'Payments', icon: 'payments' },
   { to: '/admin/offers', label: 'Offers', icon: 'offers' },
+  { to: '/admin/reviews', label: 'Reviews', icon: 'star' },
   { to: '/admin/blacklist', label: 'IMEI blacklist', icon: 'block' },
+  { to: '/admin/blocks', label: 'Blocks', icon: 'userx' },
   { to: '/admin/disputes', label: 'Complaints', icon: 'complaints' },
   { to: '/admin/broadcast', label: 'Broadcast', icon: 'broadcast' },
   { to: '/admin/safe-zones', label: 'Meetup spots', icon: 'pin' },
@@ -137,7 +156,9 @@ const ADMIN_LINKS = [
 function badgeCount(to, d) {
   if (!d) return 0;
   if (to === '/admin/verification') return d.pendingVerifications || 0;
-  if (to === '/admin/flagged') return (d.pendingListings || 0) + (d.openReports || 0);
+  if (to === '/admin/flagged') return d.pendingListings || 0;
+  if (to === '/admin/reports') return d.openReports || 0;
+  if (to === '/admin/offers') return d.offerFlags || 0;
   if (to === '/admin/payments') return (d.heldOverThreeDays || 0) + (d.stuckPending || 0);
   if (to === '/admin/disputes') return d.openDisputes || 0;
   return 0;

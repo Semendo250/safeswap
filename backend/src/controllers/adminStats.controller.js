@@ -68,7 +68,15 @@ async function getNeedsAttention(req, res) {
       Payment.countDocuments({ needsReview: true }),
     ]);
 
+    let offerFlags = 0;
+    try {
+      offerFlags = countOfferFlags(await findOfferFlags());
+    } catch (e) {
+      console.error('offer flags failed:', e.message);
+    }
+
     res.json({
+      offerFlags,
       reviewPayments,
       pendingListings,
       openReports,

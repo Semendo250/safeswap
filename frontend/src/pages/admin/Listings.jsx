@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { getAllListings, approveListing, removeListing } from '../../api/admin.api';
 import {
   PageShell,
@@ -23,6 +24,10 @@ const STATUS_TABS = [
   ['under_review', 'Under review'],
   ['removed', 'Removed'],
   ['sold', 'Sold'],
+  ['unavailable', 'Unavailable'],
+  ['sold_elsewhere', 'Sold elsewhere'],
+  ['expired', 'Expired'],
+  ['expiring', 'Expiring soon'],
 ];
 
 const CATEGORY_TABS = [
@@ -119,7 +124,11 @@ function ListingCard({ l, risk, onView, onApprove, onRemove }) {
             {money(l.price)}
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            <Chip tone={LISTING_TONE[l.status] || 'muted'}>{l.status.replace('_', ' ')}</Chip>
+            <Chip tone={LISTING_TONE[l.status] || 'muted'}>
+              {l.status === 'unavailable' && l.unavailableReason === 'sold_elsewhere'
+                ? 'sold elsewhere'
+                : l.status.replace('_', ' ')}
+            </Chip>
             <Chip tone="muted">{l.category}</Chip>
             {l.category === 'phone' && <Chip tone={IMEI_TONE[l.imeiStatus] || 'muted'}>IMEI {l.imeiStatus}</Chip>}
             {l.reportCount > 0 && <Chip tone="warning">{l.reportCount} report{l.reportCount === 1 ? '' : 's'}</Chip>}
@@ -183,7 +192,13 @@ function ListingCard({ l, risk, onView, onApprove, onRemove }) {
 export default function Listings() {
   const [search, setSearch] = useState('');
   const debounced = useDebounced(search);
-  const [status, setStatus] = useState('all');
+  const [params, setParams] = useSearchParams();
+  const urlStatus = params.get('status');
+  const status = STATUS_TABS.some(([v]) => v === urlStatus) ? urlStatus : 'all';
+  function changeStatus(v) {
+    setParams(v === 'all' ? {} : { status: v }, { replace: true });
+    setPage(1);
+  }
   const [category, setCategory] = useState('all');
   const [page, setPage] = useState(1);
   const [reloadKey, setReloadKey] = useState(0);
@@ -338,14 +353,7 @@ export default function Listings() {
 
       <div className="lst-filter">
         <span className="lst-filter-label">Status</span>
-        <Tabs
-          options={STATUS_TABS}
-          value={status}
-          onChange={(v) => {
-            setStatus(v);
-            setPage(1);
-          }}
-        />
+        <Tabs options={STATUS_TABS} value={status} onChange={changeStatus} />
       </div>
       <div className="lst-filter">
         <span className="lst-filter-label">Type</span>
