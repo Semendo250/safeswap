@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { getOffersLog } from '../../api/admin.api';
-import OfferWatchlist from '../../components/admin/OfferWatchlist';
 import OfferSettings from '../../components/admin/OfferSettings';
 import {
   PageShell,
