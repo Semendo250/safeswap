@@ -13,6 +13,7 @@ const payAdmin = require('../controllers/adminPayments.controller');
 const offersAdmin = require('../controllers/adminOffers.controller');
 const modAdmin = require('../controllers/adminModeration.controller');
 const communityAdmin = require('../controllers/adminCommunity.controller');
+const finance = require('../controllers/adminFinance.controller');
 
 router.use(authMiddleware, adminMiddleware); // every admin route requires admin role
 
@@ -84,5 +85,14 @@ router.post('/disputes/:id/reply', comms.replyToDispute);
 router.post('/users/:id/message', comms.messageUser);
 
 router.get('/audit-log', audit.getAuditLog);
+
+router.get('/finance/overview', finance.getOverview);
+router.get('/finance/settlements', finance.getSettlements);
+router.get('/finance/held', finance.getHeld);
+router.get('/finance/trends', finance.getTrends);
+router.patch('/finance/settings/fee', finance.setFee);
+router.post('/finance/settlements/:id/paid', finance.markPaid);
+router.post('/finance/settlements/:id/undo', finance.undoPaid);
+router.get('/export/finance.csv', finance.exportFinance);
 
 module.exports = router;

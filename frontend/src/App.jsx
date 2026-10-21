@@ -19,6 +19,7 @@ import BlacklistManager from './pages/admin/BlacklistManager';
 import Users from './pages/admin/Users';
 import Listings from './pages/admin/Listings';
 import Payments from './pages/admin/Payments';
+import Finance from './pages/admin/Finance';
 import Activity from './pages/admin/Activity';
 import Disputes from './pages/admin/Disputes';
 import Offers from './pages/admin/Offers';
@@ -81,6 +82,7 @@ function App() {
           <Route path="/admin/listings" element={<Listings />} />
           <Route path="/admin/flagged" element={<FlaggedQueue />} />
           <Route path="/admin/payments" element={<Payments />} />
+                    <Route path="/admin/finance" element={<Finance />} />
           <Route path="/admin/blacklist" element={<BlacklistManager />} />
           <Route path="/admin/disputes" element={<Disputes />} />
           <Route path="/admin/offers" element={<Offers />} />

@@ -69,6 +69,12 @@ const ICON_PATHS = {
       <path d="M2 10h20" />
     </>
   ),
+    finance: (
+    <>
+      <path d="M3 3v18h18" />
+      <path d="m7 14 4-4 3 3 5-6" />
+    </>
+  ),
   offers: (
     <>
       <path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
@@ -142,6 +148,7 @@ const ADMIN_LINKS = [
   { to: '/admin/flagged', label: 'Flagged queue', icon: 'flag' },
   { to: '/admin/reports', label: 'Reports', icon: 'alert' },
   { to: '/admin/payments', label: 'Payments', icon: 'payments' },
+    { to: '/admin/finance', label: 'Finance', icon: 'finance' },
   { to: '/admin/offers', label: 'Offers', icon: 'offers' },
   { to: '/admin/reviews', label: 'Reviews', icon: 'star' },
   { to: '/admin/blacklist', label: 'IMEI blacklist', icon: 'block' },
