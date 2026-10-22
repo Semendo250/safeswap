@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
   getFinanceOverview,
@@ -35,6 +35,11 @@ const VALID_TABS = ['payout-due', 'refund-due', 'held', 'paid'];
 const REFERENCE_RX = /^[A-Z0-9][A-Z0-9\-_.]{3,29}$/;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const CATEGORY_LABEL = { phone: 'Phones', general: 'Other items' };
+function rangeText(list) {
+  const lo = Math.min(...list);
+  const hi = Math.max(...list);
+  return lo === hi ? `${lo}%` : `${lo}% to ${hi}%`;
+}
 
 function daysSince(value) {
   if (!value) return 0;
@@ -256,9 +261,13 @@ function PayDialog({ s, onCancel, onDone }) {
   );
 }
 
-function FeeDialog({ current, onCancel, onDone }) {
-  const [phone, setPhone] = useState(String(current.phone));
-  const [general, setGeneral] = useState(String(current.general));
+function FeeDialog({ current, buckets, onCancel, onDone }) {
+  const [cat, setCat] = useState('phone');
+  const [values, setValues] = useState({
+    phone: current.phone.map(String),
+    general: current.general.map(String),
+  });
+  const [fillAll, setFillAll] = useState('');
   const [reason, setReason] = useState('');
   const [applyToDue, setApplyToDue] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -266,17 +275,27 @@ function FeeDialog({ current, onCancel, onDone }) {
 
   const isValid = (v) => {
     const n = Number(v);
-    return v.trim() !== '' && Number.isFinite(n) && n >= 0 && n <= 30;
+    return String(v).trim() !== '' && Number.isFinite(n) && n >= 0 && n <= 30;
   };
-  const ready = isValid(phone) && isValid(general) && reason.trim().length >= 3;
-  const example = (v) => (isValid(v) ? 1000 - Math.round((1000 * Number(v)) / 100) : null);
+  const allValid = ['phone', 'general'].every((c) => values[c].every(isValid));
+  const ready = allValid && reason.trim().length >= 3;
+
+  function setCell(i, v) {
+    setValues((prev) => ({ ...prev, [cat]: prev[cat].map((x, j) => (j === i ? v : x)) }));
+  }
+
+  function fill() {
+    if (!isValid(fillAll)) return;
+    setValues((prev) => ({ ...prev, [cat]: prev[cat].map(() => fillAll) }));
+  }
 
   async function submit() {
     if (busy || !ready) return;
     setBusy(true);
     setError('');
     try {
-      const res = await setFeeRate({ phone: Number(phone), general: Number(general) }, reason.trim(), applyToDue);
+      const rates = { phone: values.phone.map(Number), general: values.general.map(Number) };
+      const res = await setFeeRate(rates, reason.trim(), applyToDue);
       onDone(res.data);
     } catch (err) {
       setError(errText(err));
@@ -284,34 +303,69 @@ function FeeDialog({ current, onCancel, onDone }) {
     }
   }
 
-  const field = (label, value, setValue) => (
-    <div style={{ marginBottom: 10 }}>
-      <label style={{ fontSize: 13, fontWeight: 600, display: 'block', marginBottom: 4 }}>{label} (%)</label>
-      <input
-        type="number"
-        inputMode="decimal"
-        min="0"
-        max="30"
-        step="0.5"
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-      />
-      {example(value) !== null && (
-        <span style={{ fontSize: 12, color: 'var(--color-muted)' }}>
-          On a KES 1,000 sale the seller receives {money(example(value))}.
-        </span>
-      )}
-    </div>
-  );
-
   return (
     <Modal title="Platform fees" onClose={onCancel} busy={busy}>
-      <p style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--color-muted)', lineHeight: 1.5 }}>
-        Each fee is a percentage of the agreed price the buyer paid, kept when a payment is released. The seller is
-        paid the rest. Refunds never include a fee.
+      <p style={{ margin: '0 0 8px', fontSize: 13, color: 'var(--color-muted)', lineHeight: 1.5 }}>
+        The fee is a percentage of the agreed price the buyer paid, set per price range for each category. It is
+        kept when a payment is released and the seller is paid the rest. Refunds never include a fee.
       </p>
-      {field('Phones', phone, setPhone)}
-      {field('Other items', general, setGeneral)}
+
+      <Tabs
+        options={[
+          ['phone', 'Phones'],
+          ['general', 'Other items'],
+        ]}
+        value={cat}
+        onChange={setCat}
+      />
+
+      {buckets.map((b, i) => (
+        <div
+          key={b.label}
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 6 }}
+        >
+          <span style={{ fontSize: 13 }}>{b.label}</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <input
+              type="number"
+              inputMode="decimal"
+              min="0"
+              max="30"
+              step="0.5"
+              value={values[cat][i]}
+              onChange={(e) => setCell(i, e.target.value)}
+              style={{ width: 84, textAlign: 'right' }}
+            />
+            <span style={{ fontSize: 13, color: 'var(--color-muted)' }}>%</span>
+          </span>
+        </div>
+      ))}
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '10px 0 12px' }}>
+        <span style={{ fontSize: 12, color: 'var(--color-muted)', flex: 1 }}>
+          Use the same rate for every range of {cat === 'phone' ? 'phones' : 'other items'}:
+        </span>
+        <input
+          type="number"
+          inputMode="decimal"
+          min="0"
+          max="30"
+          step="0.5"
+          placeholder="%"
+          value={fillAll}
+          onChange={(e) => setFillAll(e.target.value)}
+          style={{ width: 70, textAlign: 'right' }}
+        />
+        <button type="button" onClick={fill} disabled={!isValid(fillAll)} style={btn('outline')}>
+          Fill
+        </button>
+      </div>
+
+      {!allValid && (
+        <p style={{ margin: '0 0 8px', fontSize: 12, color: 'var(--color-warning)' }}>
+          Every range, in both categories, needs a fee from 0 to 30%.
+        </p>
+      )}
 
       <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 13, margin: '0 0 10px' }}>
         <input
@@ -712,6 +766,9 @@ export default function Finance() {
         .fin-owed-sub { color: var(--color-muted); font-size: 12px; font-weight: 400; }
         .fin-owed-right { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex-shrink: 0; }
         .fin-owed-amt { font-weight: 700; color: var(--color-primary); white-space: nowrap; }
+                .fin-rates { display: grid; grid-template-columns: 1fr auto auto; gap: 6px 28px; margin-top: 10px; font-size: 13px; }
+        .fin-rates-head { font-size: 11px; font-weight: 600; color: var(--color-muted); }
+        .fin-rates-num { text-align: right; font-weight: 600; }
 
         .fin-filter { display: flex; align-items: center; gap: 10px; }
         .fin-filter-label {
@@ -803,10 +860,10 @@ export default function Finance() {
                   <div className="fin-hero-amount" style={{ color: 'var(--color-success)' }}>
                     {money(o.fees.earned)}
                   </div>
-                  <div className="fin-hero-sub">
+                                    <div className="fin-hero-sub">
                     {money(o.fees.last30)} in the last 30 days. Another {money(o.fees.expected)} is expected when the
-                    held money is released. Rates: phones {o.feeRates.phone}%, other items {o.feeRates.general}%. Tap to
-                    change the rates.
+                    held money is released. Rates: phones {rangeText(o.feeRates.phone)}, other items{' '}
+                    {rangeText(o.feeRates.general)}. Tap to change the rates.
                   </div>
                 </div>
               </Clickable>
@@ -829,6 +886,23 @@ export default function Finance() {
               ))}
             </div>
           )}
+                    <Clickable onClick={() => setFeeOpen(true)}>
+            <div className="fin-card" style={{ marginTop: 12 }}>
+              <div className="fin-stat-label">Fee rates by agreed price (tap to change)</div>
+              <div className="fin-rates">
+                <span className="fin-rates-head">Agreed price</span>
+                <span className="fin-rates-head fin-rates-num">Phones</span>
+                <span className="fin-rates-head fin-rates-num">Other items</span>
+                {o.feeBuckets.map((b, i) => (
+                  <Fragment key={b.label}>
+                    <span>{b.label}</span>
+                    <span className="fin-rates-num">{o.feeRates.phone[i]}%</span>
+                    <span className="fin-rates-num">{o.feeRates.general[i]}%</span>
+                  </Fragment>
+                ))}
+              </div>
+            </div>
+          </Clickable>
 
           {/* Needs attention */}
           <SectionTitle hint={attention.length ? plural(attention.length, 'item') : ''}>Needs your attention</SectionTitle>
@@ -1060,7 +1134,8 @@ export default function Finance() {
 
       {feeOpen && o && (
         <FeeDialog
-          current={o.feeRates}
+                    current={o.feeRates}
+          buckets={o.feeBuckets}
           onCancel={() => setFeeOpen(false)}
           onDone={(result) => {
             setFeeOpen(false);

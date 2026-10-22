@@ -59,7 +59,7 @@ async function createMissingSettlements(rates) {
       const gross = Number(p.amount != null ? p.amount : l ? l.price : 0) || 0;
       const isRefund = p.status === 'refunded';
       const category = l ? l.category : undefined;
-      const rate = isRefund ? 0 : rateFor(rates, category);
+            const rate = isRefund ? 0 : rateFor(rates, category, gross);
       const fee = isRefund ? 0 : calcFee(gross, rate);
       const doc = {
         payment: p._id,
@@ -135,7 +135,7 @@ async function reconcileDueSettlements(rates) {
         const l = await Listing.findById(s.listing).select('category').lean();
         category = l ? l.category : undefined;
       }
-      const rate = rateFor(rates, category);
+            const rate = rateFor(rates, category, s.gross);
       const fee = calcFee(s.gross, rate);
       const update = {
         type: 'payout',

@@ -2,6 +2,7 @@ import { useContext } from 'react';
 import { Link } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import FavoriteButton from './FavoriteButton';
+import FeePreview from './FeePreview';
 
 function statusLabel(l) {
   if (!l.status || l.status === 'active') return '';
@@ -35,6 +36,9 @@ export default function ListingCard({ listing, onFavoriteChange }) {
         <p style={{ margin: '3px 0 0', fontSize: '13px', color: 'var(--color-muted)' }}>
           KES {Number(listing.price).toLocaleString()} &middot; {listing.seller?.fullName}
         </p>
+                {own && (!listing.status || listing.status === 'active') && (
+          <FeePreview category={listing.category} amount={listing.price} compact />
+        )}
       </div>
       {showHeart && (
         <FavoriteButton

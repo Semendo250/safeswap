@@ -35,6 +35,7 @@ export default function Chat() {
   const [blockedByMe, setBlockedByMe] = useState(false);
   const [listingTitle, setListingTitle] = useState('');
   const [listingSellerId, setListingSellerId] = useState(null);
+    const [listingCategory, setListingCategory] = useState('');
   const [otherTyping, setOtherTyping] = useState(false);
   const [otherOnline, setOtherOnline] = useState(false);
   const bottomRef = useRef(null);
@@ -49,6 +50,7 @@ export default function Chat() {
       setListingSellerId(res.data.seller?._id || null);
       setListingPrice(res.data.price || 0);
       setListingStatus(res.data.status || '');
+            setListingCategory(res.data.category || '');
     });
   }, [listingId]);
 
@@ -356,6 +358,7 @@ export default function Chat() {
 
   if (authLoading) return null;
   if (!user) return <p style={{ padding: '1rem' }}>Please log in to view this conversation.</p>;
+    const isSeller = listingSellerId === user.id;
 
   return (
     <div
@@ -498,7 +501,10 @@ export default function Chat() {
                     userId={user.id}
                     onAccept={(id) => respondToOffer(acceptOffer, id)}
                     onDecline={(id) => respondToOffer(declineOffer, id)}
-                    onCounter={(offer) => setSheet({ mode: 'counter', offer })}
+                                        onCounter={(offer) => setSheet({ mode: 'counter', offer })}
+                    isSeller={isSeller}
+                    category={listingCategory}
+                    
                   />
                 ) : (
                   <ChatBubble
@@ -633,7 +639,9 @@ export default function Chat() {
                   askingPrice={listingPrice}
                   initial={sheet.mode === 'counter' ? sheet.offer.amount : null}
                   onSubmit={submitOffer}
-                  onClose={() => setSheet(null)}
+                                    onClose={() => setSheet(null)}
+                  showFee={isSeller}
+                  category={listingCategory}
                 />
               )}
             </div>

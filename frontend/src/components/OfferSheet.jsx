@@ -1,6 +1,7 @@
 import { useState } from 'react';
+import FeePreview from './FeePreview';
 
-export default function OfferSheet({ title, askingPrice, initial, onSubmit, onClose }) {
+export default function OfferSheet({ title, askingPrice, initial, onSubmit, onClose, showFee = false, category }) {
   const [value, setValue] = useState(initial ? String(initial) : '');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -40,6 +41,7 @@ export default function OfferSheet({ title, askingPrice, initial, onSubmit, onCl
           style={s.input}
         />
         {error && <p style={s.error}>{error}</p>}
+                        {showFee && <FeePreview category={category} amount={value} lead="If accepted, you'll receive" />}
         <p style={s.hint}>Agree the price here so payment matches.</p>
         <div style={{ display: 'flex', gap: 8 }}>
           <button type="button" onClick={onClose} style={{ ...s.btn, ...s.cancel }}>

@@ -10,7 +10,8 @@ const {
   setFeeRates,
   rateFor,
   isFeeConfigured,
-  MAX_FEE_PERCENT,
+  validateRates,
+  FEE_BUCKETS,
 } = require('../utils/financeSettings');
 const { syncSettlements, calcFee, EXPECTED_STATUS } = require('../utils/finance');
 
@@ -113,6 +114,34 @@ function amountStages() {
     },
   ];
 }
+// The fee rate for a held payment depends on the listing's category and the agreed amount
+function heldRateExpr(rates) {
+  const category = { $arrayElemAt: ['$_l.category', 0] };
+  const pick = (list) => ({
+    $switch: {
+      branches: FEE_BUCKETS.slice(1).map((b, i) => ({
+        case: { $lt: ['$_amt', b.min] },
+        then: list[i] / 100,
+      })),
+      default: list[FEE_BUCKETS.length - 1] / 100,
+    },
+  });
+  return { $cond: [{ $eq: [category, 'phone'] }, pick(rates.phone), pick(rates.general)] };
+}
+
+// Lists which rates changed, for the activity log
+function describeChanges(before, after) {
+  const names = { phone: 'Phones', general: 'Other items' };
+  const out = [];
+  ['phone', 'general'].forEach((cat) => {
+    FEE_BUCKETS.forEach((b, i) => {
+      if (before[cat][i] !== after[cat][i]) {
+        out.push(`${names[cat]} ${b.label}: ${before[cat][i]}% to ${after[cat][i]}%`);
+      }
+    });
+  });
+  return out;
+}
 
 const SETTLEMENT_POPULATE = [
   { path: 'payment', select: 'checkoutRequestId mpesaReceipt phone status amount askingPrice' },
@@ -182,14 +211,8 @@ async function getOverview(req, res) {
     const d7 = new Date(now - 7 * DAY_MS);
     const d30 = new Date(now - 30 * DAY_MS);
 
-    // The fee rate that applies to a held payment depends on the listing's category
-    const rateExpr = {
-      $cond: [
-        { $eq: [{ $arrayElemAt: ['$_l.category', 0] }, 'phone'] },
-        rates.phone / 100,
-        rates.general / 100,
-      ],
-    };
+        // The fee rate for a held payment depends on the listing's category and the agreed amount
+    const rateExpr = heldRateExpr(rates);
 
     const paidSince = (since) => ({
       $cond: [{ $and: [{ $eq: ['$status', 'paid'] }, { $gte: ['$paidAt', since] }] }, '$net', 0],
@@ -316,6 +339,7 @@ async function getOverview(req, res) {
 
     res.json({
       feeRates: rates,
+            feeBuckets: FEE_BUCKETS,
       feeConfigured: configured,
       held: {
         count: H.count,
@@ -456,7 +480,7 @@ async function getHeld(req, res) {
     const payments = rows.map((p) => {
       const listing = p.listing && typeof p.listing.title === 'string' ? p.listing : null;
       const amount = p.amount != null ? p.amount : listing ? listing.price : 0;
-      const rate = rateFor(rates, listing ? listing.category : undefined);
+            const rate = rateFor(rates, listing ? listing.category : undefined, amount);
       const fee = calcFee(amount, rate);
       return {
         _id: p._id,
@@ -545,39 +569,24 @@ async function getTrends(req, res) {
 
 // ---------- fee ----------
 
-function parseRate(raw) {
-  if (raw === '' || raw === null || raw === undefined) return NaN;
-  return Number(raw);
-}
-
-function rateProblem(n, label) {
-  if (!Number.isFinite(n) || n < 0 || n > MAX_FEE_PERCENT) {
-    return `Enter a fee from 0 to ${MAX_FEE_PERCENT}% for ${label}`;
-  }
-  if (Math.round(n * 100) / 100 !== n) return `Use at most 2 decimal places for ${label}`;
-  return '';
-}
-
-// PATCH /api/admin/finance/settings/fee  { phone, general, reason, applyToDue }
+// PATCH /api/admin/finance/settings/fee  { rates: { phone: [...], general: [...] }, reason, applyToDue }
 async function setFee(req, res) {
   try {
-    const phone = parseRate(req.body?.phone);
-    const general = parseRate(req.body?.general);
+    const checked = validateRates(req.body?.rates);
+    if (checked.error) return res.status(400).json({ error: checked.error });
+    const rates = checked.rates;
     const reason = String(req.body?.reason || '').trim().slice(0, 300);
     const applyToDue = req.body?.applyToDue === true;
-
-    const problem = rateProblem(phone, 'phones') || rateProblem(general, 'other items');
-    if (problem) return res.status(400).json({ error: problem });
     if (reason.length < 3) {
       return res.status(400).json({ error: 'Please give a reason for this change' });
     }
 
     const [before, configured] = await Promise.all([getFeeRates(), isFeeConfigured()]);
-    if (configured && before.phone === phone && before.general === general && !applyToDue) {
+    const changes = describeChanges(before, rates);
+    if (configured && changes.length === 0 && !applyToDue) {
       return res.status(400).json({ error: 'Those are already the current fees' });
     }
 
-    const rates = { phone, general };
     await setFeeRates(rates);
 
     // Optionally re-price payouts that have not been sent yet (rows already sent never change)
@@ -590,7 +599,7 @@ async function setFee(req, res) {
       if (due.length) {
         const ops = due.map((d) => {
           const category = d.category || (d.listing && d.listing.category) || undefined;
-          const rate = rateFor(rates, category);
+          const rate = rateFor(rates, category, d.gross);
           const fee = calcFee(d.gross, rate);
           const set = { feePercent: rate, fee, net: d.gross - fee };
           if (category) set.category = category;
@@ -606,9 +615,11 @@ async function setFee(req, res) {
       }
     }
 
+    const shown = changes.slice(0, 8).join('; ');
+    const more = changes.length > 8 ? ` and ${changes.length - 8} more` : '';
     await logAction(req, 'settings.fee_rate', {
       targetType: 'settings',
-      summary: `Fees changed: phones ${before.phone}% to ${phone}%, other items ${before.general}% to ${general}%${
+      summary: `Fees changed${changes.length ? `: ${shown}${more}` : ''}${
         applyToDue ? ` (also applied to ${updated} unsent payout${updated === 1 ? '' : 's'})` : ''
       }`,
       reason,
@@ -618,7 +629,7 @@ async function setFee(req, res) {
     res.json({
       feeRates: rates,
       updated,
-      message: `Fees set: phones ${phone}%, other items ${general}%.${
+      message: `Fees saved (${changes.length} rate${changes.length === 1 ? '' : 's'} changed).${
         applyToDue
           ? ` ${updated} unsent payout${updated === 1 ? '' : 's'} updated.`
           : ' They apply to payments released from now on.'
@@ -628,7 +639,6 @@ async function setFee(req, res) {
     res.status(500).json({ error: err.message });
   }
 }
-
 // ---------- mark as sent / undo ----------
 
 // POST /api/admin/finance/settlements/:id/paid  { reference, note }

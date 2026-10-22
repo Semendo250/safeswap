@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import CategoryTabs from '../components/CategoryTabs';
 import { createListing } from '../api/listings.api';
 import BackButton from '../components/BackButton';
+import FeePreview from '../components/FeePreview';
 
 const cardStyle = {
   background: 'var(--color-card)',
@@ -203,7 +204,7 @@ export default function CreateListing() {
             />
           </div>
 
-          <div>
+                    <div>
             <div style={fieldLabelStyle}>💵 Price (KES)</div>
             <input
               type="number"
@@ -213,6 +214,7 @@ export default function CreateListing() {
               required
               style={{ width: '100%' }}
             />
+            <FeePreview category={category} amount={price} approximate />
           </div>
         </div>
 

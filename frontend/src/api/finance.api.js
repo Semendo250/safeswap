@@ -25,10 +25,5 @@ export function undoSettlement(id, reason) {
 }
 
 export function setFeeRate(rates, reason, applyToDue) {
-  return api.patch('/admin/finance/settings/fee', {
-    phone: rates.phone,
-    general: rates.general,
-    reason,
-    applyToDue,
-  });
+  return api.patch('/admin/finance/settings/fee', { rates, reason, applyToDue });
 }

@@ -13,6 +13,7 @@ import ListingManager from '../components/ListingManager';
 import ReviewBox from '../components/ReviewBox';
 import FavoriteButton from '../components/FavoriteButton';
 import { Stars } from '../components/Stars';
+import FeePreview from '../components/FeePreview';
 
 const ICON_PATHS = {
   lock: (
@@ -373,13 +374,19 @@ export default function ListingDetail() {
       ) : (
         <p style={{ fontSize: '18px', fontWeight: 600 }}>KES {Number(listing.price).toLocaleString()}</p>
       )}
+            {isOwnListing && listing.status !== 'sold' && (
+        <FeePreview category={listing.category} amount={listing.price} approximate style={{ margin: '0 0 8px' }} />
+      )}
 
       {agreements.length > 0 && (
         <div style={{ margin: '0 0 12px' }}>
-          {agreements.map((a) => (
-            <p key={a.offerId} style={{ margin: '2px 0', fontSize: '13px', color: 'var(--color-success)', fontWeight: 600 }}>
-              Agreed with {a.buyer.fullName}: KES {Number(a.amount).toLocaleString()}
-            </p>
+                    {agreements.map((a) => (
+            <div key={a.offerId} style={{ margin: '4px 0' }}>
+              <p style={{ margin: '2px 0', fontSize: '13px', color: 'var(--color-success)', fontWeight: 600 }}>
+                Agreed with {a.buyer.fullName}: KES {Number(a.amount).toLocaleString()}
+              </p>
+              <FeePreview category={listing.category} amount={a.amount} style={{ margin: 0 }} />
+            </div>
           ))}
         </div>
       )}

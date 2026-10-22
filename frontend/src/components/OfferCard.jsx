@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import FeePreview from './FeePreview';
 
 const fmt = (n) => `KES ${Number(n).toLocaleString()}`;
 
@@ -10,7 +11,7 @@ function timeLeft(date) {
   return `${Math.max(1, Math.floor(ms / 60000))}m left`;
 }
 
-export default function OfferCard({ message, userId, onAccept, onDecline, onCounter }) {
+export default function OfferCard({ message, userId, onAccept, onDecline, onCounter, isSeller = false, category }) {
   const offer = message.offer;
   const [busy, setBusy] = useState(false);
 
@@ -48,6 +49,14 @@ export default function OfferCard({ message, userId, onAccept, onDecline, onCoun
         <p style={s.label}>{proposer}</p>
         <p style={{ ...s.amount, color: accent }}>{fmt(offer.amount)}</p>
         <p style={s.asking}>Asking {fmt(offer.askingPrice)}</p>
+                {isSeller && ['pending', 'accepted', 'paid'].includes(offer.status) && (
+          <FeePreview
+            category={category}
+            amount={offer.amount}
+            lead={offer.status === 'pending' ? "If accepted, you'll receive" : undefined}
+            style={{ margin: '6px 0 0' }}
+          />
+        )}
         {statusLine && <p style={{ ...s.status, color: accent }}>{statusLine}</p>}
 
         {pending && !mine && (

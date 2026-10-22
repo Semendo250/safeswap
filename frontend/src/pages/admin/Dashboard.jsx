@@ -76,25 +76,27 @@ function BarChart({ data, color, format }) {
   );
 }
 
-function ChartCard({ title, total, series, pick, color, format }) {
+function ChartCard({ title, total, series, pick, color, format, to }) {
   const data = series.map((s) => ({ date: s.date, value: pick(s) }));
   if (data.length === 0) return null;
   return (
-    <div className="dash-card">
-      <div className="dash-chart-head">
-        <span className="dash-chart-title">{title}</span>
-        <span className="dash-chart-total" style={{ color }}>
-          {format(total)}
-        </span>
+    <Link to={to} className="dash-link">
+      <div className="dash-card">
+        <div className="dash-chart-head">
+          <span className="dash-chart-title">{title}</span>
+          <span className="dash-chart-total" style={{ color }}>
+            {format(total)}
+          </span>
+        </div>
+        <div style={{ margin: '12px 0 6px' }}>
+          <BarChart data={data} color={color} format={format} />
+        </div>
+        <div className="dash-chart-range">
+          <span>{shortDate(data[0].date)}</span>
+          <span>{shortDate(data[data.length - 1].date)}</span>
+        </div>
       </div>
-      <div style={{ margin: '12px 0 6px' }}>
-        <BarChart data={data} color={color} format={format} />
-      </div>
-      <div className="dash-chart-range">
-        <span>{shortDate(data[0].date)}</span>
-        <span>{shortDate(data[data.length - 1].date)}</span>
-      </div>
-    </div>
+    </Link>
   );
 }
 
@@ -215,7 +217,7 @@ export default function Dashboard() {
     : [];
 
   // ----- money -----
-    const moneyCards = moneyData
+  const moneyCards = moneyData
     ? [
         {
           label: 'Held (waiting for meetup)',
@@ -275,9 +277,13 @@ export default function Dashboard() {
 
         .dash-card {
           border: 1px solid var(--color-border); border-radius: 12px; padding: 14px;
-          background: var(--color-card); box-sizing: border-box; transition: border-color 0.15s;
+          background: var(--color-card); box-sizing: border-box;
+          transition: border-color 0.15s, transform 0.1s;
         }
         a.dash-link:hover .dash-card { border-color: var(--color-teal); }
+        a.dash-link:active .dash-card { transform: scale(0.985); }
+        a.dash-link:focus-visible { outline: none; }
+        a.dash-link:focus-visible .dash-card { border-color: var(--color-teal); }
 
         .dash-grid { display: grid; gap: 12px; }
         .dash-grid-stats { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
@@ -403,7 +409,7 @@ export default function Dashboard() {
       ) : (
         <div className="dash-grid dash-grid-money">
           {moneyCards.map((c) => (
-                        <Link key={c.label} to={c.to} className="dash-link">
+            <Link key={c.label} to={c.to} className="dash-link">
               <div className="dash-card dash-money" style={{ '--accent': c.color }}>
                 <p className="dash-money-label">{c.label}</p>
                 <p className="dash-money-amount" style={{ color: c.color }}>
@@ -416,7 +422,7 @@ export default function Dashboard() {
         </div>
       )}
 
-            <SectionTitle hint="Last 30 days">Offers</SectionTitle>
+      <SectionTitle hint="Last 30 days">Offers</SectionTitle>
       {errors.offers ? (
         <SectionError>{errors.offers}</SectionError>
       ) : offersStats ? (
@@ -535,7 +541,7 @@ export default function Dashboard() {
       ) : null}
 
       {/* Trends */}
-      <SectionTitle>Trends</SectionTitle>
+      <SectionTitle hint="Tap a chart to open the page behind it">Trends</SectionTitle>
       <div className="dash-filter">
         <span className="dash-filter-label">Period</span>
         <Tabs
@@ -560,6 +566,7 @@ export default function Dashboard() {
             pick={(s) => s.signups}
             color="var(--color-primary)"
             format={count}
+            to="/admin/users"
           />
           <ChartCard
             title="New listings"
@@ -568,6 +575,7 @@ export default function Dashboard() {
             pick={(s) => s.listings}
             color="var(--color-teal)"
             format={count}
+            to="/admin/listings"
           />
           <ChartCard
             title="Money paid in (held + released)"
@@ -576,6 +584,7 @@ export default function Dashboard() {
             pick={(s) => s.paidAmount}
             color="var(--color-gold)"
             format={money}
+            to="/admin/finance"
           />
         </div>
       )}

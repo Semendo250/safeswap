@@ -10,6 +10,7 @@ import Avatar from '../components/Avatar';
 import ImageLightbox from '../components/ImageLightbox';
 import ListingManager, { statusText } from '../components/ListingManager';
 import { normalizeKenyanPhone, formatPhone, phoneForInput } from '../utils/phone';
+import FeePreview from '../components/FeePreview';
 
 const MAX_PICTURE_BYTES = 5 * 1024 * 1024;
 
@@ -271,6 +272,9 @@ useEffect(() => {
                 <p style={{ margin: '2px 0 0', fontSize: '13px', color: 'var(--color-muted)' }}>
                   KES {Number(l.price).toLocaleString()} &middot; {statusText(l)}
                 </p>
+                                {(l.status === 'active' || l.status === 'under_review') && (
+                  <FeePreview category={l.category} amount={l.price} compact />
+                )}
                 <ListingManager
                   listing={l}
                   onChange={(u) => setListings((prev) => prev.map((x) => (x._id === l._id ? { ...x, ...u } : x)))}
