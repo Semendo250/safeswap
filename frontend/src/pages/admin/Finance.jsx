@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   getFinanceOverview,
   getFinanceSettlements,
@@ -31,6 +31,7 @@ const TAB_QUERY = {
   'refund-due': { type: 'refund', status: 'due' },
   paid: { status: 'paid' },
 };
+const VALID_TABS = ['payout-due', 'refund-due', 'held', 'paid'];
 const REFERENCE_RX = /^[A-Z0-9][A-Z0-9\-_.]{3,29}$/;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const CATEGORY_LABEL = { phone: 'Phones', general: 'Other items' };
@@ -48,6 +49,11 @@ function plural(n, word) {
   return `${n} ${word}${n === 1 ? '' : 's'}`;
 }
 
+function scrollToId(id) {
+  const el = document.getElementById(id);
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
 function SectionTitle({ children, hint }) {
   return (
     <div className="fin-section">
@@ -59,6 +65,23 @@ function SectionTitle({ children, hint }) {
 
 function Muted({ children }) {
   return <p style={{ color: 'var(--color-muted)', fontSize: 13, margin: '8px 0' }}>{children}</p>;
+}
+
+// A card that behaves like the dashboard cards: teal border on hover, a small press effect,
+// and a click that either opens another page (to) or does something on this page (onClick)
+function Clickable({ to, onClick, children }) {
+  if (to) {
+    return (
+      <Link to={to} className="fin-link">
+        {children}
+      </Link>
+    );
+  }
+  return (
+    <button type="button" onClick={onClick} className="fin-link">
+      {children}
+    </button>
+  );
 }
 
 // ---------- charts (plain SVG) ----------
@@ -93,40 +116,44 @@ function BarChart({ data, color, format }) {
   );
 }
 
-function ChartCard({ title, series, pick, color }) {
+function ChartCard({ title, series, pick, color, to, onClick }) {
   const data = series.map((s) => ({ date: s.date, value: pick(s) }));
   if (data.length === 0) return null;
   const total = data.reduce((n, d) => n + d.value, 0);
   return (
-    <div className="fin-card">
-      <div className="fin-chart-head">
-        <span className="fin-chart-title">{title}</span>
-        <span className="fin-chart-total" style={{ color }}>
-          {money(total)}
-        </span>
+    <Clickable to={to} onClick={onClick}>
+      <div className="fin-card">
+        <div className="fin-chart-head">
+          <span className="fin-chart-title">{title}</span>
+          <span className="fin-chart-total" style={{ color }}>
+            {money(total)}
+          </span>
+        </div>
+        <div style={{ margin: '12px 0 6px' }}>
+          <BarChart data={data} color={color} format={money} />
+        </div>
+        <div className="fin-chart-range">
+          <span>{shortDate(data[0].date)}</span>
+          <span>{shortDate(data[data.length - 1].date)}</span>
+        </div>
       </div>
-      <div style={{ margin: '12px 0 6px' }}>
-        <BarChart data={data} color={color} format={money} />
-      </div>
-      <div className="fin-chart-range">
-        <span>{shortDate(data[0].date)}</span>
-        <span>{shortDate(data[data.length - 1].date)}</span>
-      </div>
-    </div>
+    </Clickable>
   );
 }
 
 // ---------- small pieces ----------
 
-function StatCard({ label, amount, sub, color }) {
+function StatCard({ label, amount, sub, color, onClick }) {
   return (
-    <div className="fin-card fin-stat" style={{ '--accent': color }}>
-      <p className="fin-stat-label">{label}</p>
-      <p className="fin-stat-amount" style={{ color }}>
-        {money(amount)}
-      </p>
-      {sub && <p className="fin-stat-sub">{sub}</p>}
-    </div>
+    <Clickable onClick={onClick}>
+      <div className="fin-card fin-accent" style={{ '--accent': color }}>
+        <div className="fin-stat-label">{label}</div>
+        <div className="fin-stat-amount" style={{ color }}>
+          {money(amount)}
+        </div>
+        {sub && <div className="fin-stat-sub">{sub}</div>}
+      </div>
+    </Clickable>
   );
 }
 
@@ -317,6 +344,7 @@ function FeeDialog({ current, onCancel, onDone }) {
     </Modal>
   );
 }
+
 // ---------- list cards ----------
 
 function SettlementCard({ s, onPay, onUndo }) {
@@ -324,7 +352,7 @@ function SettlementCard({ s, onPay, onUndo }) {
   const isDue = s.status === 'due';
   const waiting = isDue ? daysSince(s.eventAt) : 0;
 
-    const sale =
+  const sale =
     s.askingPrice && s.askingPrice > s.gross
       ? `Agreed price ${money(s.gross)} (asking ${money(s.askingPrice)})`
       : `Sale ${money(s.gross)}`;
@@ -332,6 +360,7 @@ function SettlementCard({ s, onPay, onUndo }) {
   if (isRefund) breakdown = `Full refund of the ${money(s.gross)} payment`;
   else if (s.fee > 0) breakdown = `${sale}, minus ${s.feePercent}% fee (${money(s.fee)})`;
   else breakdown = `${sale}, no fee`;
+
   return (
     <div className="fin-card fin-item">
       <div className="fin-top">
@@ -380,8 +409,8 @@ function SettlementCard({ s, onPay, onUndo }) {
         <Meta label="Buyer's M-Pesa receipt">
           {s.mpesaReceipt ? <CopyText value={s.mpesaReceipt} /> : 'None on file'}
         </Meta>
-        <Meta label={isRefund ? 'Refunded on' : 'Released on'}>
-                <Meta label="Category">{s.category === 'phone' ? 'Phone' : s.category ? 'Other item' : '-'}</Meta>{fmtDate(s.eventAt)}</Meta>
+        <Meta label={isRefund ? 'Refunded on' : 'Released on'}>{fmtDate(s.eventAt)}</Meta>
+        <Meta label="Category">{s.category === 'phone' ? 'Phone' : s.category ? 'Other item' : '-'}</Meta>
         {!isDue && (
           <>
             <Meta label="Confirmation code">
@@ -403,6 +432,7 @@ function SettlementCard({ s, onPay, onUndo }) {
 
 function HeldCard({ p }) {
   const late = p.daysHeld >= 3;
+  const discounted = p.askingPrice && p.askingPrice > p.amount;
   return (
     <div className="fin-card fin-item">
       <div className="fin-top">
@@ -412,8 +442,9 @@ function HeldCard({ p }) {
           </strong>
           <div className="fin-amount">{money(p.amount)}</div>
           <div className="fin-sub">
+            {discounted ? `Agreed price (asking ${money(p.askingPrice)}). ` : ''}
             {p.fee > 0
-              ? `On release: seller gets ${money(p.sellerGets)}, you keep ${money(p.fee)}`
+              ? `On release: seller gets ${money(p.sellerGets)}, you keep ${money(p.fee)} (${p.feePercent}%)`
               : 'On release: the seller gets the full amount'}
           </div>
         </div>
@@ -434,6 +465,7 @@ function HeldCard({ p }) {
         <Meta label="Seller phone">
           <CopyText value={p.sellerPhone} />
         </Meta>
+        <Meta label="Category">{p.category === 'phone' ? 'Phone' : p.category ? 'Other item' : '-'}</Meta>
         <Meta label="M-Pesa receipt">{p.mpesaReceipt ? <CopyText value={p.mpesaReceipt} /> : 'None on file'}</Meta>
         <Meta label="Held since">{fmtDate(p.heldSince)}</Meta>
       </div>
@@ -446,8 +478,29 @@ function HeldCard({ p }) {
 export default function Finance() {
   const [overview, setOverview] = useState(null);
   const [overviewError, setOverviewError] = useState('');
+  const [updatedAt, setUpdatedAt] = useState(null);
 
-  const [tab, setTab] = useState('payout-due');
+    // A link like /admin/finance?tab=held opens that tab straight away
+  const [searchParams] = useSearchParams();
+  const urlTab = searchParams.get('tab');
+  const [tab, setTab] = useState(VALID_TABS.includes(urlTab) ? urlTab : 'payout-due');
+  const [pendingScroll, setPendingScroll] = useState(VALID_TABS.includes(urlTab));
+
+  // If the link changes while the page is already open, follow it
+  useEffect(() => {
+    if (!VALID_TABS.includes(urlTab)) return;
+    setTab(urlTab);
+    setPage(1);
+    setSearch('');
+    setPendingScroll(true);
+  }, [urlTab]);
+
+  // Scroll to the list once the numbers above it have loaded, so the page doesn't jump afterwards
+  useEffect(() => {
+    if (!pendingScroll || !(overview || overviewError)) return;
+    scrollToId('fin-work');
+    setPendingScroll(false);
+  }, [pendingScroll, overview, overviewError]);
   const [search, setSearch] = useState('');
   const debounced = useDebounced(search);
   const [page, setPage] = useState(1);
@@ -475,6 +528,7 @@ export default function Finance() {
         if (!cancelled) {
           setOverview(res.data);
           setOverviewError('');
+          setUpdatedAt(new Date());
         }
       })
       .catch((err) => {
@@ -533,12 +587,12 @@ export default function Finance() {
     };
   }, [days, reloadKey]);
 
-  function pickTab(next) {
+  // Opens a tab of the list below and scrolls to it. term pre-fills the search box.
+  function pickTab(next, term = '') {
     setTab(next);
     setPage(1);
-    setSearch('');
-    const el = document.getElementById('fin-work');
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setSearch(term);
+    scrollToId('fin-work');
   }
 
   const o = overview;
@@ -568,13 +622,19 @@ export default function Finance() {
     paid: 'Nothing has been marked as sent yet.',
   }[tab];
 
+  const updatedText = updatedAt
+    ? updatedAt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+    : '';
+
   return (
     <PageShell
       title="Finance"
       subtitle="Where the money stands: what you hold, what you owe sellers and buyers, and what you have earned in fees."
     >
       <style>{`
-        .fin-toolbar { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
+        .fin-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+        .fin-updated { font-size: 12px; color: var(--color-muted); }
+        .fin-anchor { scroll-margin-top: 76px; }
 
         .fin-section { display: flex; align-items: baseline; gap: 8px; margin: 26px 0 10px; }
         .fin-section h3 { margin: 0; font-size: 16px; text-align: left; }
@@ -584,7 +644,23 @@ export default function Finance() {
           border: 1px solid var(--color-border); border-radius: 12px; padding: 14px;
           background: var(--color-card); box-sizing: border-box;
         }
+        .fin-accent { border-left: 3px solid var(--accent, var(--color-teal)); }
         .fin-item { margin-bottom: 14px; }
+
+        /* Clickable cards: same behaviour as the dashboard cards */
+        a.fin-link, button.fin-link {
+          display: block; width: 100%; min-width: 0; box-sizing: border-box; margin: 0; padding: 0;
+          border: none; background: transparent; color: inherit; font: inherit; text-align: left;
+          text-decoration: none; cursor: pointer; align-self: auto;
+        }
+        a.fin-link:hover, button.fin-link:hover {
+          background: transparent; color: inherit; text-decoration: none;
+        }
+        .fin-link .fin-card { transition: border-color 0.15s, transform 0.1s; }
+        .fin-link:hover .fin-card { border-color: var(--color-teal); }
+        .fin-link:active .fin-card { transform: scale(0.985); }
+        .fin-link:focus-visible { outline: none; }
+        .fin-link:focus-visible .fin-card { border-color: var(--color-teal); }
 
         .fin-grid { display: grid; gap: 12px; }
         .fin-grid-hero { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
@@ -592,23 +668,23 @@ export default function Finance() {
         .fin-grid-charts { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
 
         .fin-hero { padding: 18px; }
-        .fin-hero-label { margin: 0; font-size: 13px; color: var(--color-muted); }
+        .fin-hero-label { font-size: 13px; color: var(--color-muted); }
         .fin-hero-amount { margin: 6px 0 4px; font-size: 30px; font-weight: 700; line-height: 1.1; }
-        .fin-hero-sub { margin: 0; font-size: 12px; color: var(--color-muted); line-height: 1.5; }
+        .fin-hero-sub { font-size: 12px; font-weight: 400; color: var(--color-muted); line-height: 1.5; }
 
-        .fin-stat { border-left: 3px solid var(--accent, var(--color-teal)); }
-        .fin-stat-label { margin: 0; font-size: 12px; color: var(--color-muted); }
+        .fin-stat-label { font-size: 12px; font-weight: 400; color: var(--color-muted); }
         .fin-stat-amount { margin: 6px 0 2px; font-size: 20px; font-weight: 700; line-height: 1.2; }
-        .fin-stat-sub { margin: 0; font-size: 12px; color: var(--color-muted); }
+        .fin-stat-sub { font-size: 12px; font-weight: 400; color: var(--color-muted); }
 
         .fin-attn-list { display: grid; gap: 8px; }
         .fin-attn, button.fin-attn {
           display: flex; align-items: center; gap: 12px; width: 100%; min-width: 0; box-sizing: border-box;
           padding: 12px 14px; border: 1px solid var(--color-warning); border-radius: 12px;
           background: var(--color-card); color: var(--color-ink); text-align: left; text-decoration: none;
-          font-size: 14px; font-weight: 400; cursor: pointer; align-self: auto;
+          font-size: 14px; font-weight: 400; cursor: pointer; align-self: auto; transition: background 0.15s;
         }
         .fin-attn:hover, button.fin-attn:hover { background: var(--color-warning-bg); color: var(--color-ink); text-decoration: none; }
+        .fin-attn:active, button.fin-attn:active { transform: scale(0.99); }
         .fin-attn-icon { font-size: 18px; flex-shrink: 0; }
         .fin-attn-label { flex: 1; min-width: 0; }
         .fin-attn-count {
@@ -623,10 +699,18 @@ export default function Finance() {
           background: var(--color-success-bg); color: var(--color-success); font-size: 14px; font-weight: 600;
         }
 
-        .fin-owed { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid var(--color-border); font-size: 13px; }
+        .fin-owed { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid var(--color-border); font-size: 13px; }
         .fin-owed:first-of-type { border-top: none; }
-        .fin-owed-name { font-weight: 600; word-break: break-word; }
-        .fin-owed-sub { color: var(--color-muted); font-size: 12px; margin-top: 2px; }
+        button.fin-owed-btn {
+          display: flex; flex-direction: column; align-items: flex-start; gap: 2px; flex: 1; min-width: 0;
+          width: auto; padding: 0; border: none; background: transparent; color: inherit;
+          font: inherit; text-align: left; cursor: pointer; align-self: auto;
+        }
+        button.fin-owed-btn:hover { background: transparent; color: inherit; }
+        button.fin-owed-btn:hover .fin-owed-name { color: var(--color-teal); }
+        .fin-owed-name { font-weight: 600; word-break: break-word; transition: color 0.15s; }
+        .fin-owed-sub { color: var(--color-muted); font-size: 12px; font-weight: 400; }
+        .fin-owed-right { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex-shrink: 0; }
         .fin-owed-amt { font-weight: 700; color: var(--color-primary); white-space: nowrap; }
 
         .fin-filter { display: flex; align-items: center; gap: 10px; }
@@ -662,7 +746,7 @@ export default function Finance() {
         .fin-chart-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
         .fin-chart-title { font-size: 13px; font-weight: 600; }
         .fin-chart-total { font-size: 16px; font-weight: 700; }
-        .fin-chart-range { display: flex; justify-content: space-between; font-size: 11px; color: var(--color-muted); }
+        .fin-chart-range { display: flex; justify-content: space-between; font-size: 11px; font-weight: 400; color: var(--color-muted); }
 
         @media (max-width: 600px) {
           .fin-filter { flex-direction: column; align-items: stretch; gap: 0; }
@@ -673,6 +757,7 @@ export default function Finance() {
       `}</style>
 
       <div className="fin-toolbar">
+        <span className="fin-updated">{updatedText ? `Updated ${updatedText}` : ''}</span>
         <button type="button" onClick={() => setReloadKey((k) => k + 1)} style={btn('outline')}>
           Refresh
         </button>
@@ -686,7 +771,7 @@ export default function Finance() {
           <span>
             No platform fee is set yet, so sellers are owed the full sale price.{' '}
             <button type="button" onClick={() => setFeeOpen(true)} style={btn('outline', { marginLeft: 4 })}>
-              Set the fee
+              Set the fees
             </button>
           </span>
         </Notice>
@@ -698,38 +783,39 @@ export default function Finance() {
         <>
           {/* Whose money is it */}
           <div className="fin-grid fin-grid-hero" style={{ marginTop: 10 }}>
-            <div className="fin-card fin-hero" style={{ borderLeft: '3px solid var(--color-teal)' }}>
-              <p className="fin-hero-label">Belongs to buyers and sellers</p>
-              <p className="fin-hero-amount" style={{ color: 'var(--color-teal)' }}>
-                {money(o.owedToOthers)}
-              </p>
-              <p className="fin-hero-sub">
-                Held {money(o.held.total)} + payouts to send {money(o.payoutsDue.net)} + refunds to send{' '}
-                {money(o.refundsDue.total)}. This much should be in your M-Pesa account for other people.
-              </p>
-            </div>
+            <Clickable onClick={() => scrollToId('fin-balances')}>
+              <div className="fin-card fin-hero fin-accent" style={{ '--accent': 'var(--color-teal)' }}>
+                <div className="fin-hero-label">Belongs to buyers and sellers</div>
+                <div className="fin-hero-amount" style={{ color: 'var(--color-teal)' }}>
+                  {money(o.owedToOthers)}
+                </div>
+                <div className="fin-hero-sub">
+                  Held {money(o.held.total)} + payouts to send {money(o.payoutsDue.net)} + refunds to send{' '}
+                  {money(o.refundsDue.total)}. This much should be in your M-Pesa account for other people.
+                </div>
+              </div>
+            </Clickable>
 
-            <div className="fin-card fin-hero" style={{ borderLeft: '3px solid var(--color-success)' }}>
-              <p className="fin-hero-label">Yours: fees earned</p>
-              <p className="fin-hero-amount" style={{ color: 'var(--color-success)' }}>
-                {money(o.fees.earned)}
-              </p>
-                            <p className="fin-hero-sub">
-                {money(o.fees.last30)} in the last 30 days. Another {money(o.fees.expected)} is expected when the
-                held money is released. Rates: phones {o.feeRates.phone}%, other items {o.feeRates.general}%.{' '}
-                <button
-                  type="button"
-                  onClick={() => setFeeOpen(true)}
-                  style={{ ...btn('outline'), padding: '2px 8px', fontSize: 12 }}
-                >
-                  Change fees
-                </button>
-              </p>
+            <div id="fin-fees" className="fin-anchor">
+              <Clickable onClick={() => setFeeOpen(true)}>
+                <div className="fin-card fin-hero fin-accent" style={{ '--accent': 'var(--color-success)' }}>
+                  <div className="fin-hero-label">Yours: fees earned</div>
+                  <div className="fin-hero-amount" style={{ color: 'var(--color-success)' }}>
+                    {money(o.fees.earned)}
+                  </div>
+                  <div className="fin-hero-sub">
+                    {money(o.fees.last30)} in the last 30 days. Another {money(o.fees.expected)} is expected when the
+                    held money is released. Rates: phones {o.feeRates.phone}%, other items {o.feeRates.general}%. Tap to
+                    change the rates.
+                  </div>
+                </div>
+              </Clickable>
             </div>
           </div>
-                    {o.byCategory.length > 0 && (
+
+          {o.byCategory.length > 0 && (
             <div className="fin-card" style={{ marginTop: 12 }}>
-              <p className="fin-stat-label">Fees by category (all released sales)</p>
+              <div className="fin-stat-label">Fees by category (all released sales)</div>
               {o.byCategory.map((c) => (
                 <div key={c.category} className="fin-owed">
                   <div style={{ minWidth: 0 }}>
@@ -767,56 +853,62 @@ export default function Finance() {
           )}
 
           {/* Numbers */}
-          <SectionTitle>Balances</SectionTitle>
-          <div className="fin-grid fin-grid-stats">
+          <SectionTitle hint="Tap a card to see the list behind it">Balances</SectionTitle>
+          <div id="fin-balances" className="fin-grid fin-grid-stats fin-anchor">
             <StatCard
               label="Held (waiting for the handover)"
               amount={o.held.total}
               sub={`${plural(o.held.count, 'payment')}, you would keep ${money(o.held.fee)}`}
               color="var(--color-teal)"
+              onClick={() => pickTab('held')}
             />
             <StatCard
               label="Owed to sellers"
               amount={o.payoutsDue.net}
               sub={`${plural(o.payoutsDue.count, 'payout')} to send, after ${money(o.payoutsDue.fee)} in fees`}
               color="var(--color-gold)"
+              onClick={() => pickTab('payout-due')}
             />
             <StatCard
               label="Refunds to send"
               amount={o.refundsDue.total}
               sub={plural(o.refundsDue.count, 'refund')}
               color="var(--color-warning)"
+              onClick={() => pickTab('refund-due')}
             />
             <StatCard
               label="Paid out to sellers"
               amount={o.payoutsPaid.net}
               sub={`${money(o.payoutsPaid.last7)} in 7 days, ${money(o.payoutsPaid.last30)} in 30 days`}
               color="var(--color-success)"
+              onClick={() => pickTab('paid')}
             />
             <StatCard
               label="Refunded to buyers"
               amount={o.refundsPaid.total}
               sub={`${plural(o.refundsPaid.count, 'refund')} sent, ${money(o.refundsPaid.last30)} in 30 days`}
               color="var(--color-muted)"
+              onClick={() => pickTab('paid')}
             />
           </div>
 
           {/* Who is owed */}
           {o.owedBySeller.length > 0 && (
             <>
-              <SectionTitle hint="Sellers you owe the most">Who you owe</SectionTitle>
+              <SectionTitle hint="Tap a name to see their payouts">Who you owe</SectionTitle>
               <div className="fin-card">
                 {o.owedBySeller.map((r) => (
                   <div key={r.sellerId} className="fin-owed">
-                    <div style={{ minWidth: 0 }}>
-                      <div className="fin-owed-name">{r.name}</div>
-                      <div className="fin-owed-sub">
+                    <button type="button" className="fin-owed-btn" onClick={() => pickTab('payout-due', r.name)}>
+                      <span className="fin-owed-name">{r.name}</span>
+                      <span className="fin-owed-sub">
                         {plural(r.count, 'payout')}, oldest {daysSince(r.oldest)} days ago
-                        {r.phone ? ' · ' : ''}
-                        {r.phone && <CopyText value={r.phone} />}
-                      </div>
+                      </span>
+                    </button>
+                    <div className="fin-owed-right">
+                      <span className="fin-owed-amt">{money(r.net)}</span>
+                      {r.phone && <CopyText value={r.phone} />}
                     </div>
-                    <span className="fin-owed-amt">{money(r.net)}</span>
                   </div>
                 ))}
               </div>
@@ -826,7 +918,7 @@ export default function Finance() {
       )}
 
       {/* Work list */}
-      <div id="fin-work" />
+      <div id="fin-work" className="fin-anchor" />
       <SectionTitle hint="Send the money in M-Pesa, then mark it as sent here with the code">Money to move</SectionTitle>
       <div className="fin-filter">
         <span className="fin-filter-label">Show</span>
@@ -887,7 +979,7 @@ export default function Finance() {
       <Pager page={page} pages={list.pages} onPage={setPage} />
 
       {/* Trends */}
-      <SectionTitle>Trends</SectionTitle>
+      <SectionTitle hint="Tap a chart to open what it is made of">Trends</SectionTitle>
       <div className="fin-filter">
         <span className="fin-filter-label">Period</span>
         <Tabs
@@ -906,10 +998,34 @@ export default function Finance() {
         <Muted>Loading charts...</Muted>
       ) : (
         <div className="fin-grid fin-grid-charts">
-          <ChartCard title="Money received" series={series} pick={(s) => s.moneyIn} color="var(--color-teal)" />
-          <ChartCard title="Fees earned" series={series} pick={(s) => s.fees} color="var(--color-success)" />
-          <ChartCard title="Paid out to sellers" series={series} pick={(s) => s.paidOut} color="var(--color-gold)" />
-          <ChartCard title="Refunded to buyers" series={series} pick={(s) => s.refunded} color="var(--color-muted)" />
+          <ChartCard
+            title="Money received"
+            series={series}
+            pick={(s) => s.moneyIn}
+            color="var(--color-teal)"
+            to="/admin/payments"
+          />
+          <ChartCard
+            title="Fees earned"
+            series={series}
+            pick={(s) => s.fees}
+            color="var(--color-success)"
+            onClick={() => scrollToId('fin-fees')}
+          />
+          <ChartCard
+            title="Paid out to sellers"
+            series={series}
+            pick={(s) => s.paidOut}
+            color="var(--color-gold)"
+            onClick={() => pickTab('paid')}
+          />
+          <ChartCard
+            title="Refunded to buyers"
+            series={series}
+            pick={(s) => s.refunded}
+            color="var(--color-muted)"
+            onClick={() => pickTab('paid')}
+          />
         </div>
       )}
 
@@ -944,7 +1060,7 @@ export default function Finance() {
 
       {feeOpen && o && (
         <FeeDialog
-                    current={o.feeRates}
+          current={o.feeRates}
           onCancel={() => setFeeOpen(false)}
           onDone={(result) => {
             setFeeOpen(false);

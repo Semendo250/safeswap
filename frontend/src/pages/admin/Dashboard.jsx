@@ -215,31 +215,35 @@ export default function Dashboard() {
     : [];
 
   // ----- money -----
-  const moneyCards = moneyData
+    const moneyCards = moneyData
     ? [
         {
           label: 'Held (waiting for meetup)',
           amount: moneyData.held.total,
           sub: `${moneyData.held.count} payment${moneyData.held.count === 1 ? '' : 's'}`,
           color: 'var(--color-teal)',
+          to: '/admin/finance?tab=held',
         },
         {
           label: 'Released to sellers',
           amount: moneyData.released.total,
           sub: `${money(moneyData.released.last7)} in the last 7 days`,
           color: 'var(--color-success)',
+          to: '/admin/finance?tab=payout-due',
         },
         {
           label: 'Refunded',
           amount: moneyData.refunded.total,
           sub: `${moneyData.refunded.count} payment${moneyData.refunded.count === 1 ? '' : 's'}`,
           color: 'var(--color-muted)',
+          to: '/admin/finance?tab=refund-due',
         },
         {
           label: 'Pending / failed',
           amount: moneyData.pending.total,
           sub: `${moneyData.pending.count} pending, ${moneyData.failed.count} failed`,
           color: 'var(--color-gold)',
+          to: '/admin/payments',
         },
       ]
     : [];
@@ -399,7 +403,7 @@ export default function Dashboard() {
       ) : (
         <div className="dash-grid dash-grid-money">
           {moneyCards.map((c) => (
-            <Link key={c.label} to="/admin/payments" className="dash-link">
+                        <Link key={c.label} to={c.to} className="dash-link">
               <div className="dash-card dash-money" style={{ '--accent': c.color }}>
                 <p className="dash-money-label">{c.label}</p>
                 <p className="dash-money-amount" style={{ color: c.color }}>
