@@ -27,6 +27,22 @@ const settlementSchema = new mongoose.Schema(
     paidAt: { type: Date },
     paidBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     paidByName: { type: String },
+        // How a paid row was sent: through M-Pesa from the Finance page, or by hand
+    via: { type: String, enum: ['mpesa', 'manual'] },
+
+    // Automatic M-Pesa sending. Used once someone presses "Send now".
+    transfer: {
+      state: { type: String, enum: ['sending', 'failed'] },
+      attempts: { type: Number, default: 0 },
+      amount: { type: Number },
+      phone: { type: String },
+      conversationId: { type: String },
+      originatorConversationId: { type: String },
+      message: { type: String },
+      initiatedAt: { type: Date },
+      initiatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+      initiatedByName: { type: String },
+    },
   },
   { timestamps: true }
 );

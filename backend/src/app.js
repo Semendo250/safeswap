@@ -14,6 +14,7 @@ const reviewsRoutes = require('./routes/reviews.routes');
 const favoritesRoutes = require('./routes/favorites.routes');
 const blocksRoutes = require('./routes/blocks.routes');
 const feesRoutes = require('./routes/fees.routes');
+const b2cRoutes = require('./routes/b2c.routes');
 
 const app = express();
 
@@ -44,6 +45,8 @@ app.use('/api/reviews', reviewsRoutes);
 app.use('/api/favorites', favoritesRoutes);
 app.use('/api/blocks', blocksRoutes);
 app.use('/api/fees', feesRoutes);
+app.use('/api/b2c', b2cRoutes);
+
 
 // 404 handler
 app.use((req, res) => res.status(404).json({ error: 'Route not found' }));

@@ -822,8 +822,10 @@ async function updatePaymentStatus(req, res) {
         userId: buyerId,
         actorId: req.user._id,
         type: 'payment_status',
-        title: 'Your payment was refunded',
-        body: listing ? `Your payment for "${listing.title}" was refunded.` : 'Your payment was refunded.',
+        title: 'Your refund was approved',
+        body: listing
+          ? `Your refund for "${listing.title}" was approved. We will send it to your M-Pesa and notify you once it is sent.`
+          : 'Your refund was approved. We will send it to your M-Pesa and notify you once it is sent.',
         link: `/listings/${payment.listing}`,
       });
     }
@@ -832,8 +834,8 @@ async function updatePaymentStatus(req, res) {
         userId: sellerId,
         actorId: req.user._id,
         type: 'payment_status',
-        title: 'Funds released to you',
-        body: `Payment for "${listing.title}" has been released.`,
+        title: 'Payment released',
+        body: `The buyer's payment for "${listing.title}" has been released. We are processing your payout and will notify you once it is sent to your M-Pesa.`,
         link: `/listings/${payment.listing}`,
       });
       if (listingJustSold) {

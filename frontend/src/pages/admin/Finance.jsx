@@ -8,6 +8,8 @@ import {
   markSettlementPaid,
   undoSettlement,
   setFeeRate,
+  sendSettlement,
+  resetTransfer,
 } from '../../api/finance.api';
 import ExportButton from '../../components/admin/ExportButton';
 import {
@@ -260,6 +262,99 @@ function PayDialog({ s, onCancel, onDone }) {
     </Modal>
   );
 }
+function SendDialog({ s, env, onCancel, onDone }) {
+  const [confirmed, setConfirmed] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const isRefund = s.type === 'refund';
+  const live = env === 'production';
+  const noPhone = !s.sendTo.phone;
+
+  async function submit() {
+    if (busy || !confirmed || noPhone) return;
+    setBusy(true);
+    setError('');
+    try {
+      const res = await sendSettlement(s._id, s.net);
+      onDone(res.data);
+    } catch (err) {
+      setError(errText(err));
+      setBusy(false);
+    }
+  }
+
+  const row = (label, value) => (
+    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '6px 0', fontSize: 14 }}>
+      <span style={{ color: 'var(--color-muted)' }}>{label}</span>
+      <strong style={{ textAlign: 'right', wordBreak: 'break-word' }}>{value}</strong>
+    </div>
+  );
+
+  return (
+    <Modal title={isRefund ? 'Send refund now' : 'Send payout now'} onClose={onCancel} busy={busy}>
+      <div
+        style={{
+          borderTop: '1px solid var(--color-border)',
+          borderBottom: '1px solid var(--color-border)',
+          margin: '8px 0 12px',
+          padding: '4px 0',
+        }}
+      >
+        {row('Amount', money(s.net))}
+        {row(isRefund ? 'Refund to' : 'Pay to', s.sendTo.name)}
+        {row('M-Pesa number', s.sendTo.phone || 'None on file')}
+        {row('Item', s.listing ? s.listing.title : 'Deleted listing')}
+      </div>
+
+      <p
+        style={{
+          margin: '0 0 10px',
+          padding: '8px 10px',
+          borderRadius: 8,
+          fontSize: 12,
+          lineHeight: 1.5,
+          background: live ? 'var(--color-warning-bg)' : 'var(--color-gold-bg)',
+          color: live ? 'var(--color-warning)' : 'var(--color-gold)',
+        }}
+      >
+        {live
+          ? 'This sends real money from your M-Pesa business account and cannot be undone.'
+          : 'Test mode: no real money moves.'}
+      </p>
+      {noPhone && (
+        <p style={{ margin: '0 0 10px', fontSize: 12, color: 'var(--color-warning)' }}>
+          There is no phone number on file for this person, so it cannot be sent automatically.
+        </p>
+      )}
+
+      <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 13, margin: '0 0 12px' }}>
+        <input
+          type="checkbox"
+          checked={confirmed}
+          onChange={(e) => setConfirmed(e.target.checked)}
+          style={{ width: 'auto', minWidth: 0, marginTop: 2 }}
+        />
+        <span>I have checked the name, number and amount.</span>
+      </label>
+
+      {error && <p style={{ color: 'var(--color-warning)', fontSize: 13, margin: '0 0 10px' }}>{error}</p>}
+
+      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+        <button type="button" onClick={onCancel} disabled={busy} style={btn('outline', { padding: '9px 16px' })}>
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={submit}
+          disabled={busy || !confirmed || noPhone}
+          style={btn('primary', { padding: '9px 16px' })}
+        >
+          {busy ? 'Sending...' : `Send ${money(s.net)}`}
+        </button>
+      </div>
+    </Modal>
+  );
+}
 
 function FeeDialog({ current, buckets, onCancel, onDone }) {
   const [cat, setCat] = useState('phone');
@@ -401,10 +496,17 @@ function FeeDialog({ current, buckets, onCancel, onDone }) {
 
 // ---------- list cards ----------
 
-function SettlementCard({ s, onPay, onUndo }) {
+function SettlementCard({ s, b2c, onSend, onPay, onUndo, onReset }) {
   const isRefund = s.type === 'refund';
   const isDue = s.status === 'due';
   const waiting = isDue ? daysSince(s.eventAt) : 0;
+
+  const t = s.transfer || {};
+  const sending = isDue && t.state === 'sending';
+  const failed = isDue && t.state === 'failed';
+  const sendingMins = sending && t.initiatedAt ? Math.floor((Date.now() - new Date(t.initiatedAt).getTime()) / 60000) : 0;
+  const stuck = sending && sendingMins >= 5;
+  const canSend = isDue && !sending && b2c && b2c.ready;
 
   const sale =
     s.askingPrice && s.askingPrice > s.gross
@@ -426,6 +528,17 @@ function SettlementCard({ s, onPay, onUndo }) {
             <CopyText value={String(s.net)}>{money(s.net)}</CopyText>
           </div>
           <div className="fin-sub">{breakdown}</div>
+          {sending && !stuck && (
+            <div className="fin-sub" style={{ color: 'var(--color-gold)' }}>
+              Waiting for M-Pesa to confirm. This page updates by itself.
+            </div>
+          )}
+          {(stuck || failed) && (
+            <div className="fin-warnbox">
+              <strong>{stuck ? 'Still waiting for M-Pesa.' : 'The last send did not go through.'}</strong>{' '}
+              {t.message || 'Check your M-Pesa statement before trying again.'}
+            </div>
+          )}
           {s.mismatch && (
             <div className="fin-warnbox">
               <strong>Check this one.</strong> The payment is now marked {s.paymentStatus}, but this was already sent.
@@ -436,13 +549,29 @@ function SettlementCard({ s, onPay, onUndo }) {
 
         <div className="fin-side">
           <Chip tone={isRefund ? 'muted' : 'teal'}>{isRefund ? 'Refund' : 'Payout'}</Chip>
-          <Chip tone={isDue ? 'gold' : 'success'}>{isDue ? 'To send' : 'Sent'}</Chip>
-          {waiting >= 3 && <Chip tone="warning">Waiting {waiting} days</Chip>}
-          {isDue ? (
-            <button type="button" onClick={onPay} style={btn('primary')}>
+          {isDue && !sending && !failed && <Chip tone="gold">To send</Chip>}
+          {sending && <Chip tone="gold">Sending</Chip>}
+          {failed && <Chip tone="warning">Failed</Chip>}
+          {!isDue && <Chip tone="success">Sent</Chip>}
+          {!isDue && s.via === 'mpesa' && <Chip tone="teal">Via M-Pesa</Chip>}
+          {waiting >= 3 && !sending && <Chip tone="warning">Waiting {waiting} days</Chip>}
+
+          {canSend && (
+            <button type="button" onClick={onSend} style={btn('primary')}>
+              {failed ? 'Try again' : 'Send now'}
+            </button>
+          )}
+          {isDue && (!sending || stuck) && (
+            <button type="button" onClick={onPay} style={btn('outline')}>
               Mark as sent
             </button>
-          ) : (
+          )}
+          {(stuck || failed) && (
+            <button type="button" onClick={onReset} style={btn('outline')}>
+              Reset
+            </button>
+          )}
+          {!isDue && s.via !== 'mpesa' && (
             <button type="button" onClick={onUndo} style={btn('outline')}>
               Undo
             </button>
@@ -472,6 +601,7 @@ function SettlementCard({ s, onPay, onUndo }) {
             </Meta>
             <Meta label="Sent on">{fmtDate(s.paidAt)}</Meta>
             <Meta label="Sent by">{s.paidByName || '-'}</Meta>
+            <Meta label="Sent via">{s.via === 'mpesa' ? 'M-Pesa (from this page)' : 'By hand'}</Meta>
             {s.note && (
               <Meta label="Note" wide>
                 {s.note}
@@ -483,7 +613,6 @@ function SettlementCard({ s, onPay, onUndo }) {
     </div>
   );
 }
-
 function HeldCard({ p }) {
   const late = p.daysHeld >= 3;
   const discounted = p.askingPrice && p.askingPrice > p.amount;
@@ -571,6 +700,8 @@ export default function Finance() {
   const [paying, setPaying] = useState(null);
   const [undoing, setUndoing] = useState(null);
   const [feeOpen, setFeeOpen] = useState(false);
+    const [sendTarget, setSendTarget] = useState(null);
+  const [resetTarget, setResetTarget] = useState(null);
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
 
@@ -639,6 +770,13 @@ export default function Finance() {
     return () => {
       cancelled = true;
     };
+      // While a send is waiting for M-Pesa, refresh every few seconds so the result appears by itself
+  const anySending = list.items.some((x) => x.transfer && x.transfer.state === 'sending');
+  useEffect(() => {
+    if (!anySending) return undefined;
+    const timer = setInterval(() => setReloadKey((k) => k + 1), 6000);
+    return () => clearInterval(timer);
+  }, [anySending]);
   }, [days, reloadKey]);
 
   // Opens a tab of the list below and scrolls to it. term pre-fills the search box.
@@ -650,6 +788,7 @@ export default function Finance() {
   }
 
   const o = overview;
+    const b2c = o ? o.b2c : null;
   const tabs = [
     ['payout-due', `Payouts to send (${o ? o.payoutsDue.count : 0})`],
     ['refund-due', `Refunds to send (${o ? o.refundsDue.count : 0})`],
@@ -665,6 +804,8 @@ export default function Finance() {
         { key: 'n', icon: '🧾', label: 'Marked paid but no M-Pesa receipt', count: o.alerts.noReceipt, to: '/admin/payments' },
         { key: 'v', icon: '🔎', label: 'Payments flagged for review', count: o.alerts.needsReview, to: '/admin/payments' },
         { key: 'c', icon: '⚠️', label: 'Status changed after it was sent', count: o.alerts.changedAfterPaid, tab: 'paid' },
+                { key: 't', icon: '📡', label: 'Sends waiting on M-Pesa over 5 minutes', count: o.transfers.stuck, tab: 'payout-due' },
+        { key: 'f', icon: '❌', label: 'Sends that failed. Try again', count: o.transfers.failed, tab: 'payout-due' },
       ].filter((i) => i.count > 0)
     : [];
 
@@ -813,27 +954,29 @@ export default function Finance() {
         }
       `}</style>
 
-      <div className="fin-toolbar">
+            <div className="fin-toolbar">
         <span className="fin-updated">{updatedText ? `Updated ${updatedText}` : ''}</span>
-        <button type="button" onClick={() => setReloadKey((k) => k + 1)} style={btn('outline')}>
-          Refresh
-        </button>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {b2c && b2c.enabled && (
+            <Chip tone={b2c.ready ? (b2c.env === 'production' ? 'success' : 'gold') : 'warning'}>
+              {b2c.ready
+                ? b2c.env === 'production'
+                  ? 'M-Pesa sending: live'
+                  : 'M-Pesa sending: test mode'
+                : 'M-Pesa sending: not set up'}
+            </Chip>
+          )}
+          <button type="button" onClick={() => setReloadKey((k) => k + 1)} style={btn('outline')}>
+            Refresh
+          </button>
+        </span>
       </div>
 
-      {notice && <Notice onClose={() => setNotice('')}>{notice}</Notice>}
-      {overviewError && <Notice tone="warning">{overviewError}</Notice>}
-
-      {o && !o.feeConfigured && (
-        <Notice tone="gold">
-          <span>
-            No platform fee is set yet, so sellers are owed the full sale price.{' '}
-            <button type="button" onClick={() => setFeeOpen(true)} style={btn('outline', { marginLeft: 4 })}>
-              Set the fees
-            </button>
-          </span>
+      {b2c && b2c.enabled && !b2c.ready && (
+        <Notice tone="warning">
+          Automatic sending is turned on but not fully set up. Missing: {b2c.problems.join(', ')}.
         </Notice>
       )}
-
       {!o && !overviewError && <Muted>Loading...</Muted>}
 
       {o && (
@@ -1047,7 +1190,15 @@ export default function Finance() {
       {tab === 'held'
         ? list.items.map((p) => <HeldCard key={p._id} p={p} />)
         : list.items.map((s) => (
-            <SettlementCard key={s._id} s={s} onPay={() => setPaying(s)} onUndo={() => setUndoing(s)} />
+            <SettlementCard
+              key={s._id}
+              s={s}
+              b2c={b2c}
+              onSend={() => setSendTarget(s)}
+              onPay={() => setPaying(s)}
+              onUndo={() => setUndoing(s)}
+              onReset={() => setResetTarget(s)}
+            />
           ))}
 
       <Pager page={page} pages={list.pages} onPage={setPage} />
@@ -1129,6 +1280,35 @@ export default function Finance() {
             setReloadKey((k) => k + 1);
           }}
           onCancel={() => setUndoing(null)}
+        />
+      )}
+            {sendTarget && (
+        <SendDialog
+          s={sendTarget}
+          env={b2c ? b2c.env : 'sandbox'}
+          onCancel={() => setSendTarget(null)}
+          onDone={(result) => {
+            setSendTarget(null);
+            setNotice(result.message);
+            setReloadKey((k) => k + 1);
+          }}
+        />
+      )}
+
+      {resetTarget && (
+        <ConfirmDialog
+          title="Reset this send?"
+          message="Only do this after checking your M-Pesa statement and confirming the money did not leave your account. After resetting you can send it again."
+          confirmLabel="Reset"
+          askReason="required"
+          danger
+          onConfirm={async (reason) => {
+            const res = await resetTransfer(resetTarget._id, reason);
+            setResetTarget(null);
+            setNotice(res.data.message);
+            setReloadKey((k) => k + 1);
+          }}
+          onCancel={() => setResetTarget(null)}
         />
       )}
 

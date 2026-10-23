@@ -4,6 +4,7 @@ const User = require('../models/User');
 const Settlement = require('../models/Settlement');
 const AuditLog = require('../models/AuditLog');
 const { notify } = require('../utils/notify');
+const b2c = require('../utils/mpesaB2C');
 const { normalizeKenyanPhone } = require('../utils/phone');
 const {
   getFeeRates,
@@ -184,6 +185,13 @@ function shapeSettlement(s) {
     net: s.net,
     reference: s.reference || '',
     note: s.note || '',
+        via: s.via || '',
+    transfer: {
+      state: (s.transfer && s.transfer.state) || '',
+      message: (s.transfer && s.transfer.message) || '',
+      initiatedAt: (s.transfer && s.transfer.initiatedAt) || null,
+      attempts: (s.transfer && s.transfer.attempts) || 0,
+    },
     eventAt: s.eventAt,
     paidAt: s.paidAt || null,
     paidByName: s.paidByName || '',
@@ -336,10 +344,21 @@ async function getOverview(req, res) {
     const payoutsPaid = pick('payout', 'paid');
     const refundsDue = pick('refund', 'due');
     const refundsPaid = pick('refund', 'paid');
+        const stuckBefore = new Date(now - 5 * 60 * 1000);
+    const [stuckTransfers, failedTransfers] = await Promise.all([
+      Settlement.countDocuments({
+        status: 'due',
+        'transfer.state': 'sending',
+        'transfer.initiatedAt': { $lt: stuckBefore },
+      }),
+      Settlement.countDocuments({ status: 'due', 'transfer.state': 'failed' }),
+    ]);
 
     res.json({
       feeRates: rates,
             feeBuckets: FEE_BUCKETS,
+                  b2c: b2c.status(),
+      transfers: { stuck: stuckTransfers, failed: failedTransfers },
       feeConfigured: configured,
       held: {
         count: H.count,
@@ -605,7 +624,7 @@ async function setFee(req, res) {
           if (category) set.category = category;
           return {
             updateOne: {
-              filter: { _id: d._id, status: 'due', type: 'payout' },
+              filter: { _id: d._id, status: 'due', type: 'payout', 'transfer.state': { $ne: 'sending' } },
               update: { $set: set },
             },
           };
@@ -658,6 +677,13 @@ async function markPaid(req, res) {
     const s = await Settlement.findById(id);
     if (!s) return res.status(404).json({ error: 'Record not found' });
     if (s.status === 'paid') return res.status(409).json({ error: 'This is already marked as sent' });
+        if (
+      s.transfer &&
+      s.transfer.state === 'sending' &&
+      Date.now() - new Date(s.transfer.initiatedAt).getTime() < 2 * 60 * 1000
+    ) {
+      return res.status(409).json({ error: 'M-Pesa is still processing this. Wait a couple of minutes.' });
+    }
 
     const payment = await Payment.findById(s.payment).select('status checkoutRequestId').lean();
     if (!payment || payment.status !== EXPECTED_STATUS[s.type]) {
@@ -666,12 +692,14 @@ async function markPaid(req, res) {
       });
     }
 
-    const update = {
+        const update = {
       status: 'paid',
+      via: 'manual',
       reference,
       paidAt: new Date(),
       paidBy: req.user._id,
       paidByName: req.user.fullName,
+      $unset: { 'transfer.state': 1, 'transfer.message': 1 },
     };
     if (note) update.note = note;
 
@@ -738,6 +766,11 @@ async function undoPaid(req, res) {
     const s = await Settlement.findById(id);
     if (!s) return res.status(404).json({ error: 'Record not found' });
     if (s.status !== 'paid') return res.status(409).json({ error: 'This is not marked as sent' });
+        if (s.via === 'mpesa') {
+      return res.status(409).json({
+        error: 'This was sent through M-Pesa, so the money has already left your account. It cannot be undone here.',
+      });
+    }
 
     const previousCode = s.reference;
     const done = await Settlement.findOneAndUpdate(

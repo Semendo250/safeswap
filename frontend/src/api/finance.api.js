@@ -27,3 +27,10 @@ export function undoSettlement(id, reason) {
 export function setFeeRate(rates, reason, applyToDue) {
   return api.patch('/admin/finance/settings/fee', { rates, reason, applyToDue });
 }
+export function sendSettlement(id, amount) {
+  return api.post(`/admin/finance/settlements/${id}/send`, { amount });
+}
+
+export function resetTransfer(id, reason) {
+  return api.post(`/admin/finance/settlements/${id}/reset-transfer`, { reason });
+}
