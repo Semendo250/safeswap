@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import RefreshButton from '../../components/admin/RefreshButton';
 import {
   getFinanceOverview,
   getFinanceSettlements,
@@ -203,6 +204,7 @@ function PayDialog({ s, onCancel, onDone }) {
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+    const [refreshing, setRefreshing] = useState(false);
   const isRefund = s.type === 'refund';
   const clean = reference.trim().toUpperCase();
   const valid = REFERENCE_RX.test(clean);
@@ -706,8 +708,9 @@ export default function Finance() {
   const [to, setTo] = useState('');
 
   // Summary numbers
-  useEffect(() => {
+   useEffect(() => {
     let cancelled = false;
+    setRefreshing(true);
     getFinanceOverview()
       .then((res) => {
         if (!cancelled) {
@@ -718,12 +721,14 @@ export default function Finance() {
       })
       .catch((err) => {
         if (!cancelled) setOverviewError(errText(err, 'Could not load the finance summary.'));
+      })
+      .finally(() => {
+        if (!cancelled) setRefreshing(false);
       });
     return () => {
       cancelled = true;
     };
   }, [reloadKey]);
-
   // The list under the tabs
   useEffect(() => {
     let cancelled = false;

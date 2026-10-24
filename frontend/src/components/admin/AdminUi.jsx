@@ -93,6 +93,7 @@ export function PageShell({ title, subtitle, children }) {
     <>
       <style>{`
         .admin-page-shell { max-width: 720px; }
+                .admin-page-shell button:active:not(:disabled):not(.fin-link):not(.rb-btn) { transform: scale(0.97); }
         @media (min-width: 1024px) { .admin-page-shell { max-width: 960px; padding-left: 24px; padding-right: 24px; } }
 
         .admin-page-head { margin-bottom: 16px; }

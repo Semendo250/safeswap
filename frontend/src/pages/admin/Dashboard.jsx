@@ -1,6 +1,7 @@
 import { useState, useEffect, useContext } from 'react';
 import { Link } from 'react-router-dom';
 import { AuthContext } from '../../context/AuthContext';
+import RefreshButton from '../../components/admin/RefreshButton';
 import {
   getOverview,
   getNeedsAttention,
@@ -113,6 +114,7 @@ export default function Dashboard() {
   const [errors, setErrors] = useState({});
   const [loaded, setLoaded] = useState(false);
   const [updatedAt, setUpdatedAt] = useState(null);
+    const [refreshing, setRefreshing] = useState(false);
 
   const [days, setDays] = useState(7);
   const [trends, setTrends] = useState(null);
@@ -125,9 +127,12 @@ export default function Dashboard() {
     // Wait until we know who is logged in before asking for admin data
     if (authLoading || !user) return;
     let cancelled = false;
+    setRefreshing(true);
     Promise.allSettled([getOverview(), getNeedsAttention(), getMoneyOverview(), getOffersStats(), getCommunityStats()]).then(
       ([o, a, m, f, c]) => {
         if (cancelled) return;
+        setRefreshing(false);
+        
         setOverview(o.status === 'fulfilled' ? o.value.data : null);
         setAttention(a.status === 'fulfilled' ? a.value.data : null);
         setMoneyData(m.status === 'fulfilled' ? m.value.data : null);
@@ -346,9 +351,7 @@ export default function Dashboard() {
 
       <div className="dash-toolbar">
         <span className="dash-updated">{updatedText ? `Updated ${updatedText}` : ''}</span>
-        <button type="button" onClick={() => setReloadKey((k) => k + 1)} style={btn('outline')}>
-          Refresh
-        </button>
+                  <RefreshButton onClick={() => setReloadKey((k) => k + 1)} busy={refreshing} />
       </div>
 
       {/* Needs attention */}
