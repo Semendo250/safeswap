@@ -203,8 +203,7 @@ function PayDialog({ s, onCancel, onDone }) {
   const [reference, setReference] = useState('');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-    const [refreshing, setRefreshing] = useState(false);
+    const [error, setError] = useState('');
   const isRefund = s.type === 'refund';
   const clean = reference.trim().toUpperCase();
   const valid = REFERENCE_RX.test(clean);
@@ -775,14 +774,15 @@ export default function Finance() {
     return () => {
       cancelled = true;
     };
-      // While a send is waiting for M-Pesa, refresh every few seconds so the result appears by itself
+  }, [days, reloadKey]);
+
+  // While a send is waiting for M-Pesa, refresh every few seconds so the result appears by itself
   const anySending = list.items.some((x) => x.transfer && x.transfer.state === 'sending');
   useEffect(() => {
     if (!anySending) return undefined;
     const timer = setInterval(() => setReloadKey((k) => k + 1), 6000);
     return () => clearInterval(timer);
   }, [anySending]);
-  }, [days, reloadKey]);
 
   // Opens a tab of the list below and scrolls to it. term pre-fills the search box.
   function pickTab(next, term = '') {
@@ -971,8 +971,13 @@ export default function Finance() {
                 : 'M-Pesa sending: not set up'}
             </Chip>
           )}
-          <button type="button" onClick={() => setReloadKey((k) => k + 1)} style={btn('outline')}>
-            Refresh
+                    <button
+            type="button"
+            onClick={() => setReloadKey((k) => k + 1)}
+            disabled={refreshing}
+            style={btn('outline')}
+          >
+            {refreshing ? 'Refreshing...' : 'Refresh'}
           </button>
         </span>
       </div>
