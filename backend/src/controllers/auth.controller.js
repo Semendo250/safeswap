@@ -8,6 +8,21 @@ const { generateOtp, storeOtp, verifyOtp, sendOtpEmail, isUniversityEmail } = re
 const { notifyAdmins } = require('../utils/notify');
 
 const PHONE_ERROR = 'Enter a valid Kenyan phone number, e.g. 0712 345 678';
+const PHONE_TAKEN = 'This phone number is already registered to another account';
+
+// Is this number already on someone else's account? (exceptUserId lets people keep their own number)
+async function phoneInUse(phone, exceptUserId) {
+  const query = { phone };
+  if (exceptUserId) query._id = { $ne: exceptUserId };
+  return !!(await User.exists(query));
+}
+
+// Two people saving the same number at the same moment: the database refuses the second one
+function isPhoneDuplicate(err) {
+  if (!err || err.code !== 11000) return false;
+  if (err.keyPattern) return Object.prototype.hasOwnProperty.call(err.keyPattern, 'phone');
+  return /phone/i.test(err.message || '');
+}
 const EMAIL_TIMEOUT_MS = 20000;
 
 // Verification emails can't be delivered from the current host, so by default signup
@@ -108,6 +123,14 @@ async function signup(req, res) {
       }
     }
 
+        if (!error) {
+      // An account that signed up before and is signing up again may keep its own number
+      if (await phoneInUse(normalizeKenyanPhone(rawPhone), existing && existing._id)) {
+        error = PHONE_TAKEN;
+        status = 409;
+      }
+    }
+
     if (error) {
       await discardUpload(req.file);
       return res.status(status).json({ error });
@@ -177,6 +200,7 @@ async function signup(req, res) {
     });
   } catch (err) {
     if (!accountSaved) await discardUpload(req.file);
+    if (isPhoneDuplicate(err)) return res.status(409).json({ error: PHONE_TAKEN });
     res.status(500).json({ error: err.message });
   }
 }
@@ -308,6 +332,10 @@ async function updateProfile(req, res) {
           await discardUpload(req.file);
           return res.status(400).json({ error: PHONE_ERROR });
         }
+                if (await phoneInUse(normalized, req.user._id)) {
+          await discardUpload(req.file);
+          return res.status(409).json({ error: PHONE_TAKEN });
+        }
         updates.phone = normalized;
       }
     }
@@ -332,8 +360,9 @@ async function updateProfile(req, res) {
     if (req.file && oldPicture) await deleteImageByUrl(oldPicture);
 
     res.json(publicUser(user));
-  } catch (err) {
+    } catch (err) {
     await discardUpload(req.file);
+    if (isPhoneDuplicate(err)) return res.status(409).json({ error: PHONE_TAKEN });
     res.status(500).json({ error: err.message });
   }
 }

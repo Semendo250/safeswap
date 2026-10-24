@@ -40,5 +40,7 @@ userSchema.pre('save', function (next) {
   if (this.role === 'admin') this.trustScore = 99;
   next();
 });
+// One phone number per account. Accounts with no number are ignored, so many can stay empty.
+userSchema.index({ phone: 1 }, { unique: true, partialFilterExpression: { phone: { $gt: '' } } });
 
 module.exports = mongoose.model('User', userSchema);
