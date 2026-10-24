@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const { initiateStkPush } = require('../utils/mpesa');
+const { normalizeKenyanPhone } = require('../utils/phone');
 const Listing = require('../models/Listing');
 const Payment = require('../models/Payment');
 const paymentStore = require('../utils/paymentStore');
@@ -31,6 +32,10 @@ async function initiatePayment(req, res) {
     const { listingId, phone } = req.body;
     if (!listingId || !phone) {
       return res.status(400).json({ error: 'listingId and phone are required' });
+    }
+        const msisdn = normalizeKenyanPhone(String(phone).trim());
+    if (!msisdn) {
+      return res.status(400).json({ error: 'Enter a valid Kenyan phone number, e.g. 0712 345 678' });
     }
     if (!/^[a-f\d]{24}$/i.test(String(listingId))) {
       return res.status(400).json({ error: 'Invalid listing' });
@@ -83,7 +88,7 @@ async function initiatePayment(req, res) {
     }
 
     const result = await initiateStkPush({
-      phone,
+      phone: msisdn,
       amount,
       accountReference: listingKey,
       transactionDesc: `SafeSwap: ${listing.title}`,
@@ -93,7 +98,7 @@ async function initiatePayment(req, res) {
       listingId: listingKey,
       buyerId,
       amount,
-      phone,
+      phone: msisdn,
       askingPrice: listing.price,
       offerId: agreed ? agreed._id.toString() : undefined,
     });

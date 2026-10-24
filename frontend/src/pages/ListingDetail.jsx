@@ -8,7 +8,7 @@ import VerificationBadge from '../components/VerificationBadge';
 import SafeZonePicker from '../components/SafeZonePicker';
 import BackButton from '../components/BackButton';
 import Avatar from '../components/Avatar';
-import { formatPhone, telHref } from '../utils/phone';
+import { formatPhone, telHref, normalizeKenyanPhone, phoneForInput } from '../utils/phone';
 import ListingManager from '../components/ListingManager';
 import ReviewBox from '../components/ReviewBox';
 import FavoriteButton from '../components/FavoriteButton';
@@ -127,6 +127,10 @@ export default function ListingDetail() {
       document.removeEventListener('keydown', onKey);
     };
   }, [viewerOpen, photoCount]);
+    // Start with the phone number saved on the person's profile, if they have one
+  useEffect(() => {
+    if (user?.phone) setPhone((current) => current || phoneForInput(user.phone));
+  }, [user?.phone]);
 
   if (notFound) {
     return (
@@ -225,13 +229,17 @@ export default function ListingDetail() {
       setLoginNotice('pay');
       return;
     }
-    if (!phone) {
+    if (!phone.trim()) {
       setPayError('Enter the phone number to pay from');
+      return;
+    }
+    if (!normalizeKenyanPhone(phone.trim())) {
+      setPayError('Enter a valid Kenyan phone number, e.g. 0712 345 678');
       return;
     }
     try {
       setPaying(true);
-      const res = await initiateStkPush(listing._id, phone);
+            const res = await initiateStkPush(listing._id, phone.trim());
       setCheckoutId(res.data.checkoutRequestId);
       setPaymentStatus('pending');
     } catch (err) {
@@ -550,9 +558,12 @@ export default function ListingDetail() {
             </label>
             <div className="ld-input-wrap">
               <Icon name="phone" />
-              <input
+                            <input
                 id="ld-pay-phone"
-                placeholder="Phone e.g. 2547XXXXXXXX"
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
+                placeholder="e.g. 0712 345 678"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
               />
