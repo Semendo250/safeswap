@@ -701,6 +701,7 @@ export default function Finance() {
   const [paying, setPaying] = useState(null);
   const [undoing, setUndoing] = useState(null);
   const [feeOpen, setFeeOpen] = useState(false);
+    const [refreshing, setRefreshing] = useState(false);
     const [sendTarget, setSendTarget] = useState(null);
   const [resetTarget, setResetTarget] = useState(null);
   const [from, setFrom] = useState('');
@@ -971,14 +972,7 @@ export default function Finance() {
                 : 'M-Pesa sending: not set up'}
             </Chip>
           )}
-                    <button
-            type="button"
-            onClick={() => setReloadKey((k) => k + 1)}
-            disabled={refreshing}
-            style={btn('outline')}
-          >
-            {refreshing ? 'Refreshing...' : 'Refresh'}
-          </button>
+                              <RefreshButton onClick={() => setReloadKey((k) => k + 1)} busy={refreshing} />
         </span>
       </div>
 
