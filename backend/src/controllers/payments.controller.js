@@ -127,7 +127,6 @@ async function initiatePayment(req, res) {
 
 // POST /api/payments/callback
 async function handleCallback(req, res) {
-  console.log('STK callback hit. token present:', !!req.query.token, 'body:', JSON.stringify(req.body));
   try {
     if (!callbackTokenIsValid(req.query.token)) {
       return res.status(403).json({ error: 'Forbidden' });
@@ -136,13 +135,7 @@ async function handleCallback(req, res) {
     const callback = req.body?.Body?.stkCallback;
     if (!callback) return res.status(400).json({ error: 'Invalid callback payload' });
 
-    const { CheckoutRequestID } = callback;
-    let ResultCode = callback.ResultCode;
-    console.log(`STK callback ${CheckoutRequestID}: ResultCode=${ResultCode} ResultDesc=${callback.ResultDesc}`);
-    if (process.env.MPESA_SIMULATE_SUCCESS === 'true' && ResultCode === 1032) {
-      console.log('SANDBOX TEST: treating cancelled payment as successful');
-      ResultCode = 0;
-    }
+    const { CheckoutRequestID, ResultCode } = callback;
     const ack = { ResultCode: 0, ResultDesc: 'Received' };
 
     const existing = await paymentStore.getByCheckoutId(String(CheckoutRequestID));
