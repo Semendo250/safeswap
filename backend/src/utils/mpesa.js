@@ -34,6 +34,14 @@ function generateTimestampAndPassword() {
 
   return { timestamp, password };
 }
+function callbackUrlWithToken() {
+  const base = String(process.env.MPESA_CALLBACK_URL || '').trim();
+  const secret = process.env.MPESA_CALLBACK_SECRET;
+  if (!secret) return base;
+  const u = new URL(base);
+  u.searchParams.set('token', secret);
+  return u.toString();
+}
 
 // Initiates an STK Push - the "enter your M-Pesa PIN" prompt on the buyer's phone
 async function initiateStkPush({ phone, amount, accountReference, transactionDesc }) {
@@ -49,7 +57,7 @@ async function initiateStkPush({ phone, amount, accountReference, transactionDes
     PartyA: phone, // buyer's phone, format 2547XXXXXXXX
     PartyB: process.env.MPESA_SHORTCODE,
     PhoneNumber: phone,
-    CallBackURL: process.env.MPESA_CALLBACK_URL,
+    CallBackURL: callbackUrlWithToken(),
     AccountReference: accountReference, // e.g. listing ID or a short order ref
     TransactionDesc: transactionDesc || 'SafeSwap payment',
   };
