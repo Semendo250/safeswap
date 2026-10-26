@@ -136,6 +136,7 @@ async function handleCallback(req, res) {
     if (!callback) return res.status(400).json({ error: 'Invalid callback payload' });
 
     const { CheckoutRequestID, ResultCode } = callback;
+    console.log(`STK callback ${CheckoutRequestID}: ResultCode=${ResultCode} ResultDesc=${callback.ResultDesc}`);
     const ack = { ResultCode: 0, ResultDesc: 'Received' };
 
     const existing = await paymentStore.getByCheckoutId(String(CheckoutRequestID));
