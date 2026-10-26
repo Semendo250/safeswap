@@ -127,6 +127,7 @@ async function initiatePayment(req, res) {
 
 // POST /api/payments/callback
 async function handleCallback(req, res) {
+  console.log('STK callback hit. token present:', !!req.query.token, 'body:', JSON.stringify(req.body));
   try {
     if (!callbackTokenIsValid(req.query.token)) {
       return res.status(403).json({ error: 'Forbidden' });
