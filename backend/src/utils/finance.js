@@ -153,10 +153,28 @@ async function reconcileDueSettlements(rates) {
   }
 }
 
-async function syncSettlements() {
+let syncRunning = null;
+let lastSyncAt = 0;
+const SYNC_MIN_GAP_MS = 10 * 1000;
+
+async function runSync() {
   const rates = await getFeeRates();
   await reconcileDueSettlements(rates);
   await createMissingSettlements(rates);
+}
+
+// Requests that arrive together share one run, and a run is skipped if one finished in the last 10 seconds
+async function syncSettlements() {
+  if (syncRunning) return syncRunning;
+  if (Date.now() - lastSyncAt < SYNC_MIN_GAP_MS) return undefined;
+  syncRunning = runSync()
+    .then(() => {
+      lastSyncAt = Date.now();
+    })
+    .finally(() => {
+      syncRunning = null;
+    });
+  return syncRunning;
 }
 
 module.exports = { syncSettlements, calcFee, EXPECTED_STATUS };

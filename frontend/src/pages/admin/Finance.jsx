@@ -697,6 +697,7 @@ export default function Finance() {
   const [trendsError, setTrendsError] = useState('');
 
   const [reloadKey, setReloadKey] = useState(0);
+  const [listKey, setListKey] = useState(0);
   const [notice, setNotice] = useState('');
   const [paying, setPaying] = useState(null);
   const [undoing, setUndoing] = useState(null);
@@ -759,7 +760,7 @@ export default function Finance() {
     return () => {
       cancelled = true;
     };
-  }, [tab, debounced, page, reloadKey]);
+  }, [tab, debounced, page, reloadKey, listKey]);
 
   // Charts
   useEffect(() => {
@@ -781,7 +782,7 @@ export default function Finance() {
   const anySending = list.items.some((x) => x.transfer && x.transfer.state === 'sending');
   useEffect(() => {
     if (!anySending) return undefined;
-    const timer = setInterval(() => setReloadKey((k) => k + 1), 6000);
+    const timer = setInterval(() => setListKey((k) => k + 1), 6000);
     return () => clearInterval(timer);
   }, [anySending]);
 

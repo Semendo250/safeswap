@@ -15,6 +15,16 @@ const {
   FEE_BUCKETS,
 } = require('../utils/financeSettings');
 const { syncSettlements, calcFee, EXPECTED_STATUS } = require('../utils/finance');
+// Indexes that speed up the finance queries. Safe to run on every start.
+[
+  [Payment, { status: 1, createdAt: 1 }],
+  [Payment, { status: 1, updatedAt: 1 }],
+  [Settlement, { type: 1, eventAt: 1 }],
+  [Settlement, { status: 1, eventAt: 1 }],
+  [Settlement, { type: 1, status: 1, paidAt: 1 }],
+].forEach(([model, keys]) => {
+  model.collection.createIndex(keys).catch((err) => console.error('Index skipped:', err.message));
+});
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const TZ = '+03:00'; // Kenya is UTC+3 all year
@@ -529,11 +539,17 @@ async function getHeld(req, res) {
 
 // ---------- trends ----------
 
+const trendsCache = new Map();
+const TRENDS_TTL_MS = 60 * 1000;
+
 // GET /api/admin/finance/trends?days=7|30|90
 async function getTrends(req, res) {
   try {
     const asked = parseInt(req.query.days, 10);
     const days = [7, 30, 90].includes(asked) ? asked : 30;
+
+    const hit = trendsCache.get(days);
+    if (hit && Date.now() - hit.at < TRENDS_TTL_MS) return res.json(hit.data);
 
     const keys = [];
     for (let i = days - 1; i >= 0; i -= 1) {
@@ -546,9 +562,14 @@ async function getTrends(req, res) {
     });
     const toMap = (rows) => new Map(rows.map((r) => [r._id, r.total]));
 
-    const [inRows, feeRows, paidRows, refundRows] = await Promise.all([
+    const inMatch = { createdAt: { $gte: start }, status: { $in: ['held', 'released', 'refunded'] } };
+    const [inRows, inOldRows, feeRows, paidRows, refundRows] = await Promise.all([
       Payment.aggregate([
-        { $match: { createdAt: { $gte: start }, status: { $in: ['held', 'released', 'refunded'] } } },
+        { $match: { ...inMatch, amount: { $ne: null } } },
+        { $group: { _id: dayField('$createdAt'), total: { $sum: '$amount' } } },
+      ]),
+      Payment.aggregate([
+        { $match: { ...inMatch, amount: null } },
         ...amountStages(),
         { $group: { _id: dayField('$createdAt'), total: { $sum: '$_amt' } } },
       ]),
@@ -567,11 +588,12 @@ async function getTrends(req, res) {
     ]);
 
     const moneyIn = toMap(inRows);
+    inOldRows.forEach((r) => moneyIn.set(r._id, (moneyIn.get(r._id) || 0) + r.total));
     const fees = toMap(feeRows);
     const paidOut = toMap(paidRows);
     const refunded = toMap(refundRows);
 
-    res.json({
+        const data = {
       days,
       series: keys.map((date) => ({
         date,
@@ -580,7 +602,9 @@ async function getTrends(req, res) {
         paidOut: paidOut.get(date) || 0,
         refunded: refunded.get(date) || 0,
       })),
-    });
+    };
+    trendsCache.set(days, { at: Date.now(), data });
+    res.json(data);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
