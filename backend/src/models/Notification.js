@@ -30,6 +30,8 @@ const notificationSchema = new mongoose.Schema(
         'price_drop',
         'new_review',
         'review_request',
+        'request_response',
+        'request_removed',
       ],
       required: true,
     },

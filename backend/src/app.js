@@ -15,6 +15,7 @@ const favoritesRoutes = require('./routes/favorites.routes');
 const blocksRoutes = require('./routes/blocks.routes');
 const feesRoutes = require('./routes/fees.routes');
 const b2cRoutes = require('./routes/b2c.routes');
+const requestsRoutes = require('./routes/requests.routes');
 
 const app = express();
 // Health check for uptime monitors (no login, no database work)
@@ -50,6 +51,7 @@ app.use('/api/favorites', favoritesRoutes);
 app.use('/api/blocks', blocksRoutes);
 app.use('/api/fees', feesRoutes);
 app.use('/api/b2c', b2cRoutes);
+app.use('/api/requests', requestsRoutes);
 
 
 // 404 handler

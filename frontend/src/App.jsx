@@ -40,6 +40,9 @@ import MyPurchases from './pages/MyPurchases';
 import Saved from './pages/Saved';
 import ReportListing from './pages/ReportListing';
 import ComplaintThread from './pages/ComplaintThread';
+import Requests from './pages/Requests';
+import RequestDetail from './pages/RequestDetail';
+import AdminRequests from './pages/admin/Requests';
 
 // Opens every new page at the top, so footer links don't land halfway down
 function ScrollToTop() {
@@ -92,6 +95,8 @@ function App() {
           <Route path="/admin/reports" element={<Reports />} />
           <Route path="/admin/reviews" element={<Reviews />} />
           <Route path="/admin/blocks" element={<Blocks />} />
+          <Route path="/admin/requests" element={<AdminRequests />} />
+          <Route path="/requests/:id" element={<RequestDetail />} />
           <Route path="/" element={<Landing />} />
           <Route path="/browse" element={<Browse />} />
           <Route path="/login" element={<Login />} />
@@ -106,6 +111,7 @@ function App() {
           <Route path="/support" element={<StudentOnly><Support /></StudentOnly>} />
           <Route path="/my-purchases" element={<StudentOnly><MyPurchases /></StudentOnly>} />
           <Route path="/saved" element={<StudentOnly><Saved /></StudentOnly>} />
+          <Route path="/requests" element={<StudentOnly><Requests /></StudentOnly>} />
           <Route path="/report/:id" element={<StudentOnly><ReportListing /></StudentOnly>} />
           <Route path="/my-complaints" element={<StudentOnly><MyComplaints /></StudentOnly>} />
           <Route path="/my-complaints/:id" element={<StudentOnly><ComplaintThread /></StudentOnly>} />

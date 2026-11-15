@@ -227,3 +227,20 @@ export function getBlocks(params) {
 export function getAuditLog(params) {
   return api.get('/admin/audit-log', { params });
 }
+
+// ----- buy requests -----
+export function getRequestsAdmin(params) {
+  return api.get('/admin/requests', { params });
+}
+
+export function getTopRequested(days = 30) {
+  return api.get('/admin/requests/top', { params: { days } });
+}
+
+export function removeRequestAdmin(id, reason) {
+  return api.patch(`/admin/requests/${id}/remove`, { reason });
+}
+
+export function restoreRequestAdmin(id, reason) {
+  return api.patch(`/admin/requests/${id}/restore`, { reason });
+}

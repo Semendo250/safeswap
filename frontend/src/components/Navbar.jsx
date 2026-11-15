@@ -113,6 +113,12 @@ const ICON_PATHS = {
       <path d="M12 7v5l4 2" />
     </>
   ),
+  requests: (
+    <>
+      <circle cx="11" cy="11" r="7" />
+      <path d="m21 21-4.3-4.3" />
+    </>
+  ),
   logout: (
     <>
       <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
@@ -145,6 +151,7 @@ const ADMIN_LINKS = [
   { to: '/admin/users', label: 'Users', icon: 'users' },
   { to: '/admin/verification', label: 'Verification queue', icon: 'idcard' },
   { to: '/admin/listings', label: 'All listings', icon: 'listings' },
+  { to: '/admin/requests', label: 'Requests', icon: 'requests' },
   { to: '/admin/flagged', label: 'Flagged queue', icon: 'flag' },
   { to: '/admin/reports', label: 'Reports', icon: 'alert' },
   { to: '/admin/payments', label: 'Payments', icon: 'payments' },
@@ -456,6 +463,7 @@ export default function Navbar() {
                   <Link to="/messages" className="nav-pill">Messages{msgBadge}</Link>
                   {!isAdmin && <Link to="/my-purchases" className="nav-pill">Purchases</Link>}
                   {!isAdmin && <Link to="/saved" className="nav-pill">Saved</Link>}
+                  {!isAdmin && <Link to="/requests" className="nav-pill">Requests</Link>}
                   <Link to="/create-listing" className="nav-pill">Create listing</Link>
                   {isAdmin && <Link to="/admin" className="nav-pill">Admin</Link>}
                   <Link to="/profile" className="nav-pill">Profile</Link>
@@ -518,6 +526,7 @@ export default function Navbar() {
                     <Link to="/messages" className={linkClass('/messages')}>Messages{msgBadge}</Link>
                     {!isAdmin && <Link to="/my-purchases" className={linkClass('/my-purchases')}>My purchases</Link>}
                     {!isAdmin && <Link to="/saved" className={linkClass('/saved')}>Saved items</Link>}
+                    {!isAdmin && <Link to="/requests" className={linkClass('/requests', true)}>Requests</Link>}
                     <Link to="/create-listing" className={linkClass('/create-listing')}>Create listing</Link>
                     {isAdmin && <Link to="/admin" className={linkClass('/admin', true)}>Admin</Link>}
                     <Link to="/profile" className={linkClass('/profile')}>Profile</Link>
