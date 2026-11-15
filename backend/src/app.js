@@ -17,6 +17,10 @@ const feesRoutes = require('./routes/fees.routes');
 const b2cRoutes = require('./routes/b2c.routes');
 
 const app = express();
+// Health check for uptime monitors (no login, no database work)
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok', uptime: Math.round(process.uptime()) });
+});
 
 app.use(cors({
   origin: [
