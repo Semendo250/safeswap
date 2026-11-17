@@ -53,15 +53,32 @@ function RequestCard({ r }) {
           {r.responseCount} offer{r.responseCount === 1 ? '' : 's'}
         </span>
         {r.responded && !r.mine && <span className="badge badge-success">You offered</span>}
-        {r.mine && r.status === 'removed' && r.canRepost && (
-          <span className="badge badge-warning">Removed · Edit and repost</span>
-        )}
+        {r.mine && r.status === 'removed' && <span className="badge badge-warning">Removed</span>}
       </div>
       <div className="rq-meta">
         {r.buyer ? `${r.buyer.fullName} · ` : ''}
         {timeAgo(r.createdAt)}
         {live ? ` · ${daysLeft(r.expiresAt)} days left` : ''}
       </div>
+      {r.mine && r.status === 'removed' && r.canRepost && (
+        <span className="rq-repost-cta">
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M12 20h9" />
+            <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" />
+          </svg>
+          Edit and repost
+        </span>
+      )}
     </Link>
   );
 }
@@ -160,6 +177,12 @@ export default function Requests() {
         .rq-desc { margin: 6px 0 0; font-size: 13px; color: var(--color-muted); word-break: break-word; }
         .rq-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
         .rq-meta { margin-top: 8px; font-size: 12px; color: var(--color-muted); }
+        .rq-repost-cta {
+          display: flex; align-items: center; justify-content: center; gap: 8px;
+          margin-top: 12px; padding: 10px 16px; border-radius: 10px;
+          background: var(--color-primary); color: #fff; font-size: 14px; font-weight: 600;
+          box-shadow: 0 4px 14px rgba(18, 101, 103, 0.25);
+        }
         .rq-form {
           padding: 16px; margin: 4px 0 16px; border: 1px solid var(--color-border);
           border-radius: 12px; background: var(--color-card);

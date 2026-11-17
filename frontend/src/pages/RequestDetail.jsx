@@ -28,6 +28,14 @@ export default function RequestDetail() {
   const [formError, setFormError] = useState('');
   const [busy, setBusy] = useState(false);
 
+  const [showRepost, setShowRepost] = useState(false);
+  const [rTitle, setRTitle] = useState('');
+  const [rCategory, setRCategory] = useState('phone');
+  const [rBudget, setRBudget] = useState('');
+  const [rDescription, setRDescription] = useState('');
+  const [reposting, setReposting] = useState(false);
+  const [repostError, setRepostError] = useState('');
+
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -65,6 +73,46 @@ export default function RequestDetail() {
     };
   }, [canRespond, reloadKey]);
 
+  function openRepost() {
+    if (!r) return;
+    setRTitle(r.title);
+    setRCategory(r.category);
+    setRBudget(String(r.budget));
+    setRDescription(r.description || '');
+    setRepostError('');
+    setShowRepost(true);
+  }
+
+  // Opens the form straight away when the poster comes from the "removed" notification
+  useEffect(() => {
+    if (r && r.mine && r.status === 'removed' && r.canRepost && searchParams.get('repost') === '1') {
+      openRepost();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [r && r._id, r && r.status]);
+
+  async function submitRepost(e) {
+    e.preventDefault();
+    if (reposting) return;
+    setReposting(true);
+    setRepostError('');
+    try {
+      await repostRequest(id, {
+        title: rTitle.trim(),
+        category: rCategory,
+        budget: rBudget,
+        description: rDescription.trim(),
+      });
+      setShowRepost(false);
+      setNotice('Your request is live again.');
+      setReloadKey((k) => k + 1);
+    } catch (err) {
+      setRepostError(errorText(err));
+    } finally {
+      setReposting(false);
+    }
+  }
+
   async function sendOffer(e) {
     e.preventDefault();
     if (sending || !listingId) return;
@@ -98,46 +146,6 @@ export default function RequestDetail() {
     }
   }
 
-  function openRepost() {
-    if (!r) return;
-    setRTitle(r.title);
-    setRCategory(r.category);
-    setRBudget(String(r.budget));
-    setRDescription(r.description || '');
-    setRepostError('');
-    setShowRepost(true);
-  }
-
-  async function submitRepost(e) {
-    e.preventDefault();
-    if (reposting) return;
-    setReposting(true);
-    setRepostError('');
-    try {
-      await repostRequest(id, {
-        title: rTitle.trim(),
-        category: rCategory,
-        budget: rBudget,
-        description: rDescription.trim(),
-      });
-      setShowRepost(false);
-      setNotice('Your request is live again.');
-      setReloadKey((k) => k + 1);
-    } catch (err) {
-      setRepostError(errorText(err));
-    } finally {
-      setReposting(false);
-    }
-  }
-
-  // Opens the form straight away when the poster comes from the "removed" notification or the My requests list
-  useEffect(() => {
-    if (r && r.mine && r.status === 'removed' && r.canRepost && searchParams.get('repost') === '1') {
-      openRepost();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [r && r._id, r && r.status]);
-
   const live = r && r.status === 'open' && !r.expired;
   const stateLabel = r ? (r.expired ? 'Expired' : r.status.charAt(0).toUpperCase() + r.status.slice(1)) : '';
 
@@ -162,6 +170,27 @@ export default function RequestDetail() {
         .rqd-offer img { width: 64px; height: 64px; object-fit: cover; border-radius: var(--radius); border: 1px solid var(--color-border); flex-shrink: 0; }
         .rqd-offer-main { min-width: 0; flex: 1; }
         .rqd-offer-note { margin: 4px 0 0; font-size: 13px; word-break: break-word; }
+
+        .rqd-removed {
+          margin-top: 14px; padding: 14px; border: 1px solid var(--color-warning);
+          border-radius: 12px; background: var(--color-warning-bg);
+        }
+        .rqd-removed-head { display: flex; gap: 10px; align-items: flex-start; }
+        .rqd-removed-icon {
+          flex: 0 0 28px; width: 28px; height: 28px; border-radius: 50%;
+          display: flex; align-items: center; justify-content: center;
+          background: var(--color-warning); color: #fff; font-size: 15px; font-weight: 700;
+        }
+        .rqd-removed-title { margin: 0; font-size: 14px; font-weight: 700; color: var(--color-warning); }
+        .rqd-removed-reason { margin: 2px 0 0; font-size: 13px; color: var(--color-ink); word-break: break-word; }
+        .rqd-removed-note { margin: 12px 0 0; font-size: 13px; color: var(--color-muted); }
+        button.rqd-repost-btn {
+          display: flex; align-items: center; justify-content: center; gap: 8px;
+          width: 100%; align-self: stretch; margin-top: 12px; padding: 12px 20px;
+          font-size: 14.5px; border-radius: 10px;
+          box-shadow: 0 4px 14px rgba(18, 101, 103, 0.25);
+        }
+        .rqd-form-title { margin: 0 0 4px; font-size: 16px; }
       `}</style>
 
       <Link to={isAdmin ? '/admin/requests' : '/requests'} className="rqd-back">
@@ -192,82 +221,42 @@ export default function RequestDetail() {
             </div>
 
             {r.mine && r.status === 'removed' && (
-              <>
-                <p className="rqd-warn" style={{ marginTop: 12 }}>
-                  An admin removed this request{r.removedReason ? `: ${r.removedReason}` : '.'}
-                </p>
+              <div className="rqd-removed">
+                <div className="rqd-removed-head">
+                  <span className="rqd-removed-icon" aria-hidden="true">!</span>
+                  <div style={{ minWidth: 0 }}>
+                    <p className="rqd-removed-title">An admin removed this request</p>
+                    {r.removedReason && <p className="rqd-removed-reason">{r.removedReason}</p>}
+                  </div>
+                </div>
 
                 {r.canRepost ? (
                   !showRepost && (
-                    <div className="rqd-actions">
-                      <button type="button" onClick={openRepost}>
-                        Edit and repost
-                      </button>
-                    </div>
+                    <button type="button" className="rqd-repost-btn" onClick={openRepost}>
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden="true"
+                      >
+                        <path d="M12 20h9" />
+                        <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" />
+                      </svg>
+                      Edit and repost
+                    </button>
                   )
                 ) : (
-                  <p style={{ fontSize: 13, color: 'var(--color-muted)' }}>
+                  <p className="rqd-removed-note">
                     This request has been reposted the maximum number of times. You can post a new one from the{' '}
                     <Link to="/requests">Requests page</Link>.
                   </p>
                 )}
-
-                {showRepost && (
-                  <form className="auth-form" onSubmit={submitRepost} style={{ marginTop: 12 }}>
-                    <p style={{ margin: 0, fontSize: 13, color: 'var(--color-muted)' }}>
-                      Fix what the admin pointed out, then repost. Your request goes back on the board for 30 days.
-                    </p>
-                    <div className="auth-field">
-                      <label className="auth-label">What are you looking for?</label>
-                      <input
-                        type="text"
-                        value={rTitle}
-                        maxLength={100}
-                        onChange={(e) => setRTitle(e.target.value)}
-                        required
-                      />
-                    </div>
-                    <div className="auth-field">
-                      <label className="auth-label">Category</label>
-                      <select value={rCategory} onChange={(e) => setRCategory(e.target.value)}>
-                        <option value="phone">Phone</option>
-                        <option value="general">Other item</option>
-                      </select>
-                    </div>
-                    <div className="auth-field">
-                      <label className="auth-label">Your budget (KES)</label>
-                      <input
-                        type="number"
-                        inputMode="numeric"
-                        min="1"
-                        max="250000"
-                        value={rBudget}
-                        onChange={(e) => setRBudget(e.target.value)}
-                        required
-                      />
-                    </div>
-                    <div className="auth-field">
-                      <label className="auth-label">Details (optional)</label>
-                      <textarea
-                        rows={3}
-                        maxLength={500}
-                        placeholder="No phone numbers, emails or links."
-                        value={rDescription}
-                        onChange={(e) => setRDescription(e.target.value)}
-                      />
-                    </div>
-                    {repostError && <p className="auth-error">{repostError}</p>}
-                    <div className="rqd-actions">
-                      <button type="submit" disabled={reposting || rTitle.trim().length < 3 || !rBudget}>
-                        {reposting ? 'Reposting...' : 'Repost request'}
-                      </button>
-                      <button type="button" className="btn-outline" disabled={reposting} onClick={() => setShowRepost(false)}>
-                        Cancel
-                      </button>
-                    </div>
-                  </form>
-                )}
-              </>
+              </div>
             )}
 
             {r.mine && live && (
@@ -281,6 +270,63 @@ export default function RequestDetail() {
               </div>
             )}
           </div>
+
+          {r.mine && r.status === 'removed' && r.canRepost && showRepost && (
+            <form className="rqd-card auth-form" onSubmit={submitRepost}>
+              <h3 className="rqd-form-title">Edit your request</h3>
+              <p style={{ margin: 0, fontSize: 13, color: 'var(--color-muted)' }}>
+                Fix what the admin pointed out, then repost. Your request goes back on the board for 30 days.
+              </p>
+              <div className="auth-field">
+                <label className="auth-label">What are you looking for?</label>
+                <input
+                  type="text"
+                  value={rTitle}
+                  maxLength={100}
+                  onChange={(e) => setRTitle(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="auth-field">
+                <label className="auth-label">Category</label>
+                <select value={rCategory} onChange={(e) => setRCategory(e.target.value)}>
+                  <option value="phone">Phone</option>
+                  <option value="general">Other item</option>
+                </select>
+              </div>
+              <div className="auth-field">
+                <label className="auth-label">Your budget (KES)</label>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min="1"
+                  max="250000"
+                  value={rBudget}
+                  onChange={(e) => setRBudget(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="auth-field">
+                <label className="auth-label">Details (optional)</label>
+                <textarea
+                  rows={3}
+                  maxLength={500}
+                  placeholder="No phone numbers, emails or links."
+                  value={rDescription}
+                  onChange={(e) => setRDescription(e.target.value)}
+                />
+              </div>
+              {repostError && <p className="auth-error">{repostError}</p>}
+              <div className="rqd-actions" style={{ marginTop: 0 }}>
+                <button type="submit" disabled={reposting || rTitle.trim().length < 3 || !rBudget}>
+                  {reposting ? 'Reposting...' : 'Repost request'}
+                </button>
+                <button type="button" className="btn-outline" disabled={reposting} onClick={() => setShowRepost(false)}>
+                  Cancel
+                </button>
+              </div>
+            </form>
+          )}
 
           {(r.mine || isAdmin) && (
             <>
