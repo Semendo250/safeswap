@@ -1,10 +1,8 @@
 import { useState, useRef } from 'react';
 
-// Pill textarea that grows up to 120px, Enter to send, Shift+Enter for a new
-// line, 42px circular send button. Ported from the SkillVault chat.
-//
-// `onSend` may be async. If it resolves to `false` the text is kept, so a
-// failed send doesn't lose what the user typed.
+// Pill textarea that grows up to 120px, Enter to send, Shift+Enter for a new line.
+// `onSend` may be async. If it resolves to `false` the text is kept, so a failed
+// send doesn't lose what the user typed.
 export default function ChatInput({ onSend, onTyping }) {
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
@@ -35,7 +33,7 @@ export default function ChatInput({ onSend, onTyping }) {
     submit();
   }
 
-    function handleChange(e) {
+  function handleChange(e) {
     setText(e.target.value);
     e.target.style.height = 'auto';
     e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
@@ -58,7 +56,7 @@ export default function ChatInput({ onSend, onTyping }) {
         onKeyDown={handleKeyDown}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
-        placeholder="Type a message..."
+        placeholder="Type a message"
         maxLength={1000}
         rows={1}
         style={{
@@ -74,7 +72,13 @@ export default function ChatInput({ onSend, onTyping }) {
         onMouseDown={(e) => e.preventDefault()}
         style={{ ...s.sendBtn, ...(!hasText ? s.sendBtnDisabled : {}) }}
       >
-        {sending ? <span style={{ fontSize: 20, letterSpacing: 2 }}>···</span> : '➤'}
+        {sending ? (
+          <span style={{ fontSize: 18, letterSpacing: 2, lineHeight: 1 }}>···</span>
+        ) : (
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M2.01 21 23 12 2.01 3 2 10l15 2-15 2z" />
+          </svg>
+        )}
       </button>
     </form>
   );
@@ -84,8 +88,8 @@ const s = {
   row: {
     display: 'flex',
     gap: 8,
-    padding: '10px 14px',
-    borderTop: '0.5px solid var(--color-border)',
+    padding: '10px 12px',
+    borderTop: '1px solid var(--color-border)',
     alignItems: 'flex-end',
     background: 'var(--color-card)',
     boxSizing: 'border-box',
@@ -94,10 +98,10 @@ const s = {
   input: {
     flex: 1,
     minWidth: 0,
-    padding: '10px 14px',
+    padding: '10px 16px',
     border: '1px solid var(--color-border)',
-    borderRadius: 20,
-    fontSize: 14,
+    borderRadius: 22,
+    fontSize: 14.5,
     lineHeight: 1.5,
     outline: 'none',
     background: 'var(--color-surface)',
@@ -111,25 +115,27 @@ const s = {
     fontFamily: 'inherit',
   },
   sendBtn: {
-    width: 42,
-    height: 42,
+    width: 44,
+    height: 44,
+    // index.css gives every button a 110px minimum width, which made this an oval
+    minWidth: 0,
     padding: 0,
     borderRadius: '50%',
     background: 'var(--color-primary)',
     color: '#fff',
     border: 'none',
-    fontSize: 16,
     cursor: 'pointer',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
-    // soft glow in whatever --color-primary is
+    alignSelf: 'flex-end',
     boxShadow: '0 2px 8px color-mix(in srgb, var(--color-primary) 30%, transparent)',
     transition: 'all 0.15s',
   },
   sendBtnDisabled: {
-    background: '#d1d5db',
+    background: 'var(--color-border)',
+    color: 'var(--color-muted)',
     cursor: 'not-allowed',
     boxShadow: 'none',
   },

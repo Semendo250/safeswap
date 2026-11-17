@@ -10,7 +10,7 @@ import Signup from './pages/Signup';
 import VerifyOtp from './pages/VerifyOtp';
 import CreateListing from './pages/CreateListing';
 import ListingDetail from './pages/ListingDetail';
-import Chat from './pages/Chat';
+import ChatRoute from './pages/ChatRoute';
 import SellerProfile from './pages/SellerProfile';
 import Dashboard from './pages/admin/Dashboard';
 import FlaggedQueue from './pages/admin/FlaggedQueue';
@@ -104,7 +104,7 @@ function App() {
           <Route path="/verify-otp" element={<VerifyOtp />} />
           <Route path="/create-listing" element={<CreateListing />} />
           <Route path="/listings/:id" element={<ListingDetail />} />
-          <Route path="/chat/:listingId" element={<Chat />} />
+          <Route path="/chat/:listingId" element={<ChatRoute />} />
           <Route path="/sellers/:id" element={<SellerProfile />} />
                     <Route path="/terms" element={<StudentOnly><Terms /></StudentOnly>} />
           <Route path="/privacy" element={<StudentOnly><Privacy /></StudentOnly>} />

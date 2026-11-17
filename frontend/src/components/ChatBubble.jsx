@@ -1,11 +1,11 @@
 import { useState, useRef } from 'react';
+import ChatTicks from './ChatTicks';
 
-// Styling ported from the SkillVault chat (bubble shape, hairline border,
-// bottom-sheet delete menu). Colours all come from this app's CSS variables.
-export default function ChatBubble({ message, isOwn, onDelete, otherUserName }) {
+// The bubble look (colours, tail, time and ticks inside the bubble) comes from the
+// .wa-* rules in Chat.jsx. Long-press or right-click opens the delete menu.
+export default function ChatBubble({ message, isOwn, onDelete, tail = false }) {
   const [menuOpen, setMenuOpen] = useState(false);
-  // useRef, not a plain variable: a plain `let` is reset on every re-render,
-  // which can make the long-press timer impossible to cancel.
+  // useRef, not a plain variable, so the long-press timer can always be cancelled
   const pressTimer = useRef(null);
   const isDeleted = message.deletedForEveryone;
 
@@ -32,51 +32,27 @@ export default function ChatBubble({ message, isOwn, onDelete, otherUserName }) 
   }
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'flex-end',
-        gap: 8,
-        justifyContent: isOwn ? 'flex-end' : 'flex-start',
-        flexShrink: 0,
-      }}
-    >
-      {!isOwn && (
-        <div style={s.avatar}>
-          <span style={{ color: '#fff', fontWeight: 700, fontSize: 12 }}>
-            {otherUserName?.[0]?.toUpperCase() || '?'}
-          </span>
-        </div>
-      )}
-
-      {/* .msg-bubble is widened to 85% on small screens by a rule in Chat.jsx */}
-      <div className="msg-bubble" style={{ maxWidth: '70%' }}>
-        {isDeleted ? (
-          <div style={s.bubbleDeleted}>🚫 This message was deleted</div>
-        ) : (
-          <div
-            onContextMenu={openMenu}
-            onTouchStart={startPress}
-            onTouchEnd={cancelPress}
-            onTouchMove={cancelPress}
-            style={{ ...s.bubble, ...(isOwn ? s.bubbleMe : s.bubbleThem) }}
-          >
-            {message.content}
-          </div>
-        )}
-                <p style={{ ...s.time, textAlign: isOwn ? 'right' : 'left' }}>
+    <div className={`wa-row ${isOwn ? 'own' : 'them'}${tail ? ' tail' : ''}`}>
+      <div
+        className={isDeleted ? 'wa-bubble deleted' : 'wa-bubble'}
+        onContextMenu={openMenu}
+        onTouchStart={startPress}
+        onTouchEnd={cancelPress}
+        onTouchMove={cancelPress}
+      >
+        <span className="wa-text">{isDeleted ? '🚫 This message was deleted' : message.content}</span>
+        <span className="wa-meta">
           {time}
           {isOwn && !isDeleted && (
-            <span
-              style={{
-                marginLeft: 4,
-                color: message.read ? 'var(--color-primary)' : 'var(--color-muted)',
-              }}
-            >
-              {message.read || message.delivered ? '✓✓' : '✓'}
-            </span>
+            <ChatTicks
+              read={!!message.read}
+              delivered={!!message.delivered}
+              size={16}
+              readColor="#65C1CF"
+              idleColor="rgba(255,255,255,0.7)"
+            />
           )}
-        </p>
+        </span>
       </div>
 
       {menuOpen && !isDeleted && (
@@ -102,55 +78,6 @@ export default function ChatBubble({ message, isOwn, onDelete, otherUserName }) 
 }
 
 const s = {
-  avatar: {
-    width: 28,
-    height: 28,
-    borderRadius: '50%',
-    background: 'var(--color-primary)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-    flexShrink: 0,
-  },
-  bubble: {
-    padding: '9px 13px',
-    borderRadius: 16,
-    fontSize: 14,
-    lineHeight: 1.5,
-    wordBreak: 'break-word',
-    overflowWrap: 'anywhere',
-    whiteSpace: 'pre-wrap', // so Shift+Enter line breaks actually show
-    cursor: 'pointer',
-    userSelect: 'none',
-  },
-  bubbleMe: {
-    background: 'var(--color-primary)',
-    color: '#fff',
-    borderBottomRightRadius: 4,
-  },
-    bubbleThem: {
-    background: 'var(--color-card)',
-    color: 'var(--color-ink)',
-    borderBottomLeftRadius: 4,
-    border: '0.5px solid var(--color-border)',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-  },
-  bubbleDeleted: {
-    padding: '8px 12px',
-    borderRadius: 12,
-    background: 'rgba(0,0,0,0.04)',
-    color: 'var(--color-muted)',
-    fontSize: 13,
-    fontStyle: 'italic',
-    border: '0.5px solid var(--color-border)',
-  },
-  time: {
-    fontSize: 10,
-    color: 'var(--color-muted)',
-    margin: '3px 0 0',
-    padding: '0 4px',
-  },
   overlay: {
     position: 'fixed',
     inset: 0,
@@ -161,7 +88,7 @@ const s = {
     zIndex: 1000,
     padding: 20,
   },
-    sheet: {
+  sheet: {
     background: 'var(--color-card)',
     borderRadius: 16,
     padding: '20px 24px',
@@ -179,7 +106,7 @@ const s = {
     margin: '0 0 4px',
     textAlign: 'center',
   },
-    deleteForMe: {
+  deleteForMe: {
     padding: 11,
     background: 'var(--color-surface)',
     border: 'none',
@@ -191,8 +118,7 @@ const s = {
   },
   deleteForAll: {
     padding: 11,
-    // faint tint of whatever --color-warning is, so it stays on-palette
-    background: 'color-mix(in srgb, var(--color-warning) 10%, #fff)',
+    background: 'color-mix(in srgb, var(--color-warning) 12%, var(--color-card))',
     border: 'none',
     borderRadius: 10,
     fontSize: 14,
@@ -200,7 +126,7 @@ const s = {
     cursor: 'pointer',
     color: 'var(--color-warning)',
   },
-    cancel: {
+  cancel: {
     padding: 11,
     background: 'var(--color-card)',
     border: '0.5px solid var(--color-border)',

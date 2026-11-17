@@ -171,6 +171,26 @@ async function getConversations(req, res) {
           _id: { listing: '$listing', other: '$other' },
           content: { $first: '$content' },
           createdAt: { $first: '$createdAt' },
+          lastFrom: { $first: '$sender' },
+          lastType: { $first: '$type' },
+          lastDeleted: { $first: '$deletedForEveryone' },
+          lastRead: { $first: '$read' },
+          unread: {
+            $sum: {
+              $cond: [
+                {
+                  $and: [
+                    { $eq: ['$receiver', uid] },
+                    { $eq: ['$read', false] },
+                    { $ne: ['$deletedForEveryone', true] },
+                    { $not: [{ $in: [uid, { $ifNull: ['$deletedFor', []] }] }] },
+                  ],
+                },
+                1,
+                0,
+              ],
+            },
+          },
         },
       },
       { $sort: { createdAt: -1 } },
@@ -181,7 +201,7 @@ async function getConversations(req, res) {
 
     const [listings, users] = await Promise.all([
       Listing.find({ _id: { $in: listingIds } }).select('title photos').lean(),
-      User.find({ _id: { $in: userIds } }).select('fullName').lean(),
+      User.find({ _id: { $in: userIds } }).select('fullName profilePicture').lean(),
     ]);
     const listingMap = new Map(listings.map((l) => [String(l._id), l]));
     const userMap = new Map(users.map((u) => [String(u._id), u]));
@@ -195,9 +215,14 @@ async function getConversations(req, res) {
         listingId: String(l._id),
         listingTitle: l.title,
         listingPhoto: l.photos?.[0],
-        otherUser: { id: String(u._id), fullName: u.fullName },
+        otherUser: { id: String(u._id), fullName: u.fullName, profilePicture: u.profilePicture || '' },
         lastMessage: r.content,
         lastMessageAt: r.createdAt,
+        lastFromMe: String(r.lastFrom) === String(uid),
+        lastType: r.lastType || 'text',
+        lastDeleted: !!r.lastDeleted,
+        lastRead: !!r.lastRead,
+        unread: r.unread || 0,
       });
     }
 

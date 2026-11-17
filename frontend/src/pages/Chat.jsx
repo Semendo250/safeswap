@@ -1,4 +1,4 @@
-import { useState, useEffect, useContext, useRef } from 'react';
+import { Fragment, useState, useEffect, useContext, useRef } from 'react';
 import { useParams, useLocation, useSearchParams, Link } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import socket from '../socket';
@@ -8,26 +8,196 @@ import ChatBubble from '../components/ChatBubble';
 import ChatInput from '../components/ChatInput';
 import OfferCard from '../components/OfferCard';
 import OfferSheet from '../components/OfferSheet';
+import Avatar from '../components/Avatar';
 import { createOffer, acceptOffer, declineOffer, counterOffer } from '../api/offers.api';
 import { blockUser, unblockUser, getBlockStatus } from '../api/blocks.api';
 
-const NAVBAR_HEIGHT = 68;
+// Height of the navbar, so the full-screen (phone) chat starts right below it
+const NAVBAR_HEIGHT = 60;
+const DAY_MS = 24 * 60 * 60 * 1000;
+const STATUS_LABEL = { sold: 'Sold', unavailable: 'Unavailable', expired: 'Expired' };
 
-// Same room name the server relays to — must match on both ends
+// Same room name the server relays to: must match on both ends
 function roomFor(listingId, userId, otherUserId) {
   if (!listingId || !userId || !otherUserId) return null;
   return [listingId, [userId, otherUserId].sort().join('-')].join(':');
 }
 
-export default function Chat() {
-  const { listingId } = useParams();
+function dayKey(value) {
+  const d = new Date(value);
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
+
+function dayLabel(value) {
+  const d = new Date(value);
+  const days = Math.round((new Date().setHours(0, 0, 0, 0) - new Date(d).setHours(0, 0, 0, 0)) / DAY_MS);
+  if (days <= 0) return 'Today';
+  if (days === 1) return 'Yesterday';
+  if (days < 7) return d.toLocaleDateString([], { weekday: 'long' });
+  return d.toLocaleDateString([], { day: 'numeric', month: 'long', year: 'numeric' });
+}
+
+const CHAT_CSS = `
+  .wa-chat { display: flex; flex-direction: column; background: var(--color-card); overflow: hidden; box-sizing: border-box; }
+
+  /* header */
+  .wa-header {
+    position: relative; display: flex; align-items: center; gap: 12px; flex-shrink: 0;
+    padding: 10px 14px; background: var(--color-card); border-bottom: 1px solid var(--color-border);
+  }
+  a.wa-back {
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    width: 34px; height: 34px; margin-left: -6px; border-radius: 50%;
+    color: var(--color-ink); font-size: 20px; line-height: 1;
+  }
+  a.wa-back:hover { background: var(--color-surface); text-decoration: none; }
+  .wa-dot {
+    position: absolute; right: -1px; bottom: -1px; width: 12px; height: 12px;
+    border-radius: 50%; border: 2px solid var(--color-card);
+  }
+  .wa-who { min-width: 0; flex: 1; }
+  .wa-name {
+    display: block; font-size: 15px; font-weight: 600; color: var(--color-ink);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .wa-status {
+    display: block; font-size: 12px; color: var(--color-muted);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .wa-status.live { color: var(--color-teal); font-weight: 600; }
+  button.wa-icon-btn {
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0; align-self: auto;
+    min-width: 0; width: 36px; height: 36px; padding: 0; border: none; border-radius: 50%;
+    background: transparent; color: var(--color-muted);
+  }
+  button.wa-icon-btn:hover { background: var(--color-surface); color: var(--color-ink); }
+  .wa-menu {
+    position: absolute; top: calc(100% - 6px); right: 10px; z-index: 30; min-width: 200px; padding: 6px;
+    border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-card);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+  }
+  .wa-menu a, button.wa-menu-item {
+    display: flex; align-items: center; width: 100%; min-width: 0; align-self: auto;
+    padding: 10px 12px; border: none; border-radius: 8px; background: transparent;
+    color: var(--color-ink); font-size: 14px; font-weight: 500; text-align: left; text-decoration: none;
+  }
+  .wa-menu a:hover, button.wa-menu-item:hover { background: var(--color-surface); color: var(--color-ink); text-decoration: none; }
+  button.wa-menu-item.danger, button.wa-menu-item.danger:hover { color: var(--color-warning); }
+
+  /* item strip */
+  .wa-item {
+    display: flex; align-items: center; gap: 10px; flex-shrink: 0;
+    padding: 8px 14px; background: var(--color-card); border-bottom: 1px solid var(--color-border);
+  }
+  .wa-item img, .wa-item-ph {
+    width: 38px; height: 38px; flex-shrink: 0; border-radius: 8px; object-fit: cover;
+    background: var(--color-surface); border: 1px solid var(--color-border); display: block;
+  }
+  .wa-item-main { min-width: 0; flex: 1; }
+  a.wa-item-title {
+    display: block; font-size: 13px; font-weight: 600; color: var(--color-ink);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  a.wa-item-title:hover { color: var(--color-teal); text-decoration: none; }
+  .wa-item-price { font-size: 12.5px; font-weight: 700; color: var(--color-primary); }
+  button.wa-offer-btn {
+    flex-shrink: 0; align-self: auto; min-width: 0; padding: 7px 14px; border-radius: 999px;
+    background: transparent; border: 1px solid var(--color-teal); color: var(--color-teal);
+    font-size: 13px; font-weight: 600; white-space: nowrap;
+  }
+  button.wa-offer-btn:hover { background: var(--color-teal); border-color: var(--color-teal); color: #fff; }
+  [data-theme="dark"] button.wa-offer-btn:hover { color: #0e1518; }
+
+  /* messages */
+  .wa-messages {
+    flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column;
+    padding: 12px 12px 8px; touch-action: pan-y; overscroll-behavior: contain;
+    background-color: var(--color-surface);
+    background-image:
+      radial-gradient(circle at 20% 30%, color-mix(in srgb, var(--color-teal) 9%, transparent) 0 2px, transparent 3px),
+      radial-gradient(circle at 72% 68%, color-mix(in srgb, var(--color-teal) 7%, transparent) 0 2px, transparent 3px);
+    background-size: 46px 46px, 62px 62px;
+  }
+  @media (min-width: 900px) { .wa-messages { padding: 16px 7% 10px; } }
+  .wa-secure {
+    align-self: center; max-width: 440px; margin: 4px 0 10px; padding: 8px 12px; border-radius: 10px;
+    text-align: center; font-size: 12px; line-height: 1.5; color: var(--color-ink); background: var(--color-gold-bg);
+  }
+  .wa-hello { align-self: center; margin: 14px 0; font-size: 13px; color: var(--color-muted); }
+  .wa-day { align-self: center; margin: 10px 0 8px; flex-shrink: 0; }
+  .wa-day span {
+    display: inline-block; padding: 4px 12px; border-radius: 8px; font-size: 12px; font-weight: 600;
+    color: var(--color-muted); background: var(--color-card); box-shadow: 0 1px 1px rgba(0, 0, 0, 0.1);
+  }
+
+  .wa-row { display: flex; width: 100%; flex-shrink: 0; margin-top: 2px; }
+  .wa-row.tail { margin-top: 8px; }
+  .wa-row.own { justify-content: flex-end; }
+  .wa-row.them { justify-content: flex-start; }
+  .wa-bubble {
+    position: relative; max-width: 78%; padding: 6px 9px 7px; border-radius: 10px;
+    font-size: 14.5px; line-height: 1.45; word-break: break-word; overflow-wrap: anywhere;
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.13); cursor: default;
+    -webkit-user-select: none; user-select: none;
+  }
+  @media (max-width: 640px) { .wa-bubble { max-width: 86%; } }
+  .wa-bubble::after { content: ''; display: table; clear: both; }
+  .wa-row.own .wa-bubble { background: var(--color-primary); color: #fff; }
+  .wa-row.them .wa-bubble { background: var(--color-card); color: var(--color-ink); }
+  .wa-text { white-space: pre-wrap; }
+  .wa-meta {
+    float: right; display: inline-flex; align-items: center; gap: 3px; margin: 7px 0 -4px 12px;
+    font-size: 11px; line-height: 1; white-space: nowrap; opacity: 0.85;
+  }
+  .wa-row.them .wa-meta { color: var(--color-muted); opacity: 1; }
+
+  .wa-row.tail .wa-bubble::before { content: ''; position: absolute; top: 0; width: 9px; height: 13px; }
+  .wa-row.own.tail .wa-bubble { border-top-right-radius: 0; }
+  .wa-row.own.tail .wa-bubble::before { right: -8px; background: var(--color-primary); clip-path: polygon(0 0, 100% 0, 0 100%); }
+  .wa-row.them.tail .wa-bubble { border-top-left-radius: 0; }
+  .wa-row.them.tail .wa-bubble::before { left: -8px; background: var(--color-card); clip-path: polygon(100% 0, 0 0, 100% 100%); }
+
+  .wa-row .wa-bubble.deleted { background: var(--color-card); color: var(--color-muted); font-style: italic; }
+  .wa-row.own.tail .wa-bubble.deleted::before { background: var(--color-card); }
+  .wa-row .wa-bubble.deleted .wa-meta { color: var(--color-muted); }
+
+  .wa-typing { display: inline-flex; align-items: center; padding: 11px 14px; }
+  @keyframes typingBounce {
+    0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+    30% { transform: translateY(-4px); opacity: 1; }
+  }
+  .typing-dot {
+    display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+    background: var(--color-muted); margin: 0 2px; animation: typingBounce 1.2s infinite;
+  }
+
+  .wa-blocked {
+    margin: 0; padding: 14px; font-size: 13px; text-align: center;
+    color: var(--color-muted); background: var(--color-card); border-top: 1px solid var(--color-border);
+  }
+  @media (max-width: 640px) { .msg-input-row { gap: 6px !important; padding: 8px !important; } }
+`;
+
+// listingId / receiverId can be passed in (the two-pane Messages page does that);
+// otherwise they come from the address, as before. `embedded` means it sits inside
+// another page's pane instead of covering the whole screen.
+export default function Chat({
+  listingId: listingIdProp,
+  receiverId: receiverIdProp,
+  otherName: otherNameProp,
+  otherPhoto: otherPhotoProp,
+  embedded = false,
+  onActivity,
+}) {
+  const routeParams = useParams();
+  const listingId = listingIdProp || routeParams.listingId;
   const { user, loading: authLoading } = useContext(AuthContext);
   const location = useLocation();
   const [messages, setMessages] = useState([]);
   const [searchParams] = useSearchParams();
   const withParam = searchParams.get('with') || '';
   const [receiverId, setReceiverId] = useState(
-    location.state?.receiverId || (/^[a-f\d]{24}$/i.test(withParam) ? withParam : null)
+    receiverIdProp || location.state?.receiverId || (/^[a-f\d]{24}$/i.test(withParam) ? withParam : null)
   );
   const [listingPrice, setListingPrice] = useState(0);
   const [listingStatus, setListingStatus] = useState('');
@@ -35,23 +205,44 @@ export default function Chat() {
   const [blockedByMe, setBlockedByMe] = useState(false);
   const [listingTitle, setListingTitle] = useState('');
   const [listingSellerId, setListingSellerId] = useState(null);
-    const [listingCategory, setListingCategory] = useState('');
+  const [listingCategory, setListingCategory] = useState('');
+  const [listingPhoto, setListingPhoto] = useState('');
+  const [seller, setSeller] = useState(null);
   const [otherTyping, setOtherTyping] = useState(false);
   const [otherOnline, setOtherOnline] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const bottomRef = useRef(null);
   const messagesBoxRef = useRef(null);
   const outerRef = useRef(null);
+  const menuRef = useRef(null);
   const typingTimeoutRef = useRef(null);
 
+  // Lets the Messages list know something changed (a message sent, received or read)
+  const activityRef = useRef(onActivity);
+  activityRef.current = onActivity;
+  function pingActivity() {
+    if (activityRef.current) activityRef.current();
+  }
+
   useEffect(() => {
-    if (!listingId) return;
-    getListingById(listingId).then((res) => {
-      setListingTitle(res.data.title);
-      setListingSellerId(res.data.seller?._id || null);
-      setListingPrice(res.data.price || 0);
-      setListingStatus(res.data.status || '');
-            setListingCategory(res.data.category || '');
-    });
+    if (!listingId) return undefined;
+    let cancelled = false;
+    getListingById(listingId)
+      .then((res) => {
+        if (cancelled) return;
+        const d = res.data;
+        setListingTitle(d.title);
+        setListingSellerId(d.seller?._id || null);
+        setSeller(d.seller || null);
+        setListingPrice(d.price || 0);
+        setListingStatus(d.status || '');
+        setListingCategory(d.category || '');
+        setListingPhoto(d.photos?.[0] || '');
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
   }, [listingId]);
 
   // If we weren't told who the other person is (e.g. a bookmarked link) and I'm
@@ -64,16 +255,20 @@ export default function Chat() {
   useEffect(() => {
     if (!listingId || authLoading || !user || !receiverId) return;
     const room = roomFor(listingId, user.id, receiverId);
-    getConversation(listingId, receiverId).then((res) => {
-      setMessages(res.data.messages);
-      // Anything already here that I haven't read yet: mark it read now that I'm viewing it
-      res.data.messages
-        .filter((m) => m.sender._id !== user.id && !m.read && !m.deletedForEveryone)
-        .forEach((m) => {
+    getConversation(listingId, receiverId)
+      .then((res) => {
+        setMessages(res.data.messages);
+        // Anything already here that I haven't read yet: mark it read now that I'm viewing it
+        const unread = res.data.messages.filter(
+          (m) => m.sender._id !== user.id && !m.read && !m.deletedForEveryone
+        );
+        unread.forEach((m) => {
           markAsRead(m._id).catch(() => {});
           if (room) socket.emit('message_seen', { room, messageId: m._id });
         });
-    });
+        if (unread.length) pingActivity();
+      })
+      .catch(() => {});
   }, [listingId, user, authLoading, receiverId]);
 
   // Ask whether the other person is online as soon as we know who they are
@@ -114,6 +309,7 @@ export default function Chat() {
       // The chat is open right now, so this message counts as seen immediately
       markAsRead(data._id).catch(() => {});
       socket.emit('message_seen', { room, messageId: data._id });
+      pingActivity();
     }
     function handleDeleted(data) {
       if (data.forEveryone) {
@@ -142,6 +338,19 @@ export default function Chat() {
     function handleUserOffline({ userId }) {
       if (userId === receiverId) setOtherOnline(false);
     }
+    function handleOfferMessage({ room: r, message }) {
+      if (r !== room || !message) return;
+      setMessages((prev) => (prev.some((m) => m._id === message._id) ? prev : [...prev, message]));
+      if (message.sender?._id !== user.id) {
+        markAsRead(message._id).catch(() => {});
+        socket.emit('message_seen', { room, messageId: message._id });
+      }
+      pingActivity();
+    }
+    function handleOfferUpdated({ room: r, offer }) {
+      if (r !== room || !offer) return;
+      setMessages((prev) => prev.map((m) => (m.offer && m.offer._id === offer._id ? { ...m, offer } : m)));
+    }
 
     socket.on('receive_message', handleIncoming);
     socket.on('message_deleted', handleDeleted);
@@ -150,19 +359,6 @@ export default function Chat() {
     socket.on('typing', handleTypingEvt);
     socket.on('stop_typing', handleStopTypingEvt);
     socket.on('user_online', handleUserOnline);
-    function handleOfferMessage({ room: r, message }) {
-      if (r !== room || !message) return;
-      setMessages((prev) => (prev.some((m) => m._id === message._id) ? prev : [...prev, message]));
-      if (message.sender?._id !== user.id) {
-        markAsRead(message._id).catch(() => {});
-        socket.emit('message_seen', { room, messageId: message._id });
-      }
-    }
-    function handleOfferUpdated({ room: r, offer }) {
-      if (r !== room || !offer) return;
-      setMessages((prev) => prev.map((m) => (m.offer && m.offer._id === offer._id ? { ...m, offer } : m)));
-    }
-
     socket.on('user_offline', handleUserOffline);
     socket.on('offer_message', handleOfferMessage);
     socket.on('offer_updated', handleOfferUpdated);
@@ -191,13 +387,12 @@ export default function Chat() {
     if (box) box.scrollTop = box.scrollHeight;
   }, [messages, otherTyping]);
 
-  // Pin the chat container to the visual viewport, so the input row stays
-  // directly above the on-screen keyboard when it's open, and sits at the
-  // true bottom of the screen when it's closed. The navbar height is
-  // subtracted so this container starts right below it.
+  // Full-screen (phone) mode only: pin the chat to the visual viewport, so the input
+  // row stays directly above the on-screen keyboard when it's open
   useEffect(() => {
+    if (embedded) return undefined;
     const outer = outerRef.current;
-    if (!outer) return;
+    if (!outer) return undefined;
 
     function update() {
       const vv = window.visualViewport;
@@ -215,10 +410,20 @@ export default function Chat() {
       window.visualViewport?.removeEventListener('resize', update);
       window.visualViewport?.removeEventListener('scroll', update);
     };
-  }, []);
+  }, [embedded]);
+
+  // Close the header menu when tapping anywhere else
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+    function onDown(e) {
+      if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false);
+    }
+    document.addEventListener('pointerdown', onDown);
+    return () => document.removeEventListener('pointerdown', onDown);
+  }, [menuOpen]);
 
   useEffect(() => {
-    if (!user || !receiverId) return;
+    if (!user || !receiverId) return undefined;
     let cancelled = false;
     getBlockStatus(receiverId)
       .then((res) => {
@@ -259,6 +464,7 @@ export default function Chat() {
     } else if (data.offer) {
       mergeOffer(data.offer);
     }
+    pingActivity();
   }
 
   function offerError(err) {
@@ -316,6 +522,7 @@ export default function Chat() {
       } else {
         setMessages((prev) => prev.filter((m) => m._id !== messageId));
       }
+      pingActivity();
     } catch (err) {
       alert(err.response?.data?.error || 'Failed to delete message');
     }
@@ -324,7 +531,7 @@ export default function Chat() {
   // Returns false on failure so ChatInput keeps the typed text.
   async function handleSend(content) {
     if (!receiverId) {
-      alert('Cannot determine who to message — please open this chat from the listing page.');
+      alert('Cannot determine who to message. Please open this chat from the listing page.');
       return false;
     }
     try {
@@ -345,11 +552,12 @@ export default function Chat() {
         _id: saved._id,
         createdAt: saved.createdAt,
       });
+      pingActivity();
       return true;
     } catch (err) {
       alert(
         !err.response
-          ? 'Network error — check your connection.'
+          ? 'Network error. Check your connection.'
           : err.response?.data?.error || 'Failed to send.'
       );
       return false;
@@ -358,296 +566,212 @@ export default function Chat() {
 
   if (authLoading) return null;
   if (!user) return <p style={{ padding: '1rem' }}>Please log in to view this conversation.</p>;
-    const isSeller = listingSellerId === user.id;
+  const isSeller = listingSellerId === user.id;
 
-  return (
-    <div
-      ref={outerRef}
-      style={{
+  // Who the other person is: told by the Messages list, or the seller, or found in the messages
+  let otherName = otherNameProp || '';
+  let otherPhoto = otherPhotoProp || '';
+  if (receiverId && seller && String(seller._id) === String(receiverId)) {
+    otherName = otherName || seller.fullName || '';
+    otherPhoto = otherPhoto || seller.profilePicture || '';
+  }
+  if (!otherName && receiverId) {
+    for (const m of messages) {
+      if (m.sender && String(m.sender._id) === String(receiverId) && m.sender.fullName) {
+        otherName = m.sender.fullName;
+        break;
+      }
+      if (m.receiver && String(m.receiver._id) === String(receiverId) && m.receiver.fullName) {
+        otherName = m.receiver.fullName;
+        break;
+      }
+    }
+  }
+
+  const statusLive = otherTyping || otherOnline;
+  const statusText = otherTyping ? 'typing…' : otherOnline ? 'online' : listingTitle ? `About: ${listingTitle}` : '';
+
+  const wrapperStyle = embedded
+    ? { position: 'relative', height: '100%', minHeight: 0 }
+    : {
         position: 'fixed',
         // initial values; the visualViewport effect overrides top/height
         top: NAVBAR_HEIGHT,
         left: 0,
         right: 0,
         bottom: 0,
-        display: 'flex',
-        flexDirection: 'column',
-        padding: 12,
-        boxSizing: 'border-box',
-        overflow: 'hidden',
-        background: 'var(--color-bg)',
         touchAction: 'none',
-      }}
-    >
-      <style>{`
-        @keyframes typingBounce {
-          0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
-          30% { transform: translateY(-4px); opacity: 1; }
-        }
-        .typing-dot {
-          display: inline-block; width: 6px; height: 6px; border-radius: 50%;
-          background: var(--color-muted); margin: 0 2px; animation: typingBounce 1.2s infinite;
-        }
-        @media (max-width: 640px) {
-          .msg-bubble { max-width: 85% !important; }
-          .msg-input-row { gap: 4px !important; padding: 8px !important; }
-        }
-      `}</style>
+      };
 
-      {/* The chat "card": hairline border + 12px radius, like the source app */}
-      <div
-        style={{
-          flex: 1,
-          minHeight: 0,
-          display: 'flex',
-          flexDirection: 'column',
-          background: 'var(--color-card)',
-          border: '0.5px solid var(--color-border)',
-          borderRadius: 12,
-          overflow: 'hidden',
-        }}
-      >
-        <div
-          style={{
-            padding: '12px 16px',
-            borderBottom: '0.5px solid var(--color-border)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-            background: 'var(--color-surface)',
-            flexShrink: 0,
-          }}
-        >
-          <Link to={`/listings/${listingId}`} style={{ color: 'var(--color-muted)', fontSize: 18 }}>
+  return (
+    <div ref={outerRef} className="wa-chat" style={wrapperStyle}>
+      <style>{CHAT_CSS}</style>
+
+      <div className="wa-header" ref={menuRef}>
+        {!embedded && (
+          <Link to="/messages" className="wa-back" aria-label="Back to messages">
             &larr;
           </Link>
-          <div style={{ position: 'relative', flexShrink: 0 }}>
-            <div
-              style={{
-                width: 40,
-                height: 40,
-                borderRadius: '50%',
-                background: 'var(--color-primary)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                overflow: 'hidden',
+        )}
+        <div style={{ position: 'relative', flexShrink: 0 }}>
+          <Avatar src={otherPhoto} name={otherName || listingTitle} size={42} />
+          {receiverId && (
+            <span
+              className="wa-dot"
+              title={otherOnline ? 'Online' : 'Offline'}
+              style={{ background: otherOnline ? 'var(--color-success)' : 'var(--color-muted)' }}
+            />
+          )}
+        </div>
+        <div className="wa-who">
+          <span className="wa-name">{otherName || 'Chat'}</span>
+          <span className={statusLive ? 'wa-status live' : 'wa-status'}>{statusText}</span>
+        </div>
+        {receiverId && (
+          <button
+            type="button"
+            className="wa-icon-btn"
+            aria-label="More options"
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((v) => !v)}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <circle cx="12" cy="5" r="2" />
+              <circle cx="12" cy="12" r="2" />
+              <circle cx="12" cy="19" r="2" />
+            </svg>
+          </button>
+        )}
+        {menuOpen && (
+          <div className="wa-menu">
+            <Link to={`/listings/${listingId}`} onClick={() => setMenuOpen(false)}>
+              View item
+            </Link>
+            <Link to={`/report/${listingId}`} onClick={() => setMenuOpen(false)}>
+              Report listing
+            </Link>
+            <button
+              type="button"
+              className="wa-menu-item danger"
+              onClick={() => {
+                setMenuOpen(false);
+                toggleBlock();
               }}
             >
-              <span style={{ color: '#fff', fontWeight: 700, fontSize: 16 }}>
-                {listingTitle?.[0]?.toUpperCase()}
-              </span>
+              {blockedByMe ? 'Unblock user' : 'Block user'}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {listingTitle && (
+        <div className="wa-item">
+          {listingPhoto ? <img src={listingPhoto} alt="" /> : <span className="wa-item-ph" />}
+          <div className="wa-item-main">
+            <Link to={`/listings/${listingId}`} className="wa-item-title">
+              {listingTitle}
+            </Link>
+            <span className="wa-item-price">KES {Number(listingPrice).toLocaleString()}</span>
+          </div>
+          {receiverId && listingStatus === 'active' && !blockedByMe && (
+            <button type="button" className="wa-offer-btn" onClick={() => setSheet({ mode: 'new' })}>
+              Make an offer
+            </button>
+          )}
+          {listingStatus && listingStatus !== 'active' && (
+            <span className="badge badge-muted">{STATUS_LABEL[listingStatus] || 'Not available'}</span>
+          )}
+        </div>
+      )}
+
+      {!receiverId ? (
+        <div
+          className="wa-messages"
+          style={{ alignItems: 'center', justifyContent: 'center' }}
+        >
+          <p style={{ textAlign: 'center', color: 'var(--color-muted)', fontSize: 13 }}>
+            Open this conversation from your <Link to="/messages">Messages</Link> list.
+          </p>
+        </div>
+      ) : (
+        <>
+          <div ref={messagesBoxRef} className="wa-messages">
+            <div className="wa-secure">
+              Pay through SafeSwap and meet at a safe zone. Your money is held until you confirm the handover.
             </div>
-            {receiverId && (
-              <span
-                title={otherOnline ? 'Online' : 'Offline'}
-                style={{
-                  position: 'absolute',
-                  bottom: -1,
-                  right: -1,
-                  width: 11,
-                  height: 11,
-                  borderRadius: '50%',
-                  background: otherOnline ? 'var(--color-success)' : 'var(--color-muted)',
-                  border: '2px solid var(--color-surface)',
-                }}
+
+            {messages.length === 0 && <p className="wa-hello">No messages yet. Say hello 👋</p>}
+
+            {messages.map((m, i) => {
+              const prev = messages[i - 1];
+              const showDay = !prev || dayKey(prev.createdAt) !== dayKey(m.createdAt);
+              const isOffer = m.type === 'offer' && m.offer;
+              const tail =
+                showDay || !prev || prev.type === 'offer' || String(prev.sender?._id) !== String(m.sender?._id);
+
+              return (
+                <Fragment key={m._id}>
+                  {showDay && (
+                    <div className="wa-day">
+                      <span>{dayLabel(m.createdAt)}</span>
+                    </div>
+                  )}
+                  {isOffer ? (
+                    <div style={{ margin: '6px 0' }}>
+                      <OfferCard
+                        message={m}
+                        userId={user.id}
+                        onAccept={(id) => respondToOffer(acceptOffer, id)}
+                        onDecline={(id) => respondToOffer(declineOffer, id)}
+                        onCounter={(offer) => setSheet({ mode: 'counter', offer })}
+                        isSeller={isSeller}
+                        category={listingCategory}
+                      />
+                    </div>
+                  ) : (
+                    <ChatBubble
+                      message={m}
+                      isOwn={m.sender._id === user.id}
+                      onDelete={handleDelete}
+                      tail={tail}
+                    />
+                  )}
+                </Fragment>
+              );
+            })}
+
+            {otherTyping && (
+              <div className="wa-row them tail">
+                <div className="wa-bubble wa-typing">
+                  <span className="typing-dot" style={{ animationDelay: '0s' }} />
+                  <span className="typing-dot" style={{ animationDelay: '0.2s' }} />
+                  <span className="typing-dot" style={{ animationDelay: '0.4s' }} />
+                </div>
+              </div>
+            )}
+            <div ref={bottomRef} />
+          </div>
+
+          <div style={{ flexShrink: 0 }}>
+            {blockedByMe ? (
+              <p className="wa-blocked">You blocked this person. Unblock them to send messages or offers.</p>
+            ) : (
+              <ChatInput onSend={handleSend} onTyping={handleTyping} />
+            )}
+            {sheet && (
+              <OfferSheet
+                title={sheet.mode === 'counter' ? 'Counter offer' : 'Make an offer'}
+                askingPrice={listingPrice}
+                initial={sheet.mode === 'counter' ? sheet.offer.amount : null}
+                onSubmit={submitOffer}
+                onClose={() => setSheet(null)}
+                showFee={isSeller}
+                category={listingCategory}
               />
             )}
           </div>
-          <div style={{ minWidth: 0 }}>
-            <p style={{ margin: '0 0 2px', fontWeight: 600, fontSize: 14, color: 'var(--color-ink)' }}>
-              {listingTitle || 'Listing'}
-            </p>
-            <p style={{ margin: 0, fontSize: 12, color: 'var(--color-teal)' }}>
-              {otherTyping ? 'Typing...' : otherOnline ? 'Online' : 'Chat about this item'}
-            </p>
-          </div>
-        </div>
-
-        {!receiverId ? (
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-            <p style={{ textAlign: 'center', color: 'var(--color-muted)', fontSize: 13 }}>
-              Open this conversation from your <Link to="/messages">Messages</Link> list.
-            </p>
-          </div>
-        ) : (
-          <>
-            <div
-              ref={messagesBoxRef}
-              style={{
-                flex: 1,
-                minHeight: 0,
-                overflowY: 'auto',
-                overflowX: 'hidden',
-                padding: 16,
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 8,
-                background: 'var(--color-surface)',
-                touchAction: 'pan-y',
-                overscrollBehavior: 'contain',
-              }}
-            >
-              {messages.length === 0 && (
-                <p style={{ textAlign: 'center', color: 'var(--color-muted)', fontSize: 13, margin: 'auto' }}>
-                  No messages yet — say hello. 👋
-                </p>
-              )}
-                            {messages.map((m) =>
-                m.type === 'offer' && m.offer ? (
-                  <OfferCard
-                    key={m._id}
-                    message={m}
-                    userId={user.id}
-                    onAccept={(id) => respondToOffer(acceptOffer, id)}
-                    onDecline={(id) => respondToOffer(declineOffer, id)}
-                                        onCounter={(offer) => setSheet({ mode: 'counter', offer })}
-                    isSeller={isSeller}
-                    category={listingCategory}
-                    
-                  />
-                ) : (
-                  <ChatBubble
-                    key={m._id}
-                    message={m}
-                    isOwn={m.sender._id === user.id}
-                    onDelete={handleDelete}
-                    otherUserName={listingTitle}
-                  />
-                )
-              )}
-              {otherTyping && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <div
-                    style={{
-                      width: 28,
-                      height: 28,
-                      borderRadius: '50%',
-                      background: 'var(--color-primary)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      flexShrink: 0,
-                    }}
-                  >
-                    <span style={{ color: '#fff', fontWeight: 700, fontSize: 12 }}>
-                      {listingTitle?.[0]?.toUpperCase() || '?'}
-                    </span>
-                  </div>
-                  <div
-                    style={{
-                      background: 'var(--color-card)',
-                      border: '0.5px solid var(--color-border)',
-                      borderRadius: 16,
-                      borderBottomLeftRadius: 4,
-                      padding: '8px 14px',
-                      boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-                    }}
-                  >
-                    <span className="typing-dot" style={{ animationDelay: '0s' }} />
-                    <span className="typing-dot" style={{ animationDelay: '0.2s' }} />
-                    <span className="typing-dot" style={{ animationDelay: '0.4s' }} />
-                  </div>
-                </div>
-              )}
-              <div ref={bottomRef} />
-            </div>
-
-            <div style={{ flexShrink: 0 }}>
-              {listingStatus === 'active' && !blockedByMe && (
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 10,
-                    padding: '8px 14px 0',
-                    background: 'var(--color-card)',
-                    borderTop: '0.5px solid var(--color-border)',
-                  }}
-                >
-                  <button
-                    type="button"
-                    onClick={() => setSheet({ mode: 'new' })}
-                    style={{
-                      minWidth: 0,
-                      padding: '6px 12px',
-                      fontSize: 13,
-                      fontWeight: 600,
-                      borderRadius: 999,
-                      background: 'transparent',
-                      border: '1px solid var(--color-teal)',
-                      color: 'var(--color-teal)',
-                      cursor: 'pointer',
-                      flexShrink: 0,
-                    }}
-                  >
-                    Make an offer
-                  </button>
-                  <span style={{ fontSize: 11, color: 'var(--color-muted)' }}>
-                    Agree the price here so payment matches
-                  </span>
-                </div>
-              )}
-              <div
-                style={{
-                  display: 'flex',
-                  gap: 14,
-                  padding: '6px 14px',
-                  background: 'var(--color-card)',
-                  borderTop: '0.5px solid var(--color-border)',
-                  fontSize: 12,
-                }}
-              >
-                <Link to={`/report/${listingId}`} style={{ color: 'var(--color-muted)' }}>
-                  Report listing
-                </Link>
-                <button
-                  type="button"
-                  onClick={toggleBlock}
-                  style={{
-                    minWidth: 0,
-                    padding: 0,
-                    border: 'none',
-                    background: 'transparent',
-                    color: 'var(--color-warning)',
-                    fontSize: 12,
-                    cursor: 'pointer',
-                  }}
-                >
-                  {blockedByMe ? 'Unblock user' : 'Block user'}
-                </button>
-              </div>
-              {blockedByMe ? (
-                <p
-                  style={{
-                    margin: 0,
-                    padding: '12px 14px',
-                    fontSize: 13,
-                    textAlign: 'center',
-                    color: 'var(--color-muted)',
-                    background: 'var(--color-card)',
-                  }}
-                >
-                  You blocked this person. Unblock them to send messages or offers.
-                </p>
-              ) : (
-                <ChatInput onSend={handleSend} onTyping={handleTyping} />
-              )}
-              {sheet && (
-                <OfferSheet
-                  title={sheet.mode === 'counter' ? 'Counter offer' : 'Make an offer'}
-                  askingPrice={listingPrice}
-                  initial={sheet.mode === 'counter' ? sheet.offer.amount : null}
-                  onSubmit={submitOffer}
-                                    onClose={() => setSheet(null)}
-                  showFee={isSeller}
-                  category={listingCategory}
-                />
-              )}
-            </div>
-          </>
-        )}
-      </div>
+        </>
+      )}
     </div>
   );
 }
