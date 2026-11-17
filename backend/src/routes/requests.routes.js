@@ -9,5 +9,6 @@ router.get('/:id', authMiddleware, ctrl.getRequestById);
 router.post('/', authMiddleware, ctrl.createRequest);
 router.post('/:id/respond', authMiddleware, ctrl.respond);
 router.patch('/:id/status', authMiddleware, ctrl.setStatus);
+router.patch('/:id/repost', authMiddleware, ctrl.repostRequest);
 
 module.exports = router;

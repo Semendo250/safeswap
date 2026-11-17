@@ -1,7 +1,7 @@
 import { useContext, useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
-import { getRequestById, respondToRequest, setRequestStatus } from '../api/requests.api';
+import { getRequestById, respondToRequest, setRequestStatus, repostRequest } from '../api/requests.api';
 import { getMyListings } from '../api/listings.api';
 
 function errorText(err) {
@@ -11,6 +11,7 @@ function errorText(err) {
 
 export default function RequestDetail() {
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
   const { user } = useContext(AuthContext);
   const isAdmin = user?.role === 'admin';
 
@@ -97,6 +98,46 @@ export default function RequestDetail() {
     }
   }
 
+  function openRepost() {
+    if (!r) return;
+    setRTitle(r.title);
+    setRCategory(r.category);
+    setRBudget(String(r.budget));
+    setRDescription(r.description || '');
+    setRepostError('');
+    setShowRepost(true);
+  }
+
+  async function submitRepost(e) {
+    e.preventDefault();
+    if (reposting) return;
+    setReposting(true);
+    setRepostError('');
+    try {
+      await repostRequest(id, {
+        title: rTitle.trim(),
+        category: rCategory,
+        budget: rBudget,
+        description: rDescription.trim(),
+      });
+      setShowRepost(false);
+      setNotice('Your request is live again.');
+      setReloadKey((k) => k + 1);
+    } catch (err) {
+      setRepostError(errorText(err));
+    } finally {
+      setReposting(false);
+    }
+  }
+
+  // Opens the form straight away when the poster comes from the "removed" notification or the My requests list
+  useEffect(() => {
+    if (r && r.mine && r.status === 'removed' && r.canRepost && searchParams.get('repost') === '1') {
+      openRepost();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [r && r._id, r && r.status]);
+
   const live = r && r.status === 'open' && !r.expired;
   const stateLabel = r ? (r.expired ? 'Expired' : r.status.charAt(0).toUpperCase() + r.status.slice(1)) : '';
 
@@ -151,9 +192,82 @@ export default function RequestDetail() {
             </div>
 
             {r.mine && r.status === 'removed' && (
-              <p className="rqd-warn" style={{ marginTop: 12 }}>
-                An admin removed this request{r.removedReason ? `: ${r.removedReason}` : '.'}
-              </p>
+              <>
+                <p className="rqd-warn" style={{ marginTop: 12 }}>
+                  An admin removed this request{r.removedReason ? `: ${r.removedReason}` : '.'}
+                </p>
+
+                {r.canRepost ? (
+                  !showRepost && (
+                    <div className="rqd-actions">
+                      <button type="button" onClick={openRepost}>
+                        Edit and repost
+                      </button>
+                    </div>
+                  )
+                ) : (
+                  <p style={{ fontSize: 13, color: 'var(--color-muted)' }}>
+                    This request has been reposted the maximum number of times. You can post a new one from the{' '}
+                    <Link to="/requests">Requests page</Link>.
+                  </p>
+                )}
+
+                {showRepost && (
+                  <form className="auth-form" onSubmit={submitRepost} style={{ marginTop: 12 }}>
+                    <p style={{ margin: 0, fontSize: 13, color: 'var(--color-muted)' }}>
+                      Fix what the admin pointed out, then repost. Your request goes back on the board for 30 days.
+                    </p>
+                    <div className="auth-field">
+                      <label className="auth-label">What are you looking for?</label>
+                      <input
+                        type="text"
+                        value={rTitle}
+                        maxLength={100}
+                        onChange={(e) => setRTitle(e.target.value)}
+                        required
+                      />
+                    </div>
+                    <div className="auth-field">
+                      <label className="auth-label">Category</label>
+                      <select value={rCategory} onChange={(e) => setRCategory(e.target.value)}>
+                        <option value="phone">Phone</option>
+                        <option value="general">Other item</option>
+                      </select>
+                    </div>
+                    <div className="auth-field">
+                      <label className="auth-label">Your budget (KES)</label>
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        min="1"
+                        max="250000"
+                        value={rBudget}
+                        onChange={(e) => setRBudget(e.target.value)}
+                        required
+                      />
+                    </div>
+                    <div className="auth-field">
+                      <label className="auth-label">Details (optional)</label>
+                      <textarea
+                        rows={3}
+                        maxLength={500}
+                        placeholder="No phone numbers, emails or links."
+                        value={rDescription}
+                        onChange={(e) => setRDescription(e.target.value)}
+                      />
+                    </div>
+                    {repostError && <p className="auth-error">{repostError}</p>}
+                    <div className="rqd-actions">
+                      <button type="submit" disabled={reposting || rTitle.trim().length < 3 || !rBudget}>
+                        {reposting ? 'Reposting...' : 'Repost request'}
+                      </button>
+                      <button type="button" className="btn-outline" disabled={reposting} onClick={() => setShowRepost(false)}>
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
+                )}
+              </>
             )}
 
             {r.mine && live && (

@@ -37,7 +37,10 @@ function RequestCard({ r }) {
   const label = r.expired ? 'Expired' : STATUS_LABEL[r.status] || r.status;
   const live = r.status === 'open' && !r.expired;
   return (
-    <Link to={`/requests/${r._id}`} className="rq-card">
+    <Link
+      to={r.mine && r.status === 'removed' ? `/requests/${r._id}?repost=1` : `/requests/${r._id}`}
+      className="rq-card"
+    >
       <div className="rq-card-top">
         <strong className="rq-title">{r.title}</strong>
         <span className="rq-budget">Up to KES {Number(r.budget).toLocaleString()}</span>
@@ -50,6 +53,9 @@ function RequestCard({ r }) {
           {r.responseCount} offer{r.responseCount === 1 ? '' : 's'}
         </span>
         {r.responded && !r.mine && <span className="badge badge-success">You offered</span>}
+        {r.mine && r.status === 'removed' && r.canRepost && (
+          <span className="badge badge-warning">Removed · Edit and repost</span>
+        )}
       </div>
       <div className="rq-meta">
         {r.buyer ? `${r.buyer.fullName} · ` : ''}

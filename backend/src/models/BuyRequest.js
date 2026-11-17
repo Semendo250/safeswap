@@ -12,6 +12,7 @@ const buyRequestSchema = new mongoose.Schema(
     status: { type: String, enum: ['open', 'fulfilled', 'closed', 'removed'], default: 'open' },
     expiresAt: { type: Date, required: true },
     responseCount: { type: Number, default: 0 },
+    repostCount: { type: Number, default: 0 },
     removedReason: { type: String },
   },
   { timestamps: true }

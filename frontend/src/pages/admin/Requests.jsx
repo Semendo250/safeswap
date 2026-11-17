@@ -366,6 +366,7 @@ export default function AdminRequests() {
                   </Chip>
                   {r.effectiveStatus === 'open' && r.responseCount === 0 && <Chip tone="warning">Unanswered</Chip>}
                   {r.buyer && r.buyer.isBanned && <Chip tone="warning">Poster banned</Chip>}
+                  {r.repostCount > 0 && <Chip tone="gold">Reposted {r.repostCount}x</Chip>}
                 </div>
               </div>
               <div className="arq-actions">

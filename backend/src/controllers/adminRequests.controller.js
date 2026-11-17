@@ -90,6 +90,7 @@ async function getRequests(req, res) {
         status: r.status,
         effectiveStatus: r.status === 'open' && new Date(r.expiresAt) <= now ? 'expired' : r.status,
         responseCount: r.responseCount || 0,
+        repostCount: r.repostCount || 0,
         createdAt: r.createdAt,
         expiresAt: r.expiresAt,
         removedReason: r.removedReason || '',
@@ -217,7 +218,7 @@ async function removeRequest(req, res) {
       type: 'request_removed',
       title: 'Your request was removed',
       body: `"${r.title}" was removed by an admin: ${reason}`,
-      link: '/requests',
+      link: `/requests/${r._id}?repost=1`,
     });
 
     res.json({ ok: true });

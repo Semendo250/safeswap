@@ -23,3 +23,7 @@ export function respondToRequest(id, payload) {
 export function setRequestStatus(id, status) {
   return api.patch(`/requests/${id}/status`, { status });
 }
+
+export function repostRequest(id, payload) {
+  return api.patch(`/requests/${id}/repost`, payload);
+}

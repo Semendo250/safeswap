@@ -2,11 +2,12 @@ const BuyRequest = require('../models/BuyRequest');
 const RequestResponse = require('../models/RequestResponse');
 const Listing = require('../models/Listing');
 const { parsePrice } = require('../utils/offers');
-const { notify } = require('../utils/notify');
+const { notify, notifyAdmins } = require('../utils/notify');
 const { isBlockedBetween } = require('../utils/blocks');
 const {
   MAX_OPEN_PER_USER,
   MAX_RESPONSES,
+  MAX_REPOSTS,
   keywordFrom,
   hasContactInfo,
   expiryFromNow,
@@ -49,6 +50,8 @@ function shapeRequest(r, viewer, respondedSet) {
     expiresAt: r.expiresAt,
     createdAt: r.createdAt,
     responseCount: r.responseCount || 0,
+    repostCount: r.repostCount || 0,
+    canRepost: r.status === 'removed' && (r.repostCount || 0) < MAX_REPOSTS,
     buyer: shapePerson(r.buyer),
     mine: !!viewer && buyerId === String(viewer._id),
     responded: respondedSet ? respondedSet.has(String(r._id)) : false,
@@ -311,4 +314,94 @@ async function setStatus(req, res) {
   }
 }
 
-module.exports = { createRequest, getRequests, getMyRequests, getRequestById, respond, setStatus };
+// PATCH /api/requests/:id/repost   { title, description, category, budget }
+async function repostRequest(req, res) {
+  try {
+    const id = String(req.params.id);
+    if (!isId(id)) return res.status(404).json({ error: 'Request not found' });
+
+    const title = String(req.body?.title || '').trim();
+    const description = String(req.body?.description || '').trim();
+    const category = String(req.body?.category || '');
+    const budget = parsePrice(req.body?.budget);
+
+    if (title.length < 3 || title.length > 100) {
+      return res.status(400).json({ error: 'Title must be 3 to 100 characters' });
+    }
+    if (description.length > 500) {
+      return res.status(400).json({ error: 'Description can be up to 500 characters' });
+    }
+    if (!['phone', 'general'].includes(category)) {
+      return res.status(400).json({ error: 'Choose a category' });
+    }
+    if (budget === null) {
+      return res.status(400).json({ error: 'Budget must be a whole number of KES between 1 and 250,000' });
+    }
+    if (hasContactInfo(title) || hasContactInfo(description)) {
+      return res.status(400).json({ error: CONTACT_ERROR });
+    }
+
+    const current = await BuyRequest.findOne({ _id: id, buyer: req.user._id });
+    if (!current) return res.status(404).json({ error: 'Request not found' });
+    if (current.status !== 'removed') {
+      return res.status(409).json({ error: 'Only removed requests can be reposted' });
+    }
+    if ((current.repostCount || 0) >= MAX_REPOSTS) {
+      return res.status(409).json({
+        error: 'This request has been reposted the maximum number of times. Please post a new one instead.',
+      });
+    }
+
+    const open = await BuyRequest.countDocuments({
+      buyer: req.user._id,
+      status: 'open',
+      expiresAt: { $gt: new Date() },
+    });
+    if (open >= MAX_OPEN_PER_USER) {
+      return res.status(409).json({
+        error: `You can have up to ${MAX_OPEN_PER_USER} open requests. Close one before reposting.`,
+      });
+    }
+
+    const r = await BuyRequest.findOneAndUpdate(
+      { _id: id, buyer: req.user._id, status: 'removed' },
+      {
+        $set: {
+          title,
+          description,
+          category,
+          budget,
+          keyword: keywordFrom(title),
+          status: 'open',
+          expiresAt: expiryFromNow(),
+        },
+        $inc: { repostCount: 1 },
+        $unset: { removedReason: 1 },
+      },
+      { new: true }
+    );
+    if (!r) return res.status(409).json({ error: 'This request was already reposted' });
+
+    await notifyAdmins({
+      type: 'request_reposted',
+      title: 'A removed request was reposted',
+      body: `${req.user.fullName} edited and reposted "${r.title}".`,
+      link: '/admin/requests',
+      actorId: req.user._id,
+    });
+
+    res.json(r);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+module.exports = {
+  createRequest,
+  getRequests,
+  getMyRequests,
+  getRequestById,
+  respond,
+  setStatus,
+  repostRequest,
+};

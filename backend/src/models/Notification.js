@@ -32,6 +32,7 @@ const notificationSchema = new mongoose.Schema(
         'review_request',
         'request_response',
         'request_removed',
+        'request_reposted',
       ],
       required: true,
     },

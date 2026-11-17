@@ -1,6 +1,7 @@
 const REQUEST_TTL_DAYS = 30;
 const MAX_OPEN_PER_USER = 5;
 const MAX_RESPONSES = 30;
+const MAX_REPOSTS = 3;
 
 const STOPWORDS = new Set([
   'a', 'an', 'the', 'and', 'or', 'for', 'to', 'in', 'on', 'of', 'with', 'me', 'my', 'i', 'is', 'are',
@@ -35,4 +36,12 @@ function expiryFromNow() {
   return new Date(Date.now() + REQUEST_TTL_DAYS * 24 * 60 * 60 * 1000);
 }
 
-module.exports = { REQUEST_TTL_DAYS, MAX_OPEN_PER_USER, MAX_RESPONSES, keywordFrom, hasContactInfo, expiryFromNow };
+module.exports = {
+  REQUEST_TTL_DAYS,
+  MAX_OPEN_PER_USER,
+  MAX_RESPONSES,
+  MAX_REPOSTS,
+  keywordFrom,
+  hasContactInfo,
+  expiryFromNow,
+};
