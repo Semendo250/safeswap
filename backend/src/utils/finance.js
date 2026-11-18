@@ -98,7 +98,7 @@ async function createMissingSettlements(rates) {
 // never changed here: the Finance page shows a warning on them instead.
 async function reconcileDueSettlements(rates) {
   const stale = await Settlement.aggregate([
-    { $match: { status: 'due', 'transfer.state': { $ne: 'sending' } } },
+    { $match: { status: 'due', 'transfer.state': { $ne: 'sending' }, paidTotal: { $not: { $gt: 0 } } } },
     {
       $lookup: {
         from: Payment.collection.name,

@@ -33,6 +33,33 @@ const MAX_ROWS = 10000;
 const TYPES = ['payout', 'refund'];
 const STATUSES = ['due', 'paid'];
 const REFERENCE_RX = /^[A-Z0-9][A-Z0-9\-_.]{3,29}$/;
+// Money actually sent out. Every receipt counts (part payments included), dated by the time in the SMS.
+// Older rows that were marked paid with a single code have no receipts, so they count once, on paidAt.
+const SENT_EVENTS = {
+  $cond: [
+    { $gt: [{ $size: { $ifNull: ['$receipts', []] } }, 0] },
+    {
+      $map: {
+        input: '$receipts',
+        as: 'r',
+        in: { amount: '$$r.amount', at: { $ifNull: ['$$r.paidAtSms', '$$r.addedAt'] } },
+      },
+    },
+    {
+      $cond: [{ $eq: ['$status', 'paid'] }, [{ amount: '$net', at: '$paidAt' }], []],
+    },
+  ],
+};
+
+function sentByDay(type, start, dayField) {
+  return Settlement.aggregate([
+    { $match: { type } },
+    { $project: { events: SENT_EVENTS } },
+    { $unwind: '$events' },
+    { $match: { 'events.at': { $gte: start } } },
+    { $group: { _id: dayField('$events.at'), total: { $sum: '$events.amount' } } },
+  ]);
+}
 
 // ---------- helpers ----------
 
@@ -171,6 +198,9 @@ function shapeSettlement(s) {
   const seller = s.seller && s.seller.fullName ? s.seller : null;
   const buyer = s.buyer && s.buyer.fullName ? s.buyer : null;
   const isRefund = s.type === 'refund';
+  const receiptList = Array.isArray(s.receipts) ? s.receipts : [];
+  const paidSoFar = receiptList.reduce((n, r) => n + (Number(r.amount) || 0), 0);
+  const remaining = s.status === 'due' ? Math.max(s.net - paidSoFar, 0) : 0;
 
   // Payouts go to the seller's phone. Refunds go back to the number that paid.
   const sendTo = isRefund
@@ -193,7 +223,25 @@ function shapeSettlement(s) {
     feePercent: s.feePercent || 0,
     fee: s.fee || 0,
     net: s.net,
-    reference: s.reference || '',
+    reference: receiptList.length ? receiptList.map((r) => r.code).join(', ') : s.reference || '',
+    receipts: receiptList.map((r) => ({
+      _id: r._id,
+      code: r.code,
+      amount: r.amount,
+      phone: r.phone || '',
+      recipientName: r.recipientName || '',
+      paidAtSms: r.paidAtSms || null,
+      cost: r.cost || 0,
+      manual: !!r.manual,
+      partial: !!r.partial,
+      overridden: !!r.overridden,
+      overrideReason: r.overrideReason || '',
+      rawText: r.rawText || '',
+      addedByName: r.addedByName || '',
+      addedAt: r.addedAt || null,
+    })),
+    paidSoFar,
+    remaining,
     note: s.note || '',
         via: s.via || '',
     transfer: {
@@ -206,7 +254,7 @@ function shapeSettlement(s) {
     paidAt: s.paidAt || null,
     paidByName: s.paidByName || '',
     paymentStatus: payment ? payment.status : null,
-    mismatch: s.status === 'paid' && !!payment && payment.status !== EXPECTED_STATUS[s.type],
+    mismatch: (s.status === 'paid' || paidSoFar > 0) && !!payment && payment.status !== EXPECTED_STATUS[s.type],
     mpesaReceipt: payment ? payment.mpesaReceipt || '' : '',
     checkoutRequestId: payment ? payment.checkoutRequestId : '',
     listing: listing ? { _id: listing._id, title: listing.title } : null,
@@ -259,7 +307,15 @@ async function getOverview(req, res) {
             count: { $sum: 1 },
             gross: { $sum: '$gross' },
             fee: { $sum: '$fee' },
-            net: { $sum: '$net' },
+            net: {
+              $sum: {
+                $cond: [
+                  { $eq: ['$status', 'due'] },
+                  { $max: [0, { $subtract: ['$net', { $ifNull: ['$paidTotal', 0] }] }] },
+                  '$net',
+                ],
+              },
+            },
             last7: { $sum: paidSince(d7) },
             last30: { $sum: paidSince(d30) },
             feeLast30: { $sum: { $cond: [{ $gte: ['$eventAt', d30] }, '$fee', 0] } },
@@ -306,7 +362,7 @@ async function getOverview(req, res) {
           $group: {
             _id: '$seller',
             count: { $sum: 1 },
-            net: { $sum: '$net' },
+            net: { $sum: { $max: [0, { $subtract: ['$net', { $ifNull: ['$paidTotal', 0] }] }] } },
             oldest: { $min: '$eventAt' },
           },
         },
@@ -349,6 +405,22 @@ async function getOverview(req, res) {
     const pick = (type, status) =>
       setRows.find((r) => r._id.type === type && r._id.status === status) || empty;
 
+    const sentRows = await Settlement.aggregate([
+      { $project: { type: 1, events: SENT_EVENTS } },
+      { $unwind: '$events' },
+      {
+        $group: {
+          _id: '$type',
+          total: { $sum: '$events.amount' },
+          last7: { $sum: { $cond: [{ $gte: ['$events.at', d7] }, '$events.amount', 0] } },
+          last30: { $sum: { $cond: [{ $gte: ['$events.at', d30] }, '$events.amount', 0] } },
+        },
+      },
+    ]);
+    const sentOf = (type) => sentRows.find((r) => r._id === type) || { total: 0, last7: 0, last30: 0 };
+    const sentPayout = sentOf('payout');
+    const sentRefund = sentOf('refund');
+
     const H = heldRows[0] || { count: 0, total: 0, fee: 0, overdue: 0 };
     const payoutsDue = pick('payout', 'due');
     const payoutsPaid = pick('payout', 'paid');
@@ -386,12 +458,12 @@ async function getOverview(req, res) {
       },
       payoutsPaid: {
         count: payoutsPaid.count,
-        net: payoutsPaid.net,
-        last7: payoutsPaid.last7,
-        last30: payoutsPaid.last30,
+        net: sentPayout.total,
+        last7: sentPayout.last7,
+        last30: sentPayout.last30,
       },
       refundsDue: { count: refundsDue.count, total: refundsDue.net, overdue: refundsDue.overdue },
-      refundsPaid: { count: refundsPaid.count, total: refundsPaid.net, last30: refundsPaid.last30 },
+      refundsPaid: { count: refundsPaid.count, total: sentRefund.total, last30: sentRefund.last30 },
       fees: {
         earned: payoutsDue.fee + payoutsPaid.fee,
         last30: payoutsDue.feeLast30 + payoutsPaid.feeLast30,
@@ -454,7 +526,7 @@ async function getSettlements(req, res) {
           .limit(50)
           .lean(),
       ]);
-      const or = [{ reference: rx }];
+      const or = [{ reference: rx }, { 'receipts.code': rx }];
       if (users.length) {
         const ids = users.map((u) => u._id);
         or.push({ seller: { $in: ids } }, { buyer: { $in: ids } });
@@ -577,14 +649,8 @@ async function getTrends(req, res) {
         { $match: { type: 'payout', eventAt: { $gte: start } } },
         { $group: { _id: dayField('$eventAt'), total: { $sum: '$fee' } } },
       ]),
-      Settlement.aggregate([
-        { $match: { type: 'payout', status: 'paid', paidAt: { $gte: start } } },
-        { $group: { _id: dayField('$paidAt'), total: { $sum: '$net' } } },
-      ]),
-      Settlement.aggregate([
-        { $match: { type: 'refund', status: 'paid', paidAt: { $gte: start } } },
-        { $group: { _id: dayField('$paidAt'), total: { $sum: '$net' } } },
-      ]),
+      sentByDay('payout', start, dayField),
+      sentByDay('refund', start, dayField),
     ]);
 
     const moneyIn = toMap(inRows);
@@ -635,7 +701,7 @@ async function setFee(req, res) {
     // Optionally re-price payouts that have not been sent yet (rows already sent never change)
     let updated = 0;
     if (applyToDue) {
-      const due = await Settlement.find({ type: 'payout', status: 'due' })
+      const due = await Settlement.find({ type: 'payout', status: 'due', paidTotal: { $not: { $gt: 0 } } })
         .select('gross category listing')
         .populate('listing', 'category')
         .lean();
@@ -684,100 +750,7 @@ async function setFee(req, res) {
 }
 // ---------- mark as sent / undo ----------
 
-// POST /api/admin/finance/settlements/:id/paid  { reference, note }
-async function markPaid(req, res) {
-  try {
-    const id = String(req.params.id);
-    if (!isId(id)) return res.status(400).json({ error: 'Invalid record id' });
 
-    const reference = String(req.body?.reference || '').trim().toUpperCase();
-    const note = String(req.body?.note || '').trim().slice(0, 300);
-    if (!REFERENCE_RX.test(reference)) {
-      return res.status(400).json({
-        error: 'Enter the M-Pesa confirmation code (4 to 30 letters or numbers)',
-      });
-    }
-
-    const s = await Settlement.findById(id);
-    if (!s) return res.status(404).json({ error: 'Record not found' });
-    if (s.status === 'paid') return res.status(409).json({ error: 'This is already marked as sent' });
-        if (
-      s.transfer &&
-      s.transfer.state === 'sending' &&
-      Date.now() - new Date(s.transfer.initiatedAt).getTime() < 2 * 60 * 1000
-    ) {
-      return res.status(409).json({ error: 'M-Pesa is still processing this. Wait a couple of minutes.' });
-    }
-
-    const payment = await Payment.findById(s.payment).select('status checkoutRequestId').lean();
-    if (!payment || payment.status !== EXPECTED_STATUS[s.type]) {
-      return res.status(409).json({
-        error: 'The payment status changed since this page loaded. Refresh and check it first.',
-      });
-    }
-
-        const update = {
-      status: 'paid',
-      via: 'manual',
-      reference,
-      paidAt: new Date(),
-      paidBy: req.user._id,
-      paidByName: req.user.fullName,
-      $unset: { 'transfer.state': 1, 'transfer.message': 1 },
-    };
-    if (note) update.note = note;
-
-    let updated;
-    try {
-      updated = await Settlement.findOneAndUpdate({ _id: s._id, status: 'due' }, update, { new: true });
-    } catch (err) {
-      if (err.code === 11000) {
-        return res.status(409).json({ error: 'That confirmation code is already saved on another record.' });
-      }
-      throw err;
-    }
-    if (!updated) return res.status(409).json({ error: 'This was already marked as sent by someone else.' });
-
-    const isRefund = updated.type === 'refund';
-    await logAction(req, isRefund ? 'payment.refund_sent' : 'payment.payout_sent', {
-      targetId: updated.payment,
-      summary: `${isRefund ? 'Refund' : 'Payout'} of KES ${updated.net} marked as sent (payment ${payment.checkoutRequestId}, code ${reference})`,
-      meta: { settlementId: updated._id, net: updated.net, fee: updated.fee, reference },
-    });
-
-    const listing = await Listing.findById(updated.listing).select('title').lean();
-    const title = listing ? listing.title : 'your item';
-    const link = listing ? `/listings/${updated.listing}` : '/browse';
-    if (isRefund && updated.buyer) {
-      await notify({
-        userId: updated.buyer,
-        actorId: req.user._id,
-        type: 'payment_status',
-        title: 'Refund sent',
-        body: `Your refund of KES ${updated.net} for "${title}" was sent to your M-Pesa. Code: ${reference}.`,
-        link,
-      });
-    } else if (!isRefund && updated.seller) {
-      await notify({
-        userId: updated.seller,
-        actorId: req.user._id,
-        type: 'payment_status',
-        title: 'Payout sent',
-        body: `KES ${updated.net} for "${title}" was sent to your M-Pesa${
-          updated.fee > 0 ? ` after a KES ${updated.fee} service fee` : ''
-        }. Code: ${reference}.`,
-        link,
-      });
-    }
-
-    res.json({
-      ok: true,
-      message: `${isRefund ? 'Refund' : 'Payout'} of KES ${updated.net.toLocaleString('en-US')} marked as sent.`,
-    });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-}
 
 // POST /api/admin/finance/settlements/:id/undo  { reason }
 async function undoPaid(req, res) {
@@ -920,7 +893,6 @@ module.exports = {
   getHeld,
   getTrends,
   setFee,
-  markPaid,
   undoPaid,
   exportFinance,
 };

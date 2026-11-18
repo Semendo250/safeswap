@@ -16,6 +16,7 @@ const communityAdmin = require('../controllers/adminCommunity.controller');
 const finance = require('../controllers/adminFinance.controller');
 const transfers = require('../controllers/adminTransfers.controller');
 const requestsAdmin = require('../controllers/adminRequests.controller');
+const receipts = require('../controllers/adminReceipts.controller');
 
 router.use(authMiddleware, adminMiddleware); // every admin route requires admin role
 
@@ -93,7 +94,9 @@ router.get('/finance/settlements', finance.getSettlements);
 router.get('/finance/held', finance.getHeld);
 router.get('/finance/trends', finance.getTrends);
 router.patch('/finance/settings/fee', finance.setFee);
-router.post('/finance/settlements/:id/paid', finance.markPaid);
+router.post('/finance/settlements/:id/receipt/check', receipts.checkReceipt);
+router.post('/finance/settlements/:id/receipt', receipts.addReceipt);
+router.post('/finance/settlements/:id/receipt/:receiptId/remove', receipts.removeReceipt);
 router.post('/finance/settlements/:id/undo', finance.undoPaid);
 router.get('/export/finance.csv', finance.exportFinance);
 

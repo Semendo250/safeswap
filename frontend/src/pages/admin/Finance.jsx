@@ -6,13 +6,14 @@ import {
   getFinanceSettlements,
   getFinanceHeld,
   getFinanceTrends,
-  markSettlementPaid,
+  removeReceipt,
   undoSettlement,
   setFeeRate,
   sendSettlement,
   resetTransfer,
 } from '../../api/finance.api';
 import ExportButton from '../../components/admin/ExportButton';
+import ReceiptDialog from '../../components/admin/ReceiptDialog';
 import {
   PageShell,
   Chip,
@@ -35,7 +36,6 @@ const TAB_QUERY = {
   paid: { status: 'paid' },
 };
 const VALID_TABS = ['payout-due', 'refund-due', 'held', 'paid'];
-const REFERENCE_RX = /^[A-Z0-9][A-Z0-9\-_.]{3,29}$/;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const CATEGORY_LABEL = { phone: 'Phones', general: 'Other items' };
 function rangeText(list) {
@@ -199,70 +199,7 @@ function Meta({ label, children, wide = false }) {
 
 // ---------- dialogs ----------
 
-function PayDialog({ s, onCancel, onDone }) {
-  const [reference, setReference] = useState('');
-  const [note, setNote] = useState('');
-  const [busy, setBusy] = useState(false);
-    const [error, setError] = useState('');
-  const isRefund = s.type === 'refund';
-  const clean = reference.trim().toUpperCase();
-  const valid = REFERENCE_RX.test(clean);
 
-  async function submit() {
-    if (busy || !valid) return;
-    setBusy(true);
-    setError('');
-    try {
-      const res = await markSettlementPaid(s._id, clean, note.trim());
-      onDone(res.data);
-    } catch (err) {
-      setError(errText(err));
-      setBusy(false);
-    }
-  }
-
-  return (
-    <Modal title={isRefund ? 'Mark refund as sent' : 'Mark payout as sent'} onClose={onCancel} busy={busy}>
-      <p style={{ margin: '0 0 8px', fontSize: 14, lineHeight: 1.5 }}>
-        Send <strong>{money(s.net)}</strong> to <strong>{s.sendTo.name}</strong>
-        {s.sendTo.phone ? ` on ${s.sendTo.phone}` : ''} in M-Pesa first. Then paste the confirmation code below.
-      </p>
-      {!s.sendTo.phone && (
-        <p style={{ margin: '0 0 8px', fontSize: 12, color: 'var(--color-warning)' }}>
-          There is no phone number on file for this person.
-        </p>
-      )}
-
-      <input
-        type="text"
-        placeholder="M-Pesa confirmation code"
-        value={reference}
-        maxLength={30}
-        autoCapitalize="characters"
-        onChange={(e) => setReference(e.target.value)}
-        style={{ marginBottom: 8 }}
-      />
-      <textarea
-        rows={2}
-        maxLength={300}
-        placeholder="Note (optional)"
-        value={note}
-        onChange={(e) => setNote(e.target.value)}
-        style={{ marginBottom: 10 }}
-      />
-      {error && <p style={{ color: 'var(--color-warning)', fontSize: 13, margin: '0 0 10px' }}>{error}</p>}
-
-      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-        <button type="button" onClick={onCancel} disabled={busy} style={btn('outline', { padding: '9px 16px' })}>
-          Cancel
-        </button>
-        <button type="button" onClick={submit} disabled={busy || !valid} style={btn('primary', { padding: '9px 16px' })}>
-          {busy ? 'Saving...' : 'Mark as sent'}
-        </button>
-      </div>
-    </Modal>
-  );
-}
 function SendDialog({ s, env, onCancel, onDone }) {
   const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -495,9 +432,8 @@ function FeeDialog({ current, buckets, onCancel, onDone }) {
   );
 }
 
-// ---------- list cards ----------
 
-function SettlementCard({ s, b2c, onSend, onPay, onUndo, onReset }) {
+function SettlementCard({ s, b2c, onSend, onPay, onUndo, onReset, onRemoveReceipt }) {
   const isRefund = s.type === 'refund';
   const isDue = s.status === 'due';
   const waiting = isDue ? daysSince(s.eventAt) : 0;
@@ -526,9 +462,14 @@ function SettlementCard({ s, b2c, onSend, onPay, onUndo, onReset }) {
             {s.listing ? s.listing.title : 'Deleted listing'}
           </strong>
           <div className="fin-amount">
-            <CopyText value={String(s.net)}>{money(s.net)}</CopyText>
+            <CopyText value={String(isDue ? s.remaining : s.net)}>{money(isDue ? s.remaining : s.net)}</CopyText>
           </div>
           <div className="fin-sub">{breakdown}</div>
+          {isDue && s.paidSoFar > 0 && (
+            <div className="fin-sub" style={{ color: 'var(--color-gold)' }}>
+              Part paid: {money(s.paidSoFar)} of {money(s.net)} already sent.
+            </div>
+          )}
           {sending && !stuck && (
             <div className="fin-sub" style={{ color: 'var(--color-gold)' }}>
               Waiting for M-Pesa to confirm. This page updates by itself.
@@ -563,8 +504,8 @@ function SettlementCard({ s, b2c, onSend, onPay, onUndo, onReset }) {
             </button>
           )}
           {isDue && (!sending || stuck) && (
-            <button type="button" onClick={onPay} style={btn('outline')}>
-              Mark as sent
+            <button type="button" onClick={onPay} style={btn(canSend ? 'outline' : 'primary')}>
+              Add receipt
             </button>
           )}
           {(stuck || failed) && (
@@ -572,7 +513,7 @@ function SettlementCard({ s, b2c, onSend, onPay, onUndo, onReset }) {
               Reset
             </button>
           )}
-          {!isDue && s.via !== 'mpesa' && (
+                    {!isDue && s.via !== 'mpesa' && s.receipts.length === 0 && (
             <button type="button" onClick={onUndo} style={btn('outline')}>
               Undo
             </button>
@@ -611,6 +552,36 @@ function SettlementCard({ s, b2c, onSend, onPay, onUndo, onReset }) {
           </>
         )}
       </div>
+            {s.receipts.length > 0 && (
+        <div className="fin-receipts">
+          <div className="fin-meta-label">Receipts ({s.receipts.length})</div>
+          {s.receipts.map((r) => (
+            <div key={r._id} className="fin-receipt">
+              <div className="fin-receipt-main">
+                <CopyText value={r.code} />
+                <span className="fin-receipt-amt">{money(r.amount)}</span>
+                {r.partial && <Chip tone="gold">Part</Chip>}
+                {r.manual && <Chip tone="muted">Entered by hand</Chip>}
+                {r.overridden && <Chip tone="warning">Overridden</Chip>}
+              </div>
+              <div className="fin-sub">
+                {r.paidAtSms ? `Sent ${fmtDate(r.paidAtSms)}` : 'Time not recorded'} · added by {r.addedByName || '-'}
+                {r.cost > 0 ? ` · cost ${money(r.cost)}` : ''}
+                {r.overridden && r.overrideReason ? ` · Reason: ${r.overrideReason}` : ''}
+              </div>
+              {r.rawText && (
+                <details className="fin-sub">
+                  <summary>Original SMS</summary>
+                  <p style={{ margin: '6px 0 0', wordBreak: 'break-word' }}>{r.rawText}</p>
+                </details>
+              )}
+              <button type="button" onClick={() => onRemoveReceipt(r)} style={btn('outline')}>
+                Remove receipt
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -701,6 +672,7 @@ export default function Finance() {
   const [notice, setNotice] = useState('');
   const [paying, setPaying] = useState(null);
   const [undoing, setUndoing] = useState(null);
+    const [removing, setRemoving] = useState(null);
   const [feeOpen, setFeeOpen] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
     const [sendTarget, setSendTarget] = useState(null);
@@ -938,6 +910,10 @@ export default function Finance() {
           margin-top: 8px; padding: 8px 10px; border-radius: 8px;
           background: var(--color-warning-bg); color: var(--color-warning); font-size: 12px; line-height: 1.5;
         }
+                  .fin-receipts { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--color-border); display: grid; gap: 10px; }
+        .fin-receipt { padding: 10px 12px; border: 1px solid var(--color-border); border-radius: 10px; display: grid; gap: 6px; justify-items: start; }
+        .fin-receipt-main { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .fin-receipt-amt { font-weight: 700; color: var(--color-primary); }
 
         .fin-meta {
           display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
@@ -1141,7 +1117,7 @@ export default function Finance() {
 
       {/* Work list */}
       <div id="fin-work" className="fin-anchor" />
-      <SectionTitle hint="Send the money in M-Pesa, then mark it as sent here with the code">Money to move</SectionTitle>
+      <SectionTitle hint="Send the money in M-Pesa, then add the confirmation SMS here">Money to move</SectionTitle>
       <div className="fin-filter">
         <span className="fin-filter-label">Show</span>
         <Tabs
@@ -1202,7 +1178,8 @@ export default function Finance() {
               onSend={() => setSendTarget(s)}
               onPay={() => setPaying(s)}
               onUndo={() => setUndoing(s)}
-              onReset={() => setResetTarget(s)}
+                            onReset={() => setResetTarget(s)}
+              onRemoveReceipt={(r) => setRemoving({ s, r })}
             />
           ))}
 
@@ -1260,7 +1237,7 @@ export default function Finance() {
       )}
 
       {paying && (
-        <PayDialog
+        <ReceiptDialog
           s={paying}
           onCancel={() => setPaying(null)}
           onDone={(result) => {
@@ -1285,6 +1262,22 @@ export default function Finance() {
             setReloadKey((k) => k + 1);
           }}
           onCancel={() => setUndoing(null)}
+        />
+      )}
+            {removing && (
+        <ConfirmDialog
+          title="Remove this receipt?"
+          message={`Receipt ${removing.r.code} (KES ${Number(removing.r.amount).toLocaleString('en-US')}) will be removed and that amount counts as owed again. Use this if it was entered by mistake.`}
+          confirmLabel="Remove receipt"
+          askReason="required"
+          danger
+          onConfirm={async (reason) => {
+            const res = await removeReceipt(removing.s._id, removing.r._id, reason);
+            setRemoving(null);
+            setNotice(res.data.message);
+            setReloadKey((k) => k + 1);
+          }}
+          onCancel={() => setRemoving(null)}
         />
       )}
             {sendTarget && (

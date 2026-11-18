@@ -16,8 +16,18 @@ export function getFinanceTrends(days = 30) {
   return api.get('/admin/finance/trends', { params: { days } });
 }
 
-export function markSettlementPaid(id, reference, note) {
-  return api.post(`/admin/finance/settlements/${id}/paid`, { reference, note });
+// Reads and checks a pasted M-Pesa SMS (or hand-typed fields) without saving anything
+export function checkReceipt(id, payload) {
+  return api.post(`/admin/finance/settlements/${id}/receipt/check`, payload);
+}
+
+// Saves the receipt. The server runs every check again.
+export function addReceipt(id, payload) {
+  return api.post(`/admin/finance/settlements/${id}/receipt`, payload);
+}
+
+export function removeReceipt(id, receiptId, reason) {
+  return api.post(`/admin/finance/settlements/${id}/receipt/${receiptId}/remove`, { reason });
 }
 
 export function undoSettlement(id, reason) {
@@ -27,6 +37,7 @@ export function undoSettlement(id, reason) {
 export function setFeeRate(rates, reason, applyToDue) {
   return api.patch('/admin/finance/settings/fee', { rates, reason, applyToDue });
 }
+
 export function sendSettlement(id, amount) {
   return api.post(`/admin/finance/settlements/${id}/send`, { amount });
 }
