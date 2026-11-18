@@ -13,12 +13,8 @@ const PAYMENT_LOCK_MS = 60 * 1000;
 function callbackTokenIsValid(provided) {
   const secret = process.env.MPESA_CALLBACK_SECRET;
   if (!secret) {
-    if (process.env.NODE_ENV === 'production') {
-      console.error('MPESA_CALLBACK_SECRET is not set: rejecting M-Pesa callback');
-      return false;
-    }
-    console.warn('MPESA_CALLBACK_SECRET is not set: M-Pesa callbacks are NOT authenticated');
-    return true;
+    console.error('MPESA_CALLBACK_SECRET is not set: rejecting M-Pesa callback');
+    return false;
   }
   if (typeof provided !== 'string') return false;
   const a = Buffer.from(provided);
@@ -109,8 +105,12 @@ async function initiatePayment(req, res) {
       amount,
     });
   } catch (err) {
+    console.error('STK push failed:', err.response?.data || err.message);
     const safaricomError = err.response?.data;
-    res.status(500).json({ error: safaricomError || err.message });
+    const message =
+      (safaricomError && (safaricomError.errorMessage || safaricomError.ResponseDescription)) ||
+      'Could not start the M-Pesa payment. Please try again.';
+    res.status(500).json({ error: message });
   } finally {
     if (lockedListingId) {
       try {

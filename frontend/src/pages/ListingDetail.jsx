@@ -298,10 +298,6 @@ export default function ListingDetail() {
         .ld-pay-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
         .ld-pay-title { margin: 0; font-size: 15px; font-weight: 600; line-height: 1.3; }
         .ld-pay-sub { margin: 2px 0 0; font-size: 12px; color: var(--color-muted); }
-        .ld-sandbox {
-          padding: 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 600;
-          background: var(--color-gold-bg); color: var(--color-gold); flex-shrink: 0;
-        }
         .ld-label { display: block; margin-bottom: 6px; font-size: 12px; color: var(--color-muted); }
         .ld-input-wrap { position: relative; }
         .ld-input-wrap svg {
@@ -550,7 +546,6 @@ export default function ListingDetail() {
                   <p className="ld-pay-sub">Held safely until you confirm</p>
                 </div>
               </div>
-              <span className="ld-sandbox">Sandbox</span>
             </div>
 
             <label className="ld-label" htmlFor="ld-pay-phone">

@@ -4,6 +4,10 @@ const app = require('./app');
 const connectDB = require('./config/db');
 const { initSocket } = require('./socket');
 const { sweepOffers } = require('./utils/offers');
+const { assertMpesaConfig } = require('./utils/mpesa');
+
+// Refuse to start with missing or sandbox M-Pesa settings, so a bad config can never take payments
+assertMpesaConfig();
 
 const PORT = process.env.PORT || 5000;
 

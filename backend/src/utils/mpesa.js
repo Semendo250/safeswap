@@ -1,6 +1,57 @@
 const axios = require('axios');
 
-const BASE_URL = 'https://sandbox.safaricom.co.ke'; // switch to api.safaricom.co.ke for production
+// Live Safaricom Daraja API. The sandbox has been removed on purpose.
+const BASE_URL = 'https://api.safaricom.co.ke';
+
+// Public Daraja sandbox values. If any of these show up in the config, we refuse to run.
+const SANDBOX_SHORTCODE = '174379';
+const SANDBOX_PASSKEY_PREFIX = 'bfb279f9aa9bdbcf158e';
+
+const REQUIRED_ENV = [
+  'MPESA_CONSUMER_KEY',
+  'MPESA_CONSUMER_SECRET',
+  'MPESA_SHORTCODE',
+  'MPESA_PASSKEY',
+  'MPESA_CALLBACK_URL',
+  'MPESA_CALLBACK_SECRET',
+];
+
+const TRANSACTION_TYPES = ['CustomerPayBillOnline', 'CustomerBuyGoodsOnline'];
+
+// Throws a clear error if the M-Pesa settings are missing, still sandbox, or unusable.
+// Called once when the server starts, and again before every STK push.
+function assertMpesaConfig() {
+  const missing = REQUIRED_ENV.filter((k) => !String(process.env[k] || '').trim());
+  if (missing.length) {
+    throw new Error(`Missing M-Pesa settings: ${missing.join(', ')}`);
+  }
+
+  const shortcode = String(process.env.MPESA_SHORTCODE).trim();
+  const passkey = String(process.env.MPESA_PASSKEY).trim();
+  if (shortcode === SANDBOX_SHORTCODE || passkey.startsWith(SANDBOX_PASSKEY_PREFIX)) {
+    throw new Error('M-Pesa is still using the sandbox shortcode or passkey. Put in your production values.');
+  }
+
+  let callback;
+  try {
+    callback = new URL(String(process.env.MPESA_CALLBACK_URL).trim());
+  } catch (e) {
+    throw new Error('MPESA_CALLBACK_URL is not a valid URL');
+  }
+  if (callback.protocol !== 'https:') {
+    throw new Error('MPESA_CALLBACK_URL must start with https://');
+  }
+  if (/m-?pesa|safaricom|exe|cmd|sql|query/i.test(callback.hostname + callback.pathname)) {
+    throw new Error(
+      'MPESA_CALLBACK_URL contains a word Safaricom blocks in production URLs (mpesa, safaricom, exe, exec, cmd, sql, query)'
+    );
+  }
+
+  const type = process.env.MPESA_TRANSACTION_TYPE;
+  if (type && !TRANSACTION_TYPES.includes(type)) {
+    throw new Error(`MPESA_TRANSACTION_TYPE must be one of: ${TRANSACTION_TYPES.join(', ')}`);
+  }
+}
 
 // Fetch an OAuth access token using Consumer Key + Secret
 async function getAccessToken() {
@@ -34,6 +85,7 @@ function generateTimestampAndPassword() {
 
   return { timestamp, password };
 }
+
 function callbackUrlWithToken() {
   const base = String(process.env.MPESA_CALLBACK_URL || '').trim();
   const secret = process.env.MPESA_CALLBACK_SECRET;
@@ -45,21 +97,32 @@ function callbackUrlWithToken() {
 
 // Initiates an STK Push - the "enter your M-Pesa PIN" prompt on the buyer's phone
 async function initiateStkPush({ phone, amount, accountReference, transactionDesc }) {
+  assertMpesaConfig();
+
+  // Live M-Pesa only accepts whole shillings
+  const wholeAmount = Math.round(Number(amount));
+  if (!Number.isFinite(wholeAmount) || wholeAmount < 1) {
+    throw new Error('Invalid payment amount');
+  }
+
   const accessToken = await getAccessToken();
   const { timestamp, password } = generateTimestampAndPassword();
 
+  const shortcode = String(process.env.MPESA_SHORTCODE).trim();
   const payload = {
-    BusinessShortCode: process.env.MPESA_SHORTCODE,
+    BusinessShortCode: shortcode,
     Password: password,
     Timestamp: timestamp,
-    TransactionType: 'CustomerPayBillOnline',
-    Amount: amount,
+    // Paybill = CustomerPayBillOnline (default). Till number = CustomerBuyGoodsOnline.
+    TransactionType: process.env.MPESA_TRANSACTION_TYPE || 'CustomerPayBillOnline',
+    Amount: wholeAmount,
     PartyA: phone, // buyer's phone, format 2547XXXXXXXX
-    PartyB: process.env.MPESA_SHORTCODE,
+    // For a Paybill this is the same as the shortcode. For a Till, set MPESA_PARTY_B to the till number.
+    PartyB: String(process.env.MPESA_PARTY_B || shortcode).trim(),
     PhoneNumber: phone,
     CallBackURL: callbackUrlWithToken(),
-    AccountReference: accountReference, // e.g. listing ID or a short order ref
-    TransactionDesc: transactionDesc || 'SafeSwap payment',
+    AccountReference: String(accountReference || 'SafeSwap').slice(0, 12), // Daraja allows 12 characters
+    TransactionDesc: String(transactionDesc || 'SafeSwap payment').slice(0, 13), // Daraja allows 13 characters
   };
 
   const res = await axios.post(
@@ -68,7 +131,12 @@ async function initiateStkPush({ phone, amount, accountReference, transactionDes
     { headers: { Authorization: `Bearer ${accessToken}` }, timeout: 30000 }
   );
 
-  return res.data; // includes CheckoutRequestID, used to match the later callback
+  const data = res.data;
+  if (!data || String(data.ResponseCode) !== '0' || !data.CheckoutRequestID) {
+    throw new Error((data && data.ResponseDescription) || 'M-Pesa did not accept the payment request');
+  }
+
+  return data; // includes CheckoutRequestID, used to match the later callback
 }
 
-module.exports = { getAccessToken, initiateStkPush };
+module.exports = { getAccessToken, initiateStkPush, assertMpesaConfig };
