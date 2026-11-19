@@ -9,6 +9,8 @@ function toRecord(doc) {
     amount: doc.amount,
     mpesaReceipt: doc.mpesaReceipt,
     status: doc.status,
+    resultCode: doc.resultCode,
+    resultDesc: doc.resultDesc,
     createdAt: doc.createdAt,
   };
 }
@@ -30,6 +32,10 @@ async function createPending(checkoutRequestId, { listingId, buyerId, amount, ph
 async function settlePending(checkoutRequestId, status, extra = {}) {
   const update = { status };
   if (extra.mpesaReceipt) update.mpesaReceipt = extra.mpesaReceipt;
+  if (extra.resultCode !== undefined && extra.resultCode !== null && !Number.isNaN(extra.resultCode)) {
+    update.resultCode = extra.resultCode;
+  }
+  if (extra.resultDesc) update.resultDesc = String(extra.resultDesc).slice(0, 300);
   if (extra.reviewNote) {
     update.needsReview = true;
     update.reviewNote = extra.reviewNote;
@@ -40,6 +46,32 @@ async function settlePending(checkoutRequestId, status, extra = {}) {
     { new: true }
   );
   return toRecord(doc);
+}
+
+// The buyer gave up waiting. Only a payment that is still pending can be cancelled.
+async function cancelPending(checkoutRequestId) {
+  const doc = await Payment.findOneAndUpdate(
+    { checkoutRequestId, status: 'pending' },
+    { status: 'failed', resultDesc: 'You cancelled this attempt.' },
+    { new: true }
+  );
+  return toRecord(doc);
+}
+
+// A late callback brings the receipt number for a payment that a status check already marked as paid
+async function attachReceipt(checkoutRequestId, mpesaReceipt) {
+  await Payment.updateOne(
+    {
+      checkoutRequestId,
+      status: 'held',
+      $or: [{ mpesaReceipt: { $exists: false } }, { mpesaReceipt: null }, { mpesaReceipt: '' }],
+    },
+    { mpesaReceipt }
+  );
+  await Payment.updateOne(
+    { checkoutRequestId, reviewNote: /^Confirmed by M-Pesa status check/ },
+    { needsReview: false, $unset: { reviewNote: 1 } }
+  );
 }
 
 async function flagReview(checkoutRequestId, note, extra = {}) {
@@ -62,6 +94,10 @@ async function getLatestByListingId(listingId) {
   return toRecord(await Payment.findOne({ listing: listingId }).sort({ createdAt: -1 }).lean());
 }
 
+async function getLatestByBuyerAndListing(listingId, buyerId) {
+  return toRecord(await Payment.findOne({ listing: listingId, buyer: buyerId }).sort({ createdAt: -1 }).lean());
+}
+
 async function getHeldByListingId(listingId) {
   return toRecord(await Payment.findOne({ listing: listingId, status: 'held' }).lean());
 }
@@ -73,7 +109,7 @@ async function getActiveByListingId(listingId) {
 async function failStalePending(listingId, olderThanMs) {
   await Payment.updateMany(
     { listing: listingId, status: 'pending', createdAt: { $lt: new Date(Date.now() - olderThanMs) } },
-    { status: 'failed' }
+    { status: 'failed', resultDesc: 'No response from M-Pesa in time.' }
   );
 }
 
@@ -89,10 +125,13 @@ async function releaseByListingId(listingId) {
 module.exports = {
   createPending,
   settlePending,
+  cancelPending,
+  attachReceipt,
   flagReview,
   updateStatusByCheckoutId,
   getByCheckoutId,
   getLatestByListingId,
+  getLatestByBuyerAndListing,
   getHeldByListingId,
   getActiveByListingId,
   failStalePending,

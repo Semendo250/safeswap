@@ -17,6 +17,8 @@ const paymentSchema = new mongoose.Schema(
     },
     needsReview: { type: Boolean, default: false },
     reviewNote: { type: String },
+    resultCode: { type: Number }, // M-Pesa's result code for the payment prompt
+    resultDesc: { type: String }, // M-Pesa's message, or why we closed it
   },
   { timestamps: true }
 );

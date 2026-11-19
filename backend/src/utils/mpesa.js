@@ -138,5 +138,39 @@ async function initiateStkPush({ phone, amount, accountReference, transactionDes
 
   return data; // includes CheckoutRequestID, used to match the later callback
 }
+// Asks Safaricom what happened to a payment prompt. Used when the callback is late or missing.
+// Returns { state: 'success' | 'failed' | 'processing' | 'unknown', resultCode, resultDesc }
+async function queryStkStatus(checkoutRequestId) {
+  assertMpesaConfig();
+  const accessToken = await getAccessToken();
+  const { timestamp, password } = generateTimestampAndPassword();
+  try {
+    const res = await axios.post(
+      `${BASE_URL}/mpesa/stkpushquery/v1/query`,
+      {
+        BusinessShortCode: String(process.env.MPESA_SHORTCODE).trim(),
+        Password: password,
+        Timestamp: timestamp,
+        CheckoutRequestID: checkoutRequestId,
+      },
+      { headers: { Authorization: `Bearer ${accessToken}` }, timeout: 20000 }
+    );
+    const d = res.data || {};
+    if (d.ResultCode === undefined || d.ResultCode === null) return { state: 'unknown' };
+    const code = Number(d.ResultCode);
+    return {
+      state: code === 0 ? 'success' : 'failed',
+      resultCode: code,
+      resultDesc: String(d.ResultDesc || ''),
+    };
+  } catch (err) {
+    const data = err.response && err.response.data;
+    // While the customer has not answered yet, Safaricom replies with an error instead of a result
+    if (data && /being processed|under processing/i.test(String(data.errorMessage || ''))) {
+      return { state: 'processing' };
+    }
+    return { state: 'unknown' };
+  }
+}
 
-module.exports = { getAccessToken, initiateStkPush, assertMpesaConfig };
+module.exports = { getAccessToken, initiateStkPush, queryStkStatus, assertMpesaConfig };

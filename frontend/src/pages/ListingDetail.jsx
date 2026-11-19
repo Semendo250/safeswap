@@ -2,7 +2,7 @@ import { useState, useEffect, useContext } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { getListingById, setMeetup, confirmMeetup } from '../api/listings.api';
-import { initiateStkPush, getPaymentStatus } from '../api/payments.api';
+import { initiateStkPush, getPaymentStatus, getMyPaymentForListing, cancelPayment } from '../api/payments.api';
 import TrustBadge from '../components/TrustBadge';
 import VerificationBadge from '../components/VerificationBadge';
 import SafeZonePicker from '../components/SafeZonePicker';
@@ -75,7 +75,24 @@ export default function ListingDetail() {
   const [paymentStatus, setPaymentStatus] = useState(null);
   const [payError, setPayError] = useState('');
   const [paying, setPaying] = useState(false);
+  const [payMessage, setPayMessage] = useState(''); // the real reason from M-Pesa when a payment fails
+  const [cancelAfter, setCancelAfter] = useState(60);
+  const [pendingSince, setPendingSince] = useState(null);
+  const [nowTick, setNowTick] = useState(Date.now());
+  const [cancelling, setCancelling] = useState(false);
+  const [paidInfo, setPaidInfo] = useState(null); // amount and receipt shown in the success message
 
+  // Shows a payment record from the server (waiting, paid or failed) on the button
+    function applyPayment(p) {
+    if (!p) return;
+    setCheckoutId(p.checkoutRequestId);
+    setPaymentStatus(p.status);
+    setCancelAfter(p.cancelAfterSeconds || 60);
+    if (p.status === 'pending') setPendingSince(Date.now() - (p.waitingSeconds || 0) * 1000);
+    setPayMessage(p.status === 'failed' ? p.message || '' : '');
+    setPaidInfo(p.status === 'held' ? { amount: p.amount, receipt: p.mpesaReceipt || '' } : null);
+    if (p.status === 'pending' || p.status === 'held') setPayError('');
+  }
   // Which control a logged-out visitor tried to use: 'meetup', 'pay', or null
   const [loginNotice, setLoginNotice] = useState(null);
 
@@ -103,13 +120,39 @@ export default function ListingDetail() {
     };
   }, [id, authLoading, user?.id]);
 
+  // Pick up a payment the buyer already started (waiting or paid), e.g. after a page reload
   useEffect(() => {
-    if (!checkoutId || paymentStatus === 'held' || paymentStatus === 'failed') return;
+    if (authLoading || !user || !id) return;
+    let cancelled = false;
+    getMyPaymentForListing(id)
+      .then((res) => {
+        if (!cancelled && res.data.payment) applyPayment(res.data.payment);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, authLoading, user?.id]);
+
+  // While waiting for the PIN, ask the server for the real result every few seconds
+  useEffect(() => {
+    if (!checkoutId || paymentStatus !== 'pending') return;
     const interval = setInterval(() => {
-      getPaymentStatus(checkoutId).then((res) => setPaymentStatus(res.data.status));
+      getPaymentStatus(checkoutId)
+        .then((res) => applyPayment(res.data))
+        .catch(() => {});
     }, 3000);
     return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [checkoutId, paymentStatus]);
+
+  // One-second clock for the "cancel in Ns" countdown
+  useEffect(() => {
+    if (paymentStatus !== 'pending') return;
+    const t = setInterval(() => setNowTick(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [paymentStatus]);
 
   // While the preview is open: lock page scroll, and Esc / arrow keys work
   useEffect(() => {
@@ -222,6 +265,11 @@ export default function ListingDetail() {
       alert(err.response?.data?.error || 'Could not confirm the meetup');
     }
   }
+    const isPending = paymentStatus === 'pending';
+  const isHeld = paymentStatus === 'held';
+  const waited = pendingSince ? Math.max(Math.floor((nowTick - pendingSince) / 1000), 0) : 0;
+  const cancelIn = Math.max(cancelAfter - waited, 0);
+
   async function handlePay(e) {
     e.preventDefault();
     setPayError('');
@@ -239,16 +287,38 @@ export default function ListingDetail() {
     }
     try {
       setPaying(true);
-            const res = await initiateStkPush(listing._id, phone.trim());
+      const res = await initiateStkPush(listing._id, phone.trim());
       setCheckoutId(res.data.checkoutRequestId);
       setPaymentStatus('pending');
+      setPayMessage('');
+      setCancelAfter(res.data.cancelAfterSeconds || 60);
+      setPendingSince(Date.now());
     } catch (err) {
       setPayError(err.response?.data?.error?.errorMessage || err.response?.data?.error || 'Payment failed to initiate');
+      // If the server says a payment is already open, show that one instead
+      getMyPaymentForListing(listing._id)
+        .then((r) => {
+          if (r.data.payment) applyPayment(r.data.payment);
+        })
+        .catch(() => {});
     } finally {
       setPaying(false);
     }
   }
 
+  async function handleCancel() {
+    if (!checkoutId || cancelling) return;
+    setCancelling(true);
+    setPayError('');
+    try {
+      const res = await cancelPayment(checkoutId);
+      applyPayment(res.data);
+    } catch (err) {
+      setPayError(err.response?.data?.error || 'Could not cancel. Try again in a moment.');
+    } finally {
+      setCancelling(false);
+    }
+  }
   return (
     <div className="listing-detail-page" style={{ padding: '1rem' }}>
       <style>{`
@@ -317,6 +387,39 @@ export default function ListingDetail() {
         .ld-safe svg { flex-shrink: 0; margin-top: 1px; color: var(--color-teal); }
         .ld-error { margin: 8px 0 0; font-size: 13px; color: var(--color-warning); }
         .ld-status { margin: 10px 0 0; font-size: 13px; }
+                button.ld-pay-btn.ld-paid:disabled {
+          opacity: 1; cursor: default; background: var(--color-success-bg);
+          border: 1px solid var(--color-success); color: var(--color-success);
+        }
+        button.ld-cancel-btn {
+          display: flex; align-items: center; justify-content: center; gap: 8px;
+          width: 100%; min-width: 0; height: 44px; margin-top: 10px; align-self: auto;
+          background: var(--color-card); border: 1px solid var(--color-border); color: var(--color-ink); font-size: 14px;
+        }
+        button.ld-cancel-btn:hover:not(:disabled) {
+          background: var(--color-surface); border-color: var(--color-teal); color: var(--color-ink);
+        }
+                  .ld-success {
+          margin-top: 12px; padding: 14px; border-radius: 12px;
+          border: 1px solid var(--color-success); background: var(--color-success-bg);
+        }
+        .ld-success-head { display: flex; align-items: center; gap: 10px; }
+        .ld-success-icon {
+          flex: 0 0 32px; width: 32px; height: 32px; border-radius: 50%;
+          display: flex; align-items: center; justify-content: center;
+          background: var(--color-success); color: #fff;
+        }
+        .ld-success-title { margin: 0; font-size: 15px; font-weight: 700; color: var(--color-success); }
+        .ld-success-sub { margin: 2px 0 0; font-size: 13px; line-height: 1.45; color: var(--color-ink); }
+        .ld-success-steps { margin: 12px 0 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+        .ld-success-steps li { display: flex; gap: 8px; font-size: 13px; line-height: 1.45; color: var(--color-ink); }
+        .ld-step-num {
+          flex: 0 0 20px; width: 20px; height: 20px; margin-top: 1px; border-radius: 50%;
+          display: flex; align-items: center; justify-content: center;
+          background: var(--color-card); border: 1px solid var(--color-success);
+          color: var(--color-success); font-size: 11px; font-weight: 700;
+        }
+        .ld-success-receipt { margin: 10px 0 0; font-size: 12px; color: var(--color-muted); word-break: break-all; }
       `}</style>
       <BackButton />
       <div style={{ display: 'flex', gap: '6px', overflowX: 'auto' }}>
@@ -561,6 +664,7 @@ export default function ListingDetail() {
                 placeholder="e.g. 0712 345 678"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
+                disabled={isPending || isHeld}
               />
             </div>
 
@@ -572,19 +676,83 @@ export default function ListingDetail() {
               <p className="ld-hint">You will be charged the agreed price: KES {Number(agreed.amount).toLocaleString()}</p>
             )}
 
-            <button type="submit" className="ld-pay-btn" disabled={paying}>
-              <Icon name="lock" />
-              {paying ? 'Sending STK push...' : 'Pay now'}
+            <button
+              type="submit"
+              className={isHeld ? 'ld-pay-btn ld-paid' : 'ld-pay-btn'}
+              disabled={paying || isPending || isHeld}
+            >
+              <Icon name={isHeld ? 'check' : 'lock'} />
+              {isHeld
+                ? 'Paid · held by SafeSwap'
+                : isPending
+                ? 'Waiting for your PIN...'
+                : paying
+                ? 'Sending STK push...'
+                : paymentStatus === 'failed'
+                ? 'Try again'
+                : 'Pay now'}
             </button>
 
             {loginNotice === 'pay' && !user && loginNoticeEl}
 
-            {paymentStatus && (
-              <p className="ld-status">
-                Payment status: <strong>{paymentStatus}</strong>
-                {paymentStatus === 'pending' && ' — check your phone'}
-                {paymentStatus === 'held' && ' — funds held, confirm meetup to release to seller'}
-              </p>
+            {isPending && (
+              <>
+                <p className="ld-status">Check your phone and enter your M-Pesa PIN. This page updates by itself.</p>
+                {cancelIn > 0 ? (
+                  <p className="ld-hint">Didn't get the prompt? You can cancel and try again in {cancelIn}s.</p>
+                ) : (
+                  <>
+                    <button type="button" className="ld-cancel-btn" onClick={handleCancel} disabled={cancelling}>
+                      {cancelling ? 'Checking with M-Pesa...' : 'Cancel and try again'}
+                    </button>
+                    <p className="ld-hint">
+                      Missed the prompt or it was delayed? We check with M-Pesa first. If the payment already went
+                      through, it will show as paid.
+                    </p>
+                  </>
+                )}
+              </>
+            )}
+
+            {paymentStatus === 'failed' && payMessage && <p className="ld-error">{payMessage}</p>}
+
+            {isHeld && (
+              <div className="ld-success" role="status">
+                <div className="ld-success-head">
+                  <span className="ld-success-icon">
+                    <Icon name="check" size={18} />
+                  </span>
+                  <div>
+                    <p className="ld-success-title">
+                      Payment received
+                      {paidInfo && paidInfo.amount ? `: KES ${Number(paidInfo.amount).toLocaleString()}` : ''}
+                    </p>
+                    <p className="ld-success-sub">
+                      Thank you. SafeSwap is holding your money safely and the seller has been told.
+                    </p>
+                  </div>
+                </div>
+                <ul className="ld-success-steps">
+                  <li>
+                    <span className="ld-step-num">1</span>
+                    <span>Pick a safe zone above and arrange the meetup with the seller.</span>
+                  </li>
+                  <li>
+                    <span className="ld-step-num">2</span>
+                    <span>Check the item when you meet.</span>
+                  </li>
+                  <li>
+                    <span className="ld-step-num">3</span>
+                    <span>
+                      Once you have the item, tap <strong>Confirm meetup happened</strong> to release the money to
+                      the seller.
+                    </span>
+                  </li>
+                </ul>
+                {paidInfo && paidInfo.receipt && (
+                  <p className="ld-success-receipt">M-Pesa receipt: {paidInfo.receipt}</p>
+                )}
+              </div>
             )}
 
             <p className="ld-safe">
