@@ -437,6 +437,9 @@ function SettlementCard({ s, b2c, onSend, onPay, onUndo, onReset, onRemoveReceip
   const isRefund = s.type === 'refund';
   const isDue = s.status === 'due';
   const waiting = isDue ? daysSince(s.eventAt) : 0;
+  const receipts = s.receipts || [];
+  const paidSoFar = s.paidSoFar || 0;
+  const remaining = s.remaining != null ? s.remaining : s.net;
 
   const t = s.transfer || {};
   const sending = isDue && t.state === 'sending';
@@ -660,6 +663,8 @@ export default function Finance() {
   const debounced = useDebounced(search);
   const [page, setPage] = useState(1);
   const [list, setList] = useState({ items: [], total: 0, pages: 1 });
+  // Only show rows that belong to the tab being viewed, never the previous tab's rows
+  const items = list.tab === tab ? list.items : [];
   const [listLoading, setListLoading] = useState(true);
   const [listError, setListError] = useState('');
 
@@ -721,7 +726,7 @@ export default function Finance() {
           }));
     request
       .then((data) => {
-        if (!cancelled) setList(data);
+        if (!cancelled) setList({ ...data, tab });
       })
       .catch((err) => {
         if (!cancelled) setListError(errText(err, 'Could not load this list.'));
@@ -751,7 +756,7 @@ export default function Finance() {
   }, [days, reloadKey]);
 
   // While a send is waiting for M-Pesa, refresh every few seconds so the result appears by itself
-  const anySending = list.items.some((x) => x.transfer && x.transfer.state === 'sending');
+  const anySending = items.some((x) => x.transfer && x.transfer.state === 'sending');
   useEffect(() => {
     if (!anySending) return undefined;
     const timer = setInterval(() => setListKey((k) => k + 1), 6000);
@@ -1163,14 +1168,14 @@ export default function Finance() {
       </div>
 
       {listError && <Notice tone="warning">{listError}</Notice>}
-      {listLoading && list.items.length === 0 && <Muted>Loading...</Muted>}
-      {!listLoading && !listError && list.items.length === 0 && (
+      {listLoading && items.length === 0 && <Muted>Loading...</Muted>}
+      {!listLoading && !listError && items.length === 0 && (
         <Muted>{debounced && tab !== 'held' ? 'Nothing matches your search.' : emptyText}</Muted>
       )}
 
       {tab === 'held'
-        ? list.items.map((p) => <HeldCard key={p._id} p={p} />)
-        : list.items.map((s) => (
+        ? items.map((p) => <HeldCard key={p._id} p={p} />)
+        : items.map((s) => (
             <SettlementCard
               key={s._id}
               s={s}
