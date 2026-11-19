@@ -196,6 +196,21 @@ export default function NotificationBell() {
 
   return (
     <div ref={wrapRef} style={{ position: 'relative' }}>
+      <style>{`
+        .sw-bell-panel {
+          position: absolute; top: 44px; right: 0; width: 320px; max-width: calc(100vw - 32px);
+          max-height: 420px; overflow-y: auto; background: var(--color-card);
+          border: 1px solid var(--color-border); border-radius: 12px;
+          box-shadow: 0 8px 32px rgba(0,0,0,0.15); z-index: 200;
+        }
+        .sw-bell-panel button { overflow-wrap: anywhere; }
+        @media (max-width: 767px) {
+          .sw-bell-panel {
+            position: fixed; top: 64px; left: 8px; right: 8px; width: auto; max-width: none;
+            max-height: calc(100dvh - 76px); overscroll-behavior: contain;
+          }
+        }
+      `}</style>
       <button
         onClick={toggle}
         aria-label="Notifications"
@@ -242,22 +257,7 @@ export default function NotificationBell() {
       </button>
 
       {open && (
-        <div
-          style={{
-            position: 'absolute',
-            top: 44,
-            right: 0,
-            width: 320,
-            maxWidth: 'calc(100vw - 32px)',
-            maxHeight: 420,
-            overflowY: 'auto',
-            background: 'var(--color-card)',
-            border: '1px solid var(--color-border)',
-            borderRadius: 12,
-            boxShadow: '0 8px 32px rgba(0,0,0,0.15)',
-            zIndex: 200,
-          }}
-        >
+        <div className="sw-bell-panel">
           <div
             style={{
               display: 'flex',

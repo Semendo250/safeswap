@@ -5,8 +5,10 @@ import { ThemeContext } from '../context/ThemeContext';
 import { getNeedsAttention } from '../api/admin.api';
 import { getUnreadMessages } from '../api/chat.api';
 import NotificationBell from './NotificationBell';
+import Avatar from './Avatar';
 
 const ICON_PATHS = {
+  chat: <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />,
   star: <path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />,
   alert: (
     <>
@@ -69,7 +71,7 @@ const ICON_PATHS = {
       <path d="M2 10h20" />
     </>
   ),
-    finance: (
+  finance: (
     <>
       <path d="M3 3v18h18" />
       <path d="m7 14 4-4 3 3 5-6" />
@@ -155,7 +157,7 @@ const ADMIN_LINKS = [
   { to: '/admin/flagged', label: 'Flagged queue', icon: 'flag' },
   { to: '/admin/reports', label: 'Reports', icon: 'alert' },
   { to: '/admin/payments', label: 'Payments', icon: 'payments' },
-    { to: '/admin/finance', label: 'Finance', icon: 'finance' },
+  { to: '/admin/finance', label: 'Finance', icon: 'finance' },
   { to: '/admin/offers', label: 'Offers', icon: 'offers' },
   { to: '/admin/reviews', label: 'Reviews', icon: 'star' },
   { to: '/admin/blacklist', label: 'IMEI blacklist', icon: 'block' },
@@ -178,15 +180,32 @@ function badgeCount(to, d) {
   return 0;
 }
 
+// Chat icon that sits just before the notification bell, with the unread count on it
+function MessagesLink({ count, active }) {
+  return (
+    <Link
+      to="/messages"
+      title="Messages"
+      className={active ? 'sw-msg-btn active' : 'sw-msg-btn'}
+      aria-label={count > 0 ? `Messages, ${count} unread` : 'Messages'}
+    >
+      <Icon name="chat" size={20} />
+      {count > 0 && <span className="sw-msg-badge">{count > 9 ? '9+' : count}</span>}
+    </Link>
+  );
+}
+
 export default function Navbar() {
   const { theme, toggleTheme } = useContext(ThemeContext);
   const { user, logout } = useContext(AuthContext);
   const navigate = useNavigate();
   const location = useLocation();
   const navRef = useRef(null);
+  const acctRef = useRef(null);
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [adminMenuOpen, setAdminMenuOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [attention, setAttention] = useState(null);
   const [unreadMsgs, setUnreadMsgs] = useState(0);
@@ -197,6 +216,7 @@ export default function Navbar() {
   useEffect(() => {
     setMenuOpen(false);
     setAdminMenuOpen(false);
+    setAccountOpen(false);
   }, [location.pathname]);
 
   useEffect(() => {
@@ -210,6 +230,23 @@ export default function Navbar() {
     document.addEventListener('pointerdown', onPointerDown);
     return () => document.removeEventListener('pointerdown', onPointerDown);
   }, [menuOpen, adminMenuOpen]);
+
+  // The desktop account menu closes on an outside tap or Esc
+  useEffect(() => {
+    if (!accountOpen) return;
+    function onPointerDown(e) {
+      if (acctRef.current && !acctRef.current.contains(e.target)) setAccountOpen(false);
+    }
+    function onKey(e) {
+      if (e.key === 'Escape') setAccountOpen(false);
+    }
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [accountOpen]);
 
   useEffect(() => {
     if (!confirmOpen) return;
@@ -255,30 +292,6 @@ export default function Navbar() {
     };
   }, [user?.id, location.pathname]);
 
-  const msgBadge =
-    unreadMsgs > 0 ? (
-      <span
-        aria-label={`${unreadMsgs} unread`}
-        style={{
-          marginLeft: 6,
-          minWidth: 18,
-          height: 18,
-          padding: '0 5px',
-          borderRadius: 999,
-          display: 'inline-flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: 11,
-          fontWeight: 700,
-          background: 'var(--color-warning)',
-          color: '#fff',
-          verticalAlign: 'middle',
-        }}
-      >
-        {unreadMsgs > 9 ? '9+' : unreadMsgs}
-      </span>
-    ) : null;
-
   function toggleMenu() {
     setMenuOpen((v) => !v);
   }
@@ -288,6 +301,7 @@ export default function Navbar() {
   function askLogout() {
     setMenuOpen(false);
     setAdminMenuOpen(false);
+    setAccountOpen(false);
     setConfirmOpen(true);
   }
   function confirmLogout() {
@@ -305,6 +319,15 @@ export default function Navbar() {
     return active ? 'sw-menu-link active' : 'sw-menu-link';
   }
 
+  const logoutLinkStyle = {
+    background: 'transparent',
+    border: 'none',
+    borderTop: '1px solid var(--color-border)',
+    borderRadius: 0,
+    marginTop: '4px',
+    color: 'var(--color-warning)',
+  };
+
   return (
     <>
       <style>{`
@@ -321,6 +344,45 @@ export default function Navbar() {
         }
         .sw-menu-link:active { background: var(--color-surface); }
         .sw-menu-link.active { color: var(--color-teal); font-weight: 700; }
+
+        a.sw-msg-btn {
+          position: relative; width: 36px; height: 36px; flex-shrink: 0;
+          display: inline-flex; align-items: center; justify-content: center;
+          color: var(--color-ink); text-decoration: none;
+        }
+        a.sw-msg-btn:hover { color: var(--color-teal); text-decoration: none; }
+        a.sw-msg-btn.active { color: var(--color-teal); }
+        .sw-msg-badge {
+          position: absolute; top: 2px; right: 2px; min-width: 16px; height: 16px; padding: 0 3px;
+          border-radius: 999px; display: flex; align-items: center; justify-content: center;
+          font-size: 10px; font-weight: 700; background: var(--color-warning); color: #fff;
+        }
+
+        a.sw-create-btn {
+          padding: 7px 14px; border-radius: 6px; background: var(--color-primary); color: #fff;
+          font-weight: 600; text-decoration: none; white-space: nowrap;
+        }
+        a.sw-create-btn:hover { background: var(--color-primary-dark); color: #fff; text-decoration: none; }
+
+        .sw-acct { position: relative; flex-shrink: 0; }
+        button.sw-acct-btn {
+          display: inline-flex; align-items: center; gap: 4px; min-width: 0; height: 40px;
+          padding: 0 8px 0 4px; border: none; border-radius: 999px; background: transparent;
+          color: var(--color-ink); cursor: pointer; align-self: auto;
+        }
+        button.sw-acct-btn:hover { background: var(--color-surface); color: var(--color-ink); }
+        .sw-acct-caret { font-size: 11px; color: var(--color-muted); }
+        .sw-acct-menu {
+          position: absolute; top: 48px; right: 0; width: 230px; box-sizing: border-box; padding: 6px;
+          background: var(--color-card); border: 1px solid var(--color-border); border-radius: 12px;
+          box-shadow: 0 8px 32px rgba(0,0,0,0.15); z-index: 200;
+        }
+        .sw-acct-name {
+          margin-bottom: 4px; padding: 8px 10px 10px; border-bottom: 1px solid var(--color-border);
+          font-size: 13px; font-weight: 700; color: var(--color-ink); word-break: break-word;
+        }
+        .sw-acct-menu .sw-menu-link { padding: 9px 10px; font-size: 14px; }
+        .sw-acct-menu .sw-menu-link:hover { background: var(--color-surface); text-decoration: none; }
 
         .sw-admin-grid {
           display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px;
@@ -390,7 +452,8 @@ export default function Navbar() {
               Admin
             </div>
 
-            {/* Bell + theme toggle — always visible on the admin bar too, both desktop and mobile */}
+            {/* Messages, bell and theme toggle: always visible on the admin bar too, both desktop and mobile */}
+            <MessagesLink count={unreadMsgs} active={location.pathname.startsWith('/messages')} />
             <NotificationBell />
             <button
               onClick={toggleTheme}
@@ -460,15 +523,10 @@ export default function Navbar() {
               <Link to="/browse" className="nav-pill">Browse</Link>
               {user ? (
                 <>
-                  <Link to="/messages" className="nav-pill">Messages{msgBadge}</Link>
-                  {!isAdmin && <Link to="/my-purchases" className="nav-pill">Purchases</Link>}
-                  {!isAdmin && <Link to="/saved" className="nav-pill">Saved</Link>}
                   {!isAdmin && <Link to="/requests" className="nav-pill">Requests</Link>}
-                  <Link to="/create-listing" className="nav-pill">Create listing</Link>
-                  {isAdmin && <Link to="/admin" className="nav-pill">Admin</Link>}
-                  <Link to="/profile" className="nav-pill">Profile</Link>
+                  <Link to="/create-listing" className="sw-create-btn">Create listing</Link>
+                  <MessagesLink count={unreadMsgs} active={location.pathname.startsWith('/messages')} />
                   <NotificationBell />
-                  <button onClick={askLogout} className="btn-outline">Log out</button>
                 </>
               ) : (
                 <>
@@ -488,16 +546,58 @@ export default function Navbar() {
               >
                 {theme === 'dark' ? '☀️' : '🌙'}
               </button>
+
+              {/* Account menu: profile, purchases, saved, complaints and log out live here */}
+              {user && (
+                <div className="sw-acct" ref={acctRef}>
+                  <button
+                    type="button"
+                    className="sw-acct-btn"
+                    onClick={() => setAccountOpen((v) => !v)}
+                    aria-haspopup="menu"
+                    aria-expanded={accountOpen}
+                    aria-label="Account menu"
+                  >
+                    <Avatar src={user.profilePicture} name={user.fullName} size={32} />
+                    <span className="sw-acct-caret" aria-hidden="true">{accountOpen ? '▴' : '▾'}</span>
+                  </button>
+
+                  {accountOpen && (
+                    <div className="sw-acct-menu" role="menu">
+                      <div className="sw-acct-name">{user.fullName || 'Account'}</div>
+                      <Link to="/profile" className={linkClass('/profile')} role="menuitem">Profile</Link>
+                      {isAdmin && (
+                        <Link to="/admin" className={linkClass('/admin', true)} role="menuitem">Admin</Link>
+                      )}
+                      {!isAdmin && (
+                        <>
+                          <Link to="/my-purchases" className={linkClass('/my-purchases')} role="menuitem">
+                            My purchases
+                          </Link>
+                          <Link to="/saved" className={linkClass('/saved')} role="menuitem">Saved items</Link>
+                          <Link to="/my-complaints" className={linkClass('/my-complaints', true)} role="menuitem">
+                            My complaints
+                          </Link>
+                        </>
+                      )}
+                      <button type="button" onClick={askLogout} className="sw-menu-link" style={logoutLinkStyle}>
+                        Log out
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
-            {/* Bell for phones — hidden on desktop (the desktop nav has its own), only when logged in */}
+            {/* Messages and bell for phones: hidden on desktop (the desktop nav has its own), only when logged in */}
             {user && (
-              <span className="sw-nav-burger">
+              <span className="sw-nav-burger" style={{ alignItems: 'center' }}>
+                <MessagesLink count={unreadMsgs} active={location.pathname.startsWith('/messages')} />
                 <NotificationBell />
               </span>
             )}
 
-            {/* Theme toggle for phones — sits next to the hamburger, always visible regardless of menu state */}
+            {/* Theme toggle for phones: sits next to the hamburger, always visible regardless of menu state */}
             <button
               className="sw-nav-burger"
               onClick={toggleTheme}
@@ -523,7 +623,6 @@ export default function Navbar() {
                 <Link to="/browse" className={linkClass('/browse')}>Browse</Link>
                 {user ? (
                   <>
-                    <Link to="/messages" className={linkClass('/messages')}>Messages{msgBadge}</Link>
                     {!isAdmin && <Link to="/my-purchases" className={linkClass('/my-purchases')}>My purchases</Link>}
                     {!isAdmin && <Link to="/saved" className={linkClass('/saved')}>Saved items</Link>}
                     {!isAdmin && <Link to="/requests" className={linkClass('/requests', true)}>Requests</Link>}
@@ -533,18 +632,7 @@ export default function Navbar() {
                     {!isAdmin && (
                       <Link to="/my-complaints" className={linkClass('/my-complaints', true)}>My complaints</Link>
                     )}
-                    <button
-                      onClick={askLogout}
-                      className="sw-menu-link"
-                      style={{
-                        background: 'transparent',
-                        border: 'none',
-                        borderTop: '1px solid var(--color-border)',
-                        borderRadius: 0,
-                        marginTop: '4px',
-                        color: 'var(--color-warning)',
-                      }}
-                    >
+                    <button onClick={askLogout} className="sw-menu-link" style={logoutLinkStyle}>
                       Log out
                     </button>
                   </>
