@@ -84,7 +84,7 @@ export default function ListingDetail() {
   const [paidInfo, setPaidInfo] = useState(null); // amount and receipt shown in the success message
 
   // Shows a payment record from the server (waiting, paid or failed) on the button
-    function applyPayment(p) {
+  function applyPayment(p) {
     if (!p) return;
     setCheckoutId(p.checkoutRequestId);
     setPaymentStatus(p.status);
@@ -94,6 +94,7 @@ export default function ListingDetail() {
     setPaidInfo(p.status === 'held' ? { amount: p.amount, receipt: p.mpesaReceipt || '' } : null);
     if (p.status === 'pending' || p.status === 'held') setPayError('');
   }
+
   // Which control a logged-out visitor tried to use: 'meetup', 'pay', or null
   const [loginNotice, setLoginNotice] = useState(null);
 
@@ -101,14 +102,14 @@ export default function ListingDetail() {
   const [viewerIndex, setViewerIndex] = useState(null);
   const viewerOpen = viewerIndex !== null;
   const photoCount = listing?.photos?.length || 0;
+  const [mainIndex, setMainIndex] = useState(0); // the large photo currently shown
 
-  // Wait until we know whether the visitor is logged in, so the login token is
-  // attached and the seller's phone number comes back. Reloads if login state changes.
   // The login token is already attached when the app starts, so the listing (and the seller's phone
   // number for logged-in users) can be requested straight away. It reloads if the login changes.
   useEffect(() => {
     let cancelled = false;
     setNotFound(false);
+    setMainIndex(0);
     getListingById(id)
       .then((res) => {
         if (!cancelled) setListing(res.data);
@@ -172,7 +173,8 @@ export default function ListingDetail() {
       document.removeEventListener('keydown', onKey);
     };
   }, [viewerOpen, photoCount]);
-    // Start with the phone number saved on the person's profile, if they have one
+
+  // Start with the phone number saved on the person's profile, if they have one
   useEffect(() => {
     if (user?.phone) setPhone((current) => current || phoneForInput(user.phone));
   }, [user?.phone]);
@@ -242,7 +244,7 @@ export default function ListingDetail() {
     navigate(`/chat/${listing._id}`, { state: { receiverId: listing.seller._id } });
   }
 
-    async function handleSetMeetup(zone) {
+  async function handleSetMeetup(zone) {
     if (!user) {
       setLoginNotice('meetup');
       return;
@@ -267,7 +269,8 @@ export default function ListingDetail() {
       alert(err.response?.data?.error || 'Could not confirm the meetup');
     }
   }
-    const isPending = paymentStatus === 'pending';
+
+  const isPending = paymentStatus === 'pending';
   const isHeld = paymentStatus === 'held';
   const waited = pendingSince ? Math.max(Math.floor((nowTick - pendingSince) / 1000), 0) : 0;
   const cancelIn = Math.max(cancelAfter - waited, 0);
@@ -321,11 +324,49 @@ export default function ListingDetail() {
       setCancelling(false);
     }
   }
+
   return (
     <div className="listing-detail-page" style={{ padding: '1rem' }}>
       <style>{`
-        .listing-detail-page { max-width: 480px; margin: 0; box-sizing: border-box; }
-        @media (min-width: 700px) { .listing-detail-page { max-width: 680px; padding: 1.5rem; } }
+        .listing-detail-page {
+          max-width: 560px; margin: 0 auto; box-sizing: border-box;
+          display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; align-content: start;
+        }
+        .ld-back { grid-column: 1 / -1; }
+        .ld-info { min-width: 0; }
+        .ld-info h2 { margin: 0 0 6px; font-size: 24px; line-height: 1.25; word-break: break-word; }
+        .ld-price { margin: 4px 0 10px; font-size: 26px; font-weight: 700; color: var(--color-primary); }
+
+        .ld-gallery { min-width: 0; }
+        button.ld-main-photo {
+          position: relative; display: block; width: 100%; min-width: 0; padding: 0; align-self: auto;
+          aspect-ratio: 4 / 3; overflow: hidden; border: 1px solid var(--color-border); border-radius: 12px;
+          background: var(--color-surface); cursor: zoom-in;
+        }
+        button.ld-main-photo:hover { background: var(--color-surface); border-color: var(--color-teal); }
+        button.ld-main-photo img { width: 100%; height: 100%; object-fit: contain; display: block; }
+        .ld-photo-count {
+          position: absolute; right: 8px; bottom: 8px; padding: 2px 8px; border-radius: 999px;
+          background: rgba(0,0,0,0.55); color: #fff; font-size: 12px; font-weight: 600;
+        }
+        .ld-thumbs { display: flex; gap: 8px; margin-top: 8px; overflow-x: auto; padding-bottom: 2px; }
+        button.ld-thumb {
+          flex: 0 0 64px; width: 64px; height: 64px; min-width: 0; padding: 0; align-self: auto;
+          overflow: hidden; border: 2px solid transparent; border-radius: 8px;
+          background: var(--color-surface); opacity: 0.75;
+        }
+        button.ld-thumb:hover { background: var(--color-surface); opacity: 1; }
+        button.ld-thumb.active { border-color: var(--color-teal); opacity: 1; }
+        button.ld-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+        @media (min-width: 600px) { .listing-detail-page { max-width: 640px; } }
+        @media (min-width: 900px) {
+          .listing-detail-page {
+            max-width: 1080px; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+            column-gap: 32px; align-items: start;
+          }
+          .ld-gallery { position: sticky; top: 76px; }
+        }
 
         .ld-card {
           border: 1px solid var(--color-border); border-radius: 12px; padding: 14px;
@@ -389,7 +430,7 @@ export default function ListingDetail() {
         .ld-safe svg { flex-shrink: 0; margin-top: 1px; color: var(--color-teal); }
         .ld-error { margin: 8px 0 0; font-size: 13px; color: var(--color-warning); }
         .ld-status { margin: 10px 0 0; font-size: 13px; }
-                button.ld-pay-btn.ld-paid:disabled {
+        button.ld-pay-btn.ld-paid:disabled {
           opacity: 1; cursor: default; background: var(--color-success-bg);
           border: 1px solid var(--color-success); color: var(--color-success);
         }
@@ -401,7 +442,7 @@ export default function ListingDetail() {
         button.ld-cancel-btn:hover:not(:disabled) {
           background: var(--color-surface); border-color: var(--color-teal); color: var(--color-ink);
         }
-                  .ld-success {
+        .ld-success {
           margin-top: 12px; padding: 14px; border-radius: 12px;
           border: 1px solid var(--color-success); background: var(--color-success-bg);
         }
@@ -423,355 +464,378 @@ export default function ListingDetail() {
         }
         .ld-success-receipt { margin: 10px 0 0; font-size: 12px; color: var(--color-muted); word-break: break-all; }
       `}</style>
-      <BackButton />
-      <div style={{ display: 'flex', gap: '6px', overflowX: 'auto' }}>
-        {listing.photos.map((url, i) => (
-          <img
-            key={i}
-                        src={optimizeImage(url, 400)}
-            decoding="async"
-            alt={listing.title}
-            role="button"
-            tabIndex={0}
-            onClick={() => setViewerIndex(i)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                setViewerIndex(i);
-              }
-            }}
-            style={{ width: '120px', height: '120px', objectFit: 'cover', borderRadius: '8px', cursor: 'pointer' }}
-          />
-        ))}
+
+      <div className="ld-back">
+        <BackButton />
       </div>
 
-      <h2>{listing.title}</h2>
-
-      {listing.status === 'under_review' && (
-        <p
-          role="status"
-          style={{
-            background: 'var(--color-gold-bg)',
-            color: 'var(--color-gold)',
-            padding: '10px 12px',
-            borderRadius: '8px',
-            fontSize: '13px',
-            lineHeight: 1.5,
-            margin: '0 0 12px',
-          }}
-        >
-          {isOwnListing
-            ? "Waiting for approval. Only you can see this listing until an admin approves it. We'll notify you once it's live."
-            : 'This listing is waiting for approval and is visible to admins only.'}
-        </p>
-      )}
-
-      {agreed ? (
-        <div style={{ margin: '12px 0' }}>
-          <p style={{ margin: 0, fontSize: '13px', color: 'var(--color-success)', fontWeight: 600 }}>
-            Agreed price for you
-          </p>
-          <p style={{ margin: '2px 0 0', fontSize: '18px', fontWeight: 600 }}>
-            <span style={{ textDecoration: 'line-through', color: 'var(--color-muted)', marginRight: '8px' }}>
-              KES {Number(listing.price).toLocaleString()}
-            </span>
-            KES {Number(agreed.amount).toLocaleString()}
-          </p>
-          <p style={{ margin: '2px 0 0', fontSize: '12px', color: 'var(--color-muted)' }}>
-            Pay before {new Date(agreed.expiresAt).toLocaleString()}
-          </p>
-        </div>
-      ) : (
-        <p style={{ fontSize: '18px', fontWeight: 600 }}>KES {Number(listing.price).toLocaleString()}</p>
-      )}
-            {isOwnListing && listing.status !== 'sold' && (
-        <FeePreview category={listing.category} amount={listing.price} approximate style={{ margin: '0 0 8px' }} />
-      )}
-
-      {agreements.length > 0 && (
-        <div style={{ margin: '0 0 12px' }}>
-                    {agreements.map((a) => (
-            <div key={a.offerId} style={{ margin: '4px 0' }}>
-              <p style={{ margin: '2px 0', fontSize: '13px', color: 'var(--color-success)', fontWeight: 600 }}>
-                Agreed with {a.buyer.fullName}: KES {Number(a.amount).toLocaleString()}
-              </p>
-              <FeePreview category={listing.category} amount={a.amount} style={{ margin: 0 }} />
-            </div>
-          ))}
-        </div>
-      )}
-      <p style={{ color: 'var(--color-muted)' }}>{listing.description}</p>
-
-      {listing.status === 'unavailable' && !isOwnListing && (
-        <p style={{ fontWeight: 600, color: 'var(--color-warning)' }}>
-          {listing.unavailableReason === 'sold_elsewhere'
-            ? 'The seller sold this item elsewhere.'
-            : 'This item is no longer available.'}
-        </p>
-      )}
-      {listing.status === 'expired' && !isOwnListing && (
-        <p style={{ fontWeight: 600, color: 'var(--color-warning)' }}>This listing has expired.</p>
-      )}
-
-      {isOwnListing && (
-        <div className="ld-card">
-          <ListingManager
-            listing={listing}
-            onChange={(u) => setListing((prev) => ({ ...prev, ...u, seller: prev.seller }))}
-            onDeleted={() => navigate('/profile')}
-          />
-        </div>
-      )}
-
-      {listing.status === 'active' && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, margin: '12px 0' }}>
-          <a
-            href={`https://wa.me/?text=${encodeURIComponent(`${shareText} ${shareUrl}`)}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={shareBtn}
+      <div className="ld-gallery">
+        {photoCount > 0 && (
+          <button
+            type="button"
+            className="ld-main-photo"
+            onClick={() => setViewerIndex(mainIndex)}
+            aria-label="View photo full screen"
           >
-            Share on WhatsApp
-          </a>
-          <button type="button" onClick={copyLink} style={shareBtn}>
-            Copy link
-          </button>
-          {!isOwnListing && !isAdmin && (
-            <FavoriteButton listingId={listing._id} initial={!!listing.isFavorite} variant="pill" />
-          )}
-        </div>
-      )}
-
-      {!isOwnListing && !isAdmin && listing.status !== 'removed' && (
-        <p style={{ margin: '0 0 8px', fontSize: 13 }}>
-          <Link to={`/report/${listing._id}`} style={{ color: 'var(--color-muted)' }}>
-            Report this listing
-          </Link>
-        </p>
-      )}
-
-      {listing.category === 'phone' && (
-        <p style={{ fontSize: '13px' }}>
-          IMEI status: <strong>{listing.imeiStatus}</strong>
-        </p>
-      )}
-
-      {/* Seller */}
-      <div className="ld-card ld-seller-card">
-        <div className="ld-seller">
-          <Avatar src={listing.seller.profilePicture} name={listing.seller.fullName} size={48} soft zoomable />
-          <div style={{ minWidth: 0 }}>
-            <p className="ld-name">
-              <Link to={`/sellers/${listing.seller._id}`} style={{ color: 'inherit' }}>
-                {listing.seller.fullName}
-              </Link>
-            </p>
-            {listing.seller.ratingCount > 0 && (
-              <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--color-muted)' }}>
-                <Stars value={listing.seller.ratingAverage} size={13} /> {listing.seller.ratingAverage} (
-                {listing.seller.ratingCount})
-              </p>
-            )}
-            <div className="ld-badges">
-              <TrustBadge score={listing.seller.trustScore} icon />
-              <VerificationBadge verificationPath={listing.seller.verificationPath} icon />
-            </div>
-          </div>
-        </div>
-
-        {!isOwnListing &&
-          (user ? (
-            <div className="ld-contact">
-              {listing.seller.location && <span>📍 {listing.seller.location}</span>}
-              {listing.seller.phone ? (
-                <a href={telHref(listing.seller.phone)}>📞 {formatPhone(listing.seller.phone)}</a>
-              ) : (
-                <span>Seller hasn't added a phone number</span>
-              )}
-            </div>
-          ) : (
-            <div className="ld-contact">
-              <span className="ld-login-line">
-                <Icon name="lock" />
-                <span>
-                  <Link to="/login">Log in</Link> to see the seller's phone number
-                </span>
+            <img
+              src={optimizeImage(listing.photos[mainIndex] || listing.photos[0], 900)}
+              alt={listing.title}
+              decoding="async"
+            />
+            {photoCount > 1 && (
+              <span className="ld-photo-count">
+                {mainIndex + 1} / {photoCount}
               </span>
-            </div>
-          ))}
+            )}
+          </button>
+        )}
+        {photoCount > 1 && (
+          <div className="ld-thumbs">
+            {listing.photos.map((url, i) => (
+              <button
+                key={i}
+                type="button"
+                className={i === mainIndex ? 'ld-thumb active' : 'ld-thumb'}
+                onClick={() => setMainIndex(i)}
+                aria-label={`Show photo ${i + 1}`}
+              >
+                <img src={optimizeImage(url, 160)} alt="" loading="lazy" decoding="async" />
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
-      {!isOwnListing && listing.status === 'active' && (
-        <>
-          <button type="button" className="ld-msg-btn" onClick={handleMessageSeller}>
-            <Icon name="chat" />
-            Message seller
-          </button>
+      <div className="ld-info">
+        <h2>{listing.title}</h2>
 
-          <div className="ld-card ld-meetup">
-            <div className="ld-head">
-              <span className="ld-tile">
-                <Icon name="pin" size={20} />
+        {listing.status === 'under_review' && (
+          <p
+            role="status"
+            style={{
+              background: 'var(--color-gold-bg)',
+              color: 'var(--color-gold)',
+              padding: '10px 12px',
+              borderRadius: '8px',
+              fontSize: '13px',
+              lineHeight: 1.5,
+              margin: '0 0 12px',
+            }}
+          >
+            {isOwnListing
+              ? "Waiting for approval. Only you can see this listing until an admin approves it. We'll notify you once it's live."
+              : 'This listing is waiting for approval and is visible to admins only.'}
+          </p>
+        )}
+
+        {agreed ? (
+          <div style={{ margin: '12px 0' }}>
+            <p style={{ margin: 0, fontSize: '13px', color: 'var(--color-success)', fontWeight: 600 }}>
+              Agreed price for you
+            </p>
+            <p style={{ margin: '2px 0 0', fontSize: '18px', fontWeight: 600 }}>
+              <span style={{ textDecoration: 'line-through', color: 'var(--color-muted)', marginRight: '8px' }}>
+                KES {Number(listing.price).toLocaleString()}
               </span>
-              <div>
-                <p className="ld-pay-title">Meet at a safe zone</p>
-                <p className="ld-pay-sub">Choose a public spot on campus</p>
-              </div>
-            </div>
+              KES {Number(agreed.amount).toLocaleString()}
+            </p>
+            <p style={{ margin: '2px 0 0', fontSize: '12px', color: 'var(--color-muted)' }}>
+              Pay before {new Date(agreed.expiresAt).toLocaleString()}
+            </p>
+          </div>
+        ) : (
+          <p className="ld-price">KES {Number(listing.price).toLocaleString()}</p>
+        )}
 
-            <SafeZonePicker
-              value={listing.meetupSafeZone}
-              onSelect={handleSetMeetup}
-              locked={!user}
-              onLockedTap={() => setLoginNotice('meetup')}
-              hideLabel
-            />
-            {loginNotice === 'meetup' && !user && loginNoticeEl}
+        {isOwnListing && listing.status !== 'sold' && (
+          <FeePreview category={listing.category} amount={listing.price} approximate style={{ margin: '0 0 8px' }} />
+        )}
 
-            {listing.meetupSafeZone && !listing.meetupConfirmed && (
-              <>
-                <button type="button" className="ld-confirm-btn" onClick={handleConfirmMeetup}>
-                  <Icon name="check" />
-                  Confirm meetup happened
-                </button>
-                <p className="ld-hint">
-                  Only the buyer confirms, after the handover. This releases the payment to the seller.
+        {agreements.length > 0 && (
+          <div style={{ margin: '0 0 12px' }}>
+            {agreements.map((a) => (
+              <div key={a.offerId} style={{ margin: '4px 0' }}>
+                <p style={{ margin: '2px 0', fontSize: '13px', color: 'var(--color-success)', fontWeight: 600 }}>
+                  Agreed with {a.buyer.fullName}: KES {Number(a.amount).toLocaleString()}
                 </p>
-              </>
+                <FeePreview category={listing.category} amount={a.amount} style={{ margin: 0 }} />
+              </div>
+            ))}
+          </div>
+        )}
+        <p style={{ color: 'var(--color-muted)' }}>{listing.description}</p>
+
+        {listing.status === 'unavailable' && !isOwnListing && (
+          <p style={{ fontWeight: 600, color: 'var(--color-warning)' }}>
+            {listing.unavailableReason === 'sold_elsewhere'
+              ? 'The seller sold this item elsewhere.'
+              : 'This item is no longer available.'}
+          </p>
+        )}
+        {listing.status === 'expired' && !isOwnListing && (
+          <p style={{ fontWeight: 600, color: 'var(--color-warning)' }}>This listing has expired.</p>
+        )}
+
+        {isOwnListing && (
+          <div className="ld-card">
+            <ListingManager
+              listing={listing}
+              onChange={(u) => setListing((prev) => ({ ...prev, ...u, seller: prev.seller }))}
+              onDeleted={() => navigate('/profile')}
+            />
+          </div>
+        )}
+
+        {listing.status === 'active' && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, margin: '12px 0' }}>
+            <a
+              href={`https://wa.me/?text=${encodeURIComponent(`${shareText} ${shareUrl}`)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={shareBtn}
+            >
+              Share on WhatsApp
+            </a>
+            <button type="button" onClick={copyLink} style={shareBtn}>
+              Copy link
+            </button>
+            {!isOwnListing && !isAdmin && (
+              <FavoriteButton listingId={listing._id} initial={!!listing.isFavorite} variant="pill" />
             )}
           </div>
+        )}
 
-          <form onSubmit={handlePay} className="ld-card ld-pay">
-            <div className="ld-pay-head">
-              <div className="ld-head-left">
-                <span className="ld-tile">
-                  <Icon name="phone" size={20} />
-                </span>
-                <div>
-                  <p className="ld-pay-title">Pay with M-Pesa</p>
-                  <p className="ld-pay-sub">Held safely until you confirm</p>
-                </div>
+        {!isOwnListing && !isAdmin && listing.status !== 'removed' && (
+          <p style={{ margin: '0 0 8px', fontSize: 13 }}>
+            <Link to={`/report/${listing._id}`} style={{ color: 'var(--color-muted)' }}>
+              Report this listing
+            </Link>
+          </p>
+        )}
+
+        {listing.category === 'phone' && (
+          <p style={{ fontSize: '13px' }}>
+            IMEI status: <strong>{listing.imeiStatus}</strong>
+          </p>
+        )}
+
+        {/* Seller */}
+        <div className="ld-card ld-seller-card">
+          <div className="ld-seller">
+            <Avatar src={listing.seller.profilePicture} name={listing.seller.fullName} size={48} soft zoomable />
+            <div style={{ minWidth: 0 }}>
+              <p className="ld-name">
+                <Link to={`/sellers/${listing.seller._id}`} style={{ color: 'inherit' }}>
+                  {listing.seller.fullName}
+                </Link>
+              </p>
+              {listing.seller.ratingCount > 0 && (
+                <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--color-muted)' }}>
+                  <Stars value={listing.seller.ratingAverage} size={13} /> {listing.seller.ratingAverage} (
+                  {listing.seller.ratingCount})
+                </p>
+              )}
+              <div className="ld-badges">
+                <TrustBadge score={listing.seller.trustScore} icon />
+                <VerificationBadge verificationPath={listing.seller.verificationPath} icon />
               </div>
             </div>
+          </div>
 
-            <label className="ld-label" htmlFor="ld-pay-phone">
-              Phone to pay from
-            </label>
-            <div className="ld-input-wrap">
-              <Icon name="phone" />
-                            <input
-                id="ld-pay-phone"
-                type="tel"
-                inputMode="tel"
-                autoComplete="tel"
-                placeholder="e.g. 0712 345 678"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                disabled={isPending || isHeld}
-              />
-            </div>
+          {!isOwnListing &&
+            (user ? (
+              <div className="ld-contact">
+                {listing.seller.location && <span>📍 {listing.seller.location}</span>}
+                {listing.seller.phone ? (
+                  <a href={telHref(listing.seller.phone)}>📞 {formatPhone(listing.seller.phone)}</a>
+                ) : (
+                  <span>Seller hasn't added a phone number</span>
+                )}
+              </div>
+            ) : (
+              <div className="ld-contact">
+                <span className="ld-login-line">
+                  <Icon name="lock" />
+                  <span>
+                    <Link to="/login">Log in</Link> to see the seller's phone number
+                  </span>
+                </span>
+              </div>
+            ))}
+        </div>
 
-            {payError && (
-              <p className="ld-error">{typeof payError === 'string' ? payError : JSON.stringify(payError)}</p>
-            )}
-
-            {agreed && (
-              <p className="ld-hint">You will be charged the agreed price: KES {Number(agreed.amount).toLocaleString()}</p>
-            )}
-
-            <button
-              type="submit"
-              className={isHeld ? 'ld-pay-btn ld-paid' : 'ld-pay-btn'}
-              disabled={paying || isPending || isHeld}
-            >
-              <Icon name={isHeld ? 'check' : 'lock'} />
-              {isHeld
-                ? 'Paid · held by SafeSwap'
-                : isPending
-                ? 'Waiting for your PIN...'
-                : paying
-                ? 'Sending STK push...'
-                : paymentStatus === 'failed'
-                ? 'Try again'
-                : 'Pay now'}
+        {!isOwnListing && listing.status === 'active' && (
+          <>
+            <button type="button" className="ld-msg-btn" onClick={handleMessageSeller}>
+              <Icon name="chat" />
+              Message seller
             </button>
 
-            {loginNotice === 'pay' && !user && loginNoticeEl}
+            <div className="ld-card ld-meetup">
+              <div className="ld-head">
+                <span className="ld-tile">
+                  <Icon name="pin" size={20} />
+                </span>
+                <div>
+                  <p className="ld-pay-title">Meet at a safe zone</p>
+                  <p className="ld-pay-sub">Choose a public spot on campus</p>
+                </div>
+              </div>
 
-            {isPending && (
-              <>
-                <p className="ld-status">Check your phone and enter your M-Pesa PIN. This page updates by itself.</p>
-                {cancelIn > 0 ? (
-                  <p className="ld-hint">Didn't get the prompt? You can cancel and try again in {cancelIn}s.</p>
-                ) : (
-                  <>
-                    <button type="button" className="ld-cancel-btn" onClick={handleCancel} disabled={cancelling}>
-                      {cancelling ? 'Checking with M-Pesa...' : 'Cancel and try again'}
-                    </button>
-                    <p className="ld-hint">
-                      Missed the prompt or it was delayed? We check with M-Pesa first. If the payment already went
-                      through, it will show as paid.
-                    </p>
-                  </>
-                )}
-              </>
-            )}
+              <SafeZonePicker
+                value={listing.meetupSafeZone}
+                onSelect={handleSetMeetup}
+                locked={!user}
+                onLockedTap={() => setLoginNotice('meetup')}
+                hideLabel
+              />
+              {loginNotice === 'meetup' && !user && loginNoticeEl}
 
-            {paymentStatus === 'failed' && payMessage && <p className="ld-error">{payMessage}</p>}
+              {listing.meetupSafeZone && !listing.meetupConfirmed && (
+                <>
+                  <button type="button" className="ld-confirm-btn" onClick={handleConfirmMeetup}>
+                    <Icon name="check" />
+                    Confirm meetup happened
+                  </button>
+                  <p className="ld-hint">
+                    Only the buyer confirms, after the handover. This releases the payment to the seller.
+                  </p>
+                </>
+              )}
+            </div>
 
-            {isHeld && (
-              <div className="ld-success" role="status">
-                <div className="ld-success-head">
-                  <span className="ld-success-icon">
-                    <Icon name="check" size={18} />
+            <form onSubmit={handlePay} className="ld-card ld-pay">
+              <div className="ld-pay-head">
+                <div className="ld-head-left">
+                  <span className="ld-tile">
+                    <Icon name="phone" size={20} />
                   </span>
                   <div>
-                    <p className="ld-success-title">
-                      Payment received
-                      {paidInfo && paidInfo.amount ? `: KES ${Number(paidInfo.amount).toLocaleString()}` : ''}
-                    </p>
-                    <p className="ld-success-sub">
-                      Thank you. SafeSwap is holding your money safely and the seller has been told.
-                    </p>
+                    <p className="ld-pay-title">Pay with M-Pesa</p>
+                    <p className="ld-pay-sub">Held safely until you confirm</p>
                   </div>
                 </div>
-                <ul className="ld-success-steps">
-                  <li>
-                    <span className="ld-step-num">1</span>
-                    <span>Pick a safe zone above and arrange the meetup with the seller.</span>
-                  </li>
-                  <li>
-                    <span className="ld-step-num">2</span>
-                    <span>Check the item when you meet.</span>
-                  </li>
-                  <li>
-                    <span className="ld-step-num">3</span>
-                    <span>
-                      Once you have the item, tap <strong>Confirm meetup happened</strong> to release the money to
-                      the seller.
-                    </span>
-                  </li>
-                </ul>
-                {paidInfo && paidInfo.receipt && (
-                  <p className="ld-success-receipt">M-Pesa receipt: {paidInfo.receipt}</p>
-                )}
               </div>
-            )}
 
-            <p className="ld-safe">
-              <Icon name="shield" size={15} />
-              <span>Your money is held by SafeSwap and only released when you confirm the handover.</span>
-            </p>
-          </form>
-        </>
-      )}
+              <label className="ld-label" htmlFor="ld-pay-phone">
+                Phone to pay from
+              </label>
+              <div className="ld-input-wrap">
+                <Icon name="phone" />
+                <input
+                  id="ld-pay-phone"
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  placeholder="e.g. 0712 345 678"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  disabled={isPending || isHeld}
+                />
+              </div>
 
-      {listing.status === 'sold' && (
-        <>
-          <p style={{ marginTop: '16px', fontWeight: 600, color: 'var(--color-success)' }}>This item has been sold.</p>
-          {user && !isOwnListing && !isAdmin && <ReviewBox listingId={listing._id} />}
-        </>
-      )}
+              {payError && (
+                <p className="ld-error">{typeof payError === 'string' ? payError : JSON.stringify(payError)}</p>
+              )}
+
+              {agreed && (
+                <p className="ld-hint">You will be charged the agreed price: KES {Number(agreed.amount).toLocaleString()}</p>
+              )}
+
+              <button
+                type="submit"
+                className={isHeld ? 'ld-pay-btn ld-paid' : 'ld-pay-btn'}
+                disabled={paying || isPending || isHeld}
+              >
+                <Icon name={isHeld ? 'check' : 'lock'} />
+                {isHeld
+                  ? 'Paid · held by SafeSwap'
+                  : isPending
+                  ? 'Waiting for your PIN...'
+                  : paying
+                  ? 'Sending STK push...'
+                  : paymentStatus === 'failed'
+                  ? 'Try again'
+                  : 'Pay now'}
+              </button>
+
+              {loginNotice === 'pay' && !user && loginNoticeEl}
+
+              {isPending && (
+                <>
+                  <p className="ld-status">Check your phone and enter your M-Pesa PIN. This page updates by itself.</p>
+                  {cancelIn > 0 ? (
+                    <p className="ld-hint">Didn't get the prompt? You can cancel and try again in {cancelIn}s.</p>
+                  ) : (
+                    <>
+                      <button type="button" className="ld-cancel-btn" onClick={handleCancel} disabled={cancelling}>
+                        {cancelling ? 'Checking with M-Pesa...' : 'Cancel and try again'}
+                      </button>
+                      <p className="ld-hint">
+                        Missed the prompt or it was delayed? We check with M-Pesa first. If the payment already went
+                        through, it will show as paid.
+                      </p>
+                    </>
+                  )}
+                </>
+              )}
+
+              {paymentStatus === 'failed' && payMessage && <p className="ld-error">{payMessage}</p>}
+
+              {isHeld && (
+                <div className="ld-success" role="status">
+                  <div className="ld-success-head">
+                    <span className="ld-success-icon">
+                      <Icon name="check" size={18} />
+                    </span>
+                    <div>
+                      <p className="ld-success-title">
+                        Payment received
+                        {paidInfo && paidInfo.amount ? `: KES ${Number(paidInfo.amount).toLocaleString()}` : ''}
+                      </p>
+                      <p className="ld-success-sub">
+                        Thank you. SafeSwap is holding your money safely and the seller has been told.
+                      </p>
+                    </div>
+                  </div>
+                  <ul className="ld-success-steps">
+                    <li>
+                      <span className="ld-step-num">1</span>
+                      <span>Pick a safe zone above and arrange the meetup with the seller.</span>
+                    </li>
+                    <li>
+                      <span className="ld-step-num">2</span>
+                      <span>Check the item when you meet.</span>
+                    </li>
+                    <li>
+                      <span className="ld-step-num">3</span>
+                      <span>
+                        Once you have the item, tap <strong>Confirm meetup happened</strong> to release the money to
+                        the seller.
+                      </span>
+                    </li>
+                  </ul>
+                  {paidInfo && paidInfo.receipt && (
+                    <p className="ld-success-receipt">M-Pesa receipt: {paidInfo.receipt}</p>
+                  )}
+                </div>
+              )}
+
+              <p className="ld-safe">
+                <Icon name="shield" size={15} />
+                <span>Your money is held by SafeSwap and only released when you confirm the handover.</span>
+              </p>
+            </form>
+          </>
+        )}
+
+        {listing.status === 'sold' && (
+          <>
+            <p style={{ marginTop: '16px', fontWeight: 600, color: 'var(--color-success)' }}>This item has been sold.</p>
+            {user && !isOwnListing && !isAdmin && <ReviewBox listingId={listing._id} />}
+          </>
+        )}
+      </div>
 
       {/* Full-screen photo preview */}
       {viewerOpen && listing.photos[viewerIndex] && (
@@ -797,7 +861,7 @@ export default function ListingDetail() {
           )}
 
           <img
-                        src={optimizeImage(listing.photos[viewerIndex], 1400)}
+            src={optimizeImage(listing.photos[viewerIndex], 1400)}
             alt={listing.title}
             draggable={false}
             onClick={(e) => e.stopPropagation()}
