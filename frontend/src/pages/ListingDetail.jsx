@@ -344,7 +344,11 @@ export default function ListingDetail() {
           background: var(--color-surface); cursor: zoom-in;
         }
         button.ld-main-photo:hover { background: var(--color-surface); border-color: var(--color-teal); }
-        button.ld-main-photo img { width: 100%; height: 100%; object-fit: contain; display: block; }
+        button.ld-main-photo img { position: relative; width: 100%; height: 100%; object-fit: contain; display: block; }
+        .ld-photo-bg {
+          position: absolute; inset: -24px; background-size: cover; background-position: center;
+          filter: blur(22px) brightness(0.55); transform: scale(1.1);
+        }
         .ld-photo-count {
           position: absolute; right: 8px; bottom: 8px; padding: 2px 8px; border-radius: 999px;
           background: rgba(0,0,0,0.55); color: #fff; font-size: 12px; font-weight: 600;
@@ -477,6 +481,11 @@ export default function ListingDetail() {
             onClick={() => setViewerIndex(mainIndex)}
             aria-label="View photo full screen"
           >
+            <span
+              className="ld-photo-bg"
+              aria-hidden="true"
+              style={{ backgroundImage: `url(${optimizeImage(listing.photos[mainIndex] || listing.photos[0], 160)})` }}
+            />
             <img
               src={optimizeImage(listing.photos[mainIndex] || listing.photos[0], 900)}
               alt={listing.title}
