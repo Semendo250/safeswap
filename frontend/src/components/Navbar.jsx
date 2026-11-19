@@ -379,7 +379,7 @@ export default function Navbar() {
         }
         .sw-acct-name {
           margin-bottom: 4px; padding: 8px 10px 10px; border-bottom: 1px solid var(--color-border);
-          font-size: 13px; font-weight: 700; color: var(--color-ink); word-break: break-word;
+          font-size: 13px; font-weight: 700; color: var(--color-ink); overflow-wrap: break-word; word-break: normal;
         }
         .sw-acct-menu .sw-menu-link { padding: 9px 10px; font-size: 14px; }
         .sw-acct-menu .sw-menu-link:hover { background: var(--color-surface); text-decoration: none; }
@@ -563,7 +563,11 @@ export default function Navbar() {
                   </button>
 
                   {accountOpen && (
-                    <div className="sw-acct-menu" role="menu">
+                    <div
+                      className="sw-acct-menu"
+                      role="menu"
+                      style={{ width: 230, minWidth: 230, maxWidth: 'calc(100vw - 16px)' }}
+                    >
                       <div className="sw-acct-name">{user.fullName || 'Account'}</div>
                       <Link to="/profile" className={linkClass('/profile')} role="menuitem">Profile</Link>
                       {isAdmin && (
