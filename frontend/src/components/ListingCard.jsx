@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import FavoriteButton from './FavoriteButton';
 import FeePreview from './FeePreview';
-
+import { optimizeImage } from '../utils/image';
 function statusLabel(l) {
   if (!l.status || l.status === 'active') return '';
   if (l.status === 'unavailable') return l.unavailableReason === 'sold_elsewhere' ? 'Sold elsewhere' : 'Unavailable';
@@ -21,7 +21,9 @@ export default function ListingCard({ listing, onFavoriteChange }) {
   return (
     <Link to={`/listings/${listing._id}`} className="divider-row" style={{ color: 'inherit' }}>
       <img
-        src={listing.photos?.[0]}
+                src={optimizeImage(listing.photos?.[0], 160)}
+        loading="lazy"
+        decoding="async"
         alt={listing.title}
         style={{ width: '68px', height: '68px', objectFit: 'cover', borderRadius: 'var(--radius)', flexShrink: 0, border: '1px solid var(--color-border)' }}
       />

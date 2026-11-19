@@ -16,8 +16,10 @@ const blocksRoutes = require('./routes/blocks.routes');
 const feesRoutes = require('./routes/fees.routes');
 const b2cRoutes = require('./routes/b2c.routes');
 const requestsRoutes = require('./routes/requests.routes');
+const compression = require('compression');
 
 const app = express();
+app.use(compression());
 // Health check for uptime monitors (no login, no database work)
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok', uptime: Math.round(process.uptime()) });

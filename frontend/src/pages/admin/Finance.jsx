@@ -446,7 +446,7 @@ function SettlementCard({ s, b2c, onSend, onPay, onUndo, onReset, onRemoveReceip
   const failed = isDue && t.state === 'failed';
   const sendingMins = sending && t.initiatedAt ? Math.floor((Date.now() - new Date(t.initiatedAt).getTime()) / 60000) : 0;
   const stuck = sending && sendingMins >= 5;
-  const canSend = isDue && !sending && b2c && b2c.ready;
+  const canSend = isDue && !sending && b2c && b2c.ready && b2c.env === 'production';
 
   const sale =
     s.askingPrice && s.askingPrice > s.gross
@@ -945,14 +945,8 @@ export default function Finance() {
             <div className="fin-toolbar">
         <span className="fin-updated">{updatedText ? `Updated ${updatedText}` : ''}</span>
         <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {b2c && b2c.enabled && (
-            <Chip tone={b2c.ready ? (b2c.env === 'production' ? 'success' : 'gold') : 'warning'}>
-              {b2c.ready
-                ? b2c.env === 'production'
-                  ? 'M-Pesa sending: live'
-                  : 'M-Pesa sending: test mode'
-                : 'M-Pesa sending: not set up'}
-            </Chip>
+          {b2c && b2c.enabled && b2c.ready && b2c.env === 'production' && (
+            <Chip tone="success">M-Pesa sending: live</Chip>
           )}
                               <RefreshButton onClick={() => setReloadKey((k) => k + 1)} busy={refreshing} />
         </span>

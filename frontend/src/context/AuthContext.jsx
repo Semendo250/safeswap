@@ -7,6 +7,7 @@ import { registerPushToken, removePushToken } from '../api/notifications.api';
 export const AuthContext = createContext(null);
 
 const PUSH_TOKEN_KEY = 'safeswap_push_token';
+const USER_KEY = 'safeswap_user';
 
 function readSavedPushToken() {
   try {
@@ -25,6 +26,25 @@ function savePushToken(value) {
   }
 }
 
+// The last known profile, so the app opens straight away instead of waiting for the server
+function readCachedUser() {
+  try {
+    const raw = localStorage.getItem(USER_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (err) {
+    return null;
+  }
+}
+
+function saveCachedUser(value) {
+  try {
+    if (value) localStorage.setItem(USER_KEY, JSON.stringify(value));
+    else localStorage.removeItem(USER_KEY);
+  } catch (err) {
+    // storage blocked, the profile is just fetched again next time
+  }
+}
+
 // Attach the saved login token immediately, when the app loads. Without this, pages that
 // fetch data as soon as they open (Admin, Profile, Inbox) send their request before
 // AuthProvider's effect runs, and fail with 401 after a refresh.
@@ -34,9 +54,10 @@ if (savedToken) {
 }
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(() => (savedToken ? readCachedUser() : null));
   const [token, setToken] = useState(localStorage.getItem('token') || null);
-  const [loading, setLoading] = useState(true);
+  // Only wait for the server when there is a login to check and no saved profile to show meanwhile
+  const [loading, setLoading] = useState(() => !!savedToken && !readCachedUser());
   const [pushToken, setPushToken] = useState(readSavedPushToken);
 
   useEffect(() => {
@@ -45,10 +66,16 @@ export function AuthProvider({ children }) {
       socket.connect();
       api.get('/auth/me')
         .then((res) => setUser(res.data))
-        .catch(() => {
-          // token invalid/expired - clear it
-          localStorage.removeItem('token');
-          setToken(null);
+        .catch((err) => {
+          const status = err.response && err.response.status;
+          // Only an answer of "not logged in" ends the session. A sleeping server or a bad
+          // connection must not log people out.
+          if (status === 401 || status === 403) {
+            localStorage.removeItem('token');
+            delete api.defaults.headers.common['Authorization'];
+            setUser(null);
+            setToken(null);
+          }
         })
         .finally(() => setLoading(false));
     } else {
@@ -56,6 +83,11 @@ export function AuthProvider({ children }) {
     }
     return () => socket.disconnect();
   }, [token]);
+
+  // Keep the saved profile in step with the logged-in user (and clear it on logout)
+  useEffect(() => {
+    saveCachedUser(user);
+  }, [user]);
 
   // Tell the server which user this socket belongs to, for online/offline status.
   // Re-registers on every reconnect too (e.g. after the free-tier server sleeps and wakes)

@@ -38,6 +38,12 @@ async function sendNow(req, res) {
     if (!st.ready) {
       return res.status(503).json({ error: `Automatic sending is not fully set up. Missing: ${st.problems.join(', ')}` });
     }
+    // Test mode never moves real money, so it must never mark a real payout as sent
+    if (st.env !== 'production') {
+      return res.status(503).json({
+        error: 'Automatic sending is not live yet. Send it in M-Pesa yourself and add the receipt.',
+      });
+    }
 
     const id = String(req.params.id);
     if (!isId(id)) return res.status(400).json({ error: 'Invalid record id' });
@@ -45,6 +51,12 @@ async function sendNow(req, res) {
     const s = await Settlement.findById(id);
     if (!s) return res.status(404).json({ error: 'Record not found' });
     if (s.status !== 'due') return res.status(409).json({ error: 'This has already been sent.' });
+    // Part of it was already sent by hand with a receipt. Sending the full amount again would overpay.
+    if ((Number(s.paidTotal) || 0) > 0) {
+      return res.status(409).json({
+        error: 'Part of this has already been sent by hand. Add a receipt for the rest instead.',
+      });
+    }
 
     const payment = await Payment.findById(s.payment).select('status checkoutRequestId phone').lean();
     if (!payment || payment.status !== EXPECTED_STATUS[s.type]) {

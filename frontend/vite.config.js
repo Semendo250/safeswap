@@ -57,4 +57,25 @@ export default defineConfig({
       devOptions: { enabled: false },
     }),
   ],
+  build: {
+    rollupOptions: {
+      output: {
+        // Big libraries get their own files, so they are cached once and reused between app updates
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return undefined;
+          if (id.includes('firebase')) return 'firebase';
+          if (id.includes('socket.io') || id.includes('engine.io')) return 'socket';
+          if (
+            id.includes('react-router') ||
+            id.includes('react-dom') ||
+            id.includes('/react/') ||
+            id.includes('scheduler')
+          ) {
+            return 'react';
+          }
+          return undefined;
+        },
+      },
+    },
+  },
 });

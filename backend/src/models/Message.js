@@ -14,5 +14,10 @@ const messageSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+// Indexes for the chat thread, the inbox and the unread counts
+messageSchema.index({ listing: 1, sender: 1, receiver: 1, createdAt: 1 });
+messageSchema.index({ receiver: 1, read: 1 });
+messageSchema.index({ receiver: 1, createdAt: -1 });
+messageSchema.index({ sender: 1, createdAt: -1 });
 
 module.exports = mongoose.model('Message', messageSchema);

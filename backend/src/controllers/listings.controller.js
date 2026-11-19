@@ -37,16 +37,19 @@ async function loadListingForViewer(id, viewer) {
   if (!listing) return null;
   const obj = presentListing(listing, viewer);
   if (viewer) {
-    try {
-      Object.assign(obj, await getAgreementInfo(listing, viewer._id));
-    } catch (err) {
-      console.error('getAgreementInfo failed:', err.message);
-    }
-    try {
-      obj.isFavorite = !!(await Favorite.exists({ user: viewer._id, listing: listing._id }));
-    } catch (err) {
-      obj.isFavorite = false;
-    }
+    const [agreement, isFavorite] = await Promise.all([
+      Promise.resolve()
+        .then(() => getAgreementInfo(listing, viewer._id))
+        .catch((err) => {
+          console.error('getAgreementInfo failed:', err.message);
+          return {};
+        }),
+      Favorite.exists({ user: viewer._id, listing: listing._id })
+        .then((x) => !!x)
+        .catch(() => false),
+    ]);
+    Object.assign(obj, agreement);
+    obj.isFavorite = isFavorite;
   }
   return obj;
 }
@@ -142,11 +145,10 @@ async function createListing(req, res) {
 // GET /api/listings?category=&search=&minPrice=&maxPrice=&sort=&seller=
 async function getListings(req, res) {
   try {
-    try {
-      await maybeRunExpirySweep();
-    } catch (e) {
-      console.error('Expiry sweep failed:', e.message);
-    }
+    // Runs in the background so loading the list never waits for it
+    Promise.resolve()
+      .then(() => maybeRunExpirySweep())
+      .catch((e) => console.error('Expiry sweep failed:', e.message));
 
     const { category, search = '', sort = 'newest' } = req.query;
     const filter = { status: 'active' };
@@ -180,6 +182,7 @@ async function getListings(req, res) {
 
     const listings = await Listing.find(filter)
       .select('-imei -proofPhoto -paymentLockUntil -paymentLockBy')
+      .select({ photos: { $slice: 1 } }) // the list only shows the first photo
       .sort(sorts[sort] || sorts.newest)
       .limit(200)
       .populate('seller', 'fullName trustScore verificationPath')

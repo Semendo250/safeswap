@@ -14,6 +14,7 @@ import ReviewBox from '../components/ReviewBox';
 import FavoriteButton from '../components/FavoriteButton';
 import { Stars } from '../components/Stars';
 import FeePreview from '../components/FeePreview';
+import { optimizeImage } from '../utils/image';
 
 const ICON_PATHS = {
   lock: (
@@ -64,7 +65,7 @@ function Icon({ name, size = 18 }) {
 
 export default function ListingDetail() {
   const { id } = useParams();
-  const { user, loading: authLoading } = useContext(AuthContext);
+  const { user, token } = useContext(AuthContext);
   const navigate = useNavigate();
   const [listing, setListing] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -103,8 +104,9 @@ export default function ListingDetail() {
 
   // Wait until we know whether the visitor is logged in, so the login token is
   // attached and the seller's phone number comes back. Reloads if login state changes.
+  // The login token is already attached when the app starts, so the listing (and the seller's phone
+  // number for logged-in users) can be requested straight away. It reloads if the login changes.
   useEffect(() => {
-    if (authLoading) return;
     let cancelled = false;
     setNotFound(false);
     getListingById(id)
@@ -118,11 +120,11 @@ export default function ListingDetail() {
     return () => {
       cancelled = true;
     };
-  }, [id, authLoading, user?.id]);
+  }, [id, token]);
 
   // Pick up a payment the buyer already started (waiting or paid), e.g. after a page reload
   useEffect(() => {
-    if (authLoading || !user || !id) return;
+    if (!token || !id) return;
     let cancelled = false;
     getMyPaymentForListing(id)
       .then((res) => {
@@ -133,7 +135,7 @@ export default function ListingDetail() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, authLoading, user?.id]);
+  }, [id, token]);
 
   // While waiting for the PIN, ask the server for the real result every few seconds
   useEffect(() => {
@@ -426,7 +428,8 @@ export default function ListingDetail() {
         {listing.photos.map((url, i) => (
           <img
             key={i}
-            src={url}
+                        src={optimizeImage(url, 400)}
+            decoding="async"
             alt={listing.title}
             role="button"
             tabIndex={0}
@@ -794,7 +797,7 @@ export default function ListingDetail() {
           )}
 
           <img
-            src={listing.photos[viewerIndex]}
+                        src={optimizeImage(listing.photos[viewerIndex], 1400)}
             alt={listing.title}
             draggable={false}
             onClick={(e) => e.stopPropagation()}
