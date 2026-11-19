@@ -34,7 +34,7 @@ export default function Saved() {
   }, [authLoading, user?.id]);
 
   return (
-    <div style={{ maxWidth: 640, margin: '0 auto', padding: '20px 16px 60px' }}>
+    <div style={{ maxWidth: 960, margin: '0 auto', padding: '20px 16px 60px' }}>
       <BackButton />
       <h2 style={{ margin: '14px 0 4px', textAlign: 'left' }}>Saved items</h2>
       <p style={{ margin: '0 0 18px', fontSize: 14, color: 'var(--color-muted)' }}>
@@ -60,15 +60,18 @@ export default function Saved() {
           <Link to="/browse">Browse listings</Link>
         </div>
       ) : (
-        items.map((l) => (
-          <ListingCard
-            key={l._id}
-            listing={l}
-            onFavoriteChange={(listingId, saved) => {
-              if (!saved) setItems((prev) => prev.filter((x) => x._id !== listingId));
-            }}
-          />
-        ))
+        <div className="lc-grid">
+          {items.map((l) => (
+            <ListingCard
+              key={l._id}
+              listing={l}
+              variant="card"
+              onFavoriteChange={(listingId, saved) => {
+                if (!saved) setItems((prev) => prev.filter((x) => x._id !== listingId));
+              }}
+            />
+          ))}
+        </div>
       )}
     </div>
   );

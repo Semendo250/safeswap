@@ -55,9 +55,20 @@ export default function SellerProfile() {
   }
 
   const { seller, reviews } = data;
+  const sold = typeof seller.completedSales === 'number' ? seller.completedSales : null;
 
   return (
     <div className="container">
+      <style>{`
+        .sp-stats { display: flex; justify-content: center; gap: 28px; margin-top: 12px; }
+        .sp-stat { display: flex; flex-direction: column; align-items: center; gap: 1px; }
+        .sp-stat-num { font-size: 18px; font-weight: 700; color: var(--color-ink); }
+        .sp-stat-label { font-size: 12px; color: var(--color-muted); }
+        .sp-section { display: flex; align-items: baseline; gap: 8px; margin: 22px 0 12px; }
+        .sp-section h3 { margin: 0; font-size: 16px; }
+        .sp-count { font-size: 13px; color: var(--color-muted); }
+      `}</style>
+
       <BackButton />
 
       <div
@@ -85,16 +96,45 @@ export default function SellerProfile() {
           <TrustBadge score={seller.trustScore} />
           <VerificationBadge verificationPath={seller.verificationPath} />
         </div>
+
+        <div className="sp-stats">
+          {sold !== null && (
+            <div className="sp-stat">
+              <span className="sp-stat-num">{sold}</span>
+              <span className="sp-stat-label">sold</span>
+            </div>
+          )}
+          <div className="sp-stat">
+            <span className="sp-stat-num">{listings.length}</span>
+            <span className="sp-stat-label">for sale</span>
+          </div>
+          {seller.ratingCount > 0 && (
+            <div className="sp-stat">
+              <span className="sp-stat-num">{seller.ratingCount}</span>
+              <span className="sp-stat-label">review{seller.ratingCount === 1 ? '' : 's'}</span>
+            </div>
+          )}
+        </div>
       </div>
 
-      <h3 style={{ fontSize: 16, marginTop: 20 }}>Listings for sale</h3>
+      <div className="sp-section">
+        <h3>Listings for sale</h3>
+        {listings.length > 0 && <span className="sp-count">{listings.length}</span>}
+      </div>
       {listings.length === 0 ? (
         <p style={{ color: 'var(--color-muted)', fontSize: 14 }}>Nothing for sale right now.</p>
       ) : (
-        listings.map((l) => <ListingCard key={l._id} listing={l} />)
+        <div className="lc-grid">
+          {listings.map((l) => (
+            <ListingCard key={l._id} listing={l} variant="card" />
+          ))}
+        </div>
       )}
 
-      <h3 style={{ fontSize: 16, marginTop: 24 }}>Reviews</h3>
+      <div className="sp-section" style={{ marginTop: 28 }}>
+        <h3>Reviews</h3>
+        {reviews.length > 0 && <span className="sp-count">{reviews.length}</span>}
+      </div>
       {reviews.length === 0 ? (
         <p style={{ color: 'var(--color-muted)', fontSize: 14 }}>Buyers can leave a review after a completed deal.</p>
       ) : (
